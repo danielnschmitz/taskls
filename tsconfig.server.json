@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "moduleResolution": "node16",
+    "module": "node16",
+    "outDir": "dist/server",
+    "rootDir": "src/server",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true
+  },
+  "include": ["src/server/**/*"]
+}
