@@ -1,0 +1,251 @@
+{
+  "app": "TaskLS",
+  "version": "1.1.0",
+  "exported_at": "2026-09-11T00:12:02.146Z",
+  "tasks": [
+    {
+      "id": "90b510f0-26ef-46dc-914b-b41405a5bb35",
+      "title": "Solicitar para Antonelli gerar nova campanha",
+      "description": null,
+      "type": "once",
+      "priority": "high",
+      "category": "Geral",
+      "due_date": "2026-09-11T03:00:00.000Z",
+      "weekly_days": null,
+      "monthly_type": null,
+      "monthly_day": null,
+      "monthly_pattern": null,
+      "monthly_weekday": null,
+      "notification_times": [
+        "09:00",
+        "10:00"
+      ],
+      "is_completed": false,
+      "completed_at": null,
+      "created_at": "2026-09-10T21:27:07.240Z",
+      "updated_at": "2026-09-10T22:05:09.504Z",
+      "subtasks": [],
+      "snoozed_until": null
+    },
+    {
+      "id": "441d63a9-58f8-4938-85e2-70b4a1ab14f3",
+      "title": "Enviar faturamento ESM",
+      "description": null,
+      "type": "monthly",
+      "priority": "urgent",
+      "category": "Geral",
+      "due_date": null,
+      "weekly_days": null,
+      "monthly_type": "pattern",
+      "monthly_day": null,
+      "monthly_pattern": "third",
+      "monthly_weekday": 5,
+      "notification_times": [],
+      "is_completed": false,
+      "completed_at": null,
+      "created_at": "2026-09-10T21:28:04.727Z",
+      "updated_at": "2026-09-10T22:05:09.504Z",
+      "subtasks": [],
+      "snoozed_until": null
+    },
+    {
+      "id": "c10a08a4-ba5a-454e-8afa-aa73b6a04698",
+      "title": "Revisar ativações Neogrid",
+      "description": null,
+      "type": "monthly",
+      "priority": "medium",
+      "category": "Geral",
+      "due_date": null,
+      "weekly_days": null,
+      "monthly_type": "pattern",
+      "monthly_day": null,
+      "monthly_pattern": "third",
+      "monthly_weekday": 5,
+      "notification_times": [
+        "09:00",
+        "14:00",
+        "16:00"
+      ],
+      "is_completed": false,
+      "completed_at": null,
+      "created_at": "2026-09-10T21:28:30.219Z",
+      "updated_at": "2026-09-10T22:05:09.504Z",
+      "subtasks": [],
+      "snoozed_until": null
+    },
+    {
+      "id": "cb906d5f-2050-4fa4-b3e7-ffe7fc694dda",
+      "title": "Revisar ativações Neogrid",
+      "description": null,
+      "type": "monthly",
+      "priority": "medium",
+      "category": "Geral",
+      "due_date": null,
+      "weekly_days": null,
+      "monthly_type": "pattern",
+      "monthly_day": null,
+      "monthly_pattern": "last",
+      "monthly_weekday": 5,
+      "notification_times": [
+        "09:00",
+        "14:00",
+        "16:00"
+      ],
+      "is_completed": false,
+      "completed_at": null,
+      "created_at": "2026-09-10T21:29:28.643Z",
+      "updated_at": "2026-09-10T22:05:09.504Z",
+      "subtasks": [],
+      "snoozed_until": null
+    },
+    {
+      "id": "6d0d8311-fd53-4bdc-a421-3639d43bc71a",
+      "title": "Verificar tarefas Neogrid",
+      "description": null,
+      "type": "weekly",
+      "priority": "medium",
+      "category": "Geral",
+      "due_date": null,
+      "weekly_days": [
+        1,
+        3,
+        5
+      ],
+      "monthly_type": null,
+      "monthly_day": null,
+      "monthly_pattern": null,
+      "monthly_weekday": null,
+      "notification_times": [
+        "09:00",
+        "11:00",
+        "15:00"
+      ],
+      "is_completed": false,
+      "completed_at": null,
+      "created_at": "2026-09-10T23:40:11.470Z",
+      "updated_at": "2026-09-10T23:40:11.470Z",
+      "subtasks": [],
+      "snoozed_until": null
+    },
+    {
+      "id": "96270d2c-85cc-49af-aad6-35903ce13fea",
+      "title": "Dar bom dia pro Murilo",
+      "description": null,
+      "type": "weekly",
+      "priority": "low",
+      "category": "Geral",
+      "due_date": null,
+      "weekly_days": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "monthly_type": null,
+      "monthly_day": null,
+      "monthly_pattern": null,
+      "monthly_weekday": null,
+      "notification_times": [
+        "09:00"
+      ],
+      "is_completed": false,
+      "completed_at": null,
+      "created_at": "2026-09-11T00:05:21.545Z",
+      "updated_at": "2026-09-11T00:05:21.545Z",
+      "subtasks": [],
+      "snoozed_until": null
+    }
+  ],
+  "task_completions": [
+    {
+      "id": 7,
+      "task_id": "6d0d8311-fd53-4bdc-a421-3639d43bc71a",
+      "completion_date": "2026-09-07T03:00:00.000Z",
+      "completed_at": "2026-09-10T23:43:46.278Z"
+    },
+    {
+      "id": 8,
+      "task_id": "6d0d8311-fd53-4bdc-a421-3639d43bc71a",
+      "completion_date": "2026-09-09T03:00:00.000Z",
+      "completed_at": "2026-09-10T23:43:47.583Z"
+    },
+    {
+      "id": 9,
+      "task_id": "96270d2c-85cc-49af-aad6-35903ce13fea",
+      "completion_date": "2026-09-07T03:00:00.000Z",
+      "completed_at": "2026-09-11T00:05:23.731Z"
+    },
+    {
+      "id": 10,
+      "task_id": "96270d2c-85cc-49af-aad6-35903ce13fea",
+      "completion_date": "2026-09-08T03:00:00.000Z",
+      "completed_at": "2026-09-11T00:05:24.661Z"
+    },
+    {
+      "id": 11,
+      "task_id": "96270d2c-85cc-49af-aad6-35903ce13fea",
+      "completion_date": "2026-09-09T03:00:00.000Z",
+      "completed_at": "2026-09-11T00:05:25.380Z"
+    },
+    {
+      "id": 12,
+      "task_id": "96270d2c-85cc-49af-aad6-35903ce13fea",
+      "completion_date": "2026-09-10T03:00:00.000Z",
+      "completed_at": "2026-09-11T00:05:26.191Z"
+    }
+  ],
+  "categories": [
+    {
+      "id": "casa",
+      "name": "Casa",
+      "color": "#f59e0b",
+      "icon": "Home"
+    },
+    {
+      "id": "estrategia",
+      "name": "Estratégia",
+      "color": "#06b6d4",
+      "icon": "Target"
+    },
+    {
+      "id": "estudos",
+      "name": "Estudos",
+      "color": "#a855f7",
+      "icon": "GraduationCap"
+    },
+    {
+      "id": "financas",
+      "name": "Finanças",
+      "color": "#10b981",
+      "icon": "DollarSign"
+    },
+    {
+      "id": "geral",
+      "name": "Geral",
+      "color": "#64748b",
+      "icon": "CheckSquare"
+    },
+    {
+      "id": "saude",
+      "name": "Saúde",
+      "color": "#f43f5e",
+      "icon": "HeartPulse"
+    },
+    {
+      "id": "trabalho",
+      "name": "Trabalho",
+      "color": "#6366f1",
+      "icon": "Briefcase"
+    }
+  ],
+  "settings": [
+    {
+      "key": "dnd",
+      "value": {
+        "until": null,
+        "enabled": false
+      }
+    }
+  ]
+}
