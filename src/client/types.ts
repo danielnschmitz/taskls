@@ -87,3 +87,60 @@ export interface TaskFormData {
   notification_times: string[];
   subtasks: SubtaskItem[];
 }
+
+export interface JiraDemand {
+  id: string;
+  key: string;
+  summary: string;
+  duedate: string; // 'YYYY-MM-DD'
+  project: {
+    key: string;
+    name: string;
+  };
+  rawStatus: string;
+  displayStatus: string;
+  assignee: {
+    displayName: string;
+    avatarUrl?: string;
+  } | null;
+  epic: {
+    key: string;
+    summary?: string;
+  } | null;
+  industry: string | null;
+  layout: string | null;
+  url: string;
+}
+
+export interface JiraDayGroup {
+  date: string; // 'YYYY-MM-DD'
+  dayOfWeek: number; // 1-5 (Segunda a Sexta)
+  dayName: string;
+  dayNumber: number;
+  monthName: string;
+  isToday: boolean;
+  demands: JiraDemand[];
+}
+
+export interface JiraWeekResponse {
+  startDate: string;
+  endDate: string;
+  days: JiraDayGroup[];
+  totalDemands: number;
+  lastUpdated: string;
+}
+
+export interface JiraConfig {
+  domain: string;
+  email: string;
+  api_token?: string;
+  projects: string[];
+  statuses: string[];
+  custom_fields?: {
+    industry: string;
+    layout: string;
+  };
+  hasApiToken?: boolean;
+  allPossibleStatuses?: string[];
+}
+

@@ -31,6 +31,7 @@ interface HeaderProps {
   focusMode: boolean;
   onToggleFocusMode: () => void;
   onOpenBackupModal: () => void;
+  onOpenJiraSettings?: () => void;
   onShowToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
 
@@ -50,6 +51,7 @@ export const Header: React.FC<HeaderProps> = ({
   focusMode,
   onToggleFocusMode,
   onOpenBackupModal,
+  onOpenJiraSettings,
   onShowToast,
 }) => {
   const [autostartEnabled, setAutostartEnabled] = useState(false);
@@ -299,6 +301,20 @@ export const Header: React.FC<HeaderProps> = ({
             <Database className="w-3.5 h-3.5 text-emerald-400" />
             <span className="hidden lg:inline">Backup</span>
           </button>
+
+          {/* Jira Settings Button */}
+          {onOpenJiraSettings && (
+            <button
+              onClick={onOpenJiraSettings}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/60 text-xs font-semibold transition-all"
+              title="Configurações da Integração Jira"
+            >
+              <svg className="w-3.5 h-3.5 fill-blue-400 flex-shrink-0" viewBox="0 0 24 24">
+                <path d="M11.53 2c0 2.4 1.97 4.35 4.38 4.35h2.15v2.17c0 2.4 1.97 4.35 4.39 4.35V2h-10.92zm-5.77 5.79c0 2.4 1.97 4.35 4.39 4.35h2.14v2.17c0 2.4 1.97 4.35 4.39 4.35V7.79H5.76zm-5.76 5.79c0 2.4 1.97 4.35 4.39 4.35h2.14v2.17c0 2.4 1.97 4.35 4.39 4.35v-10.87H0z"/>
+              </svg>
+              <span className="hidden lg:inline">Jira</span>
+            </button>
+          )}
 
           {/* Autostart Toggle */}
           <button

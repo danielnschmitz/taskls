@@ -118,16 +118,20 @@ export const WeekPanel: React.FC<WeekPanelProps> = ({
     }
   };
 
-  // Days to show: if focusMode, prioritize today
+  // Only Monday (1) to Friday (5) are considered in the Week Panel
+  const workDays = days.filter((d) => d.dayOfWeek >= 1 && d.dayOfWeek <= 5);
+
+  // Days to show: if focusMode, prioritize today (if a workday)
+  const todayWorkDay = workDays.find((d) => d.isToday);
   const displayedDays = focusMode
-    ? days.filter((d) => d.isToday)
-    : days;
+    ? (todayWorkDay ? [todayWorkDay] : workDays)
+    : workDays;
 
   return (
     <div className="bg-[#0b101d] border border-slate-800/80 rounded-2xl p-4 lg:p-6 shadow-xl shadow-black/20">
       
       {/* Week Progress Bar Component */}
-      <WeekProgress days={days} />
+      <WeekProgress days={workDays} />
 
       {/* Panel Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-5 border-b border-slate-800/80">
@@ -138,7 +142,7 @@ export const WeekPanel: React.FC<WeekPanelProps> = ({
             </div>
             <h2 className="text-lg font-bold text-white tracking-tight">Semana Atual</h2>
             <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-              Tarefas Semanais & Calendário
+              Segunda a Sexta
             </span>
             {focusMode && (
               <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1 animate-pulse">
@@ -197,13 +201,13 @@ export const WeekPanel: React.FC<WeekPanelProps> = ({
         </div>
       </div>
 
-      {/* 7 Day Columns Grid (or 1 expanded column in Focus Mode) */}
+      {/* 5 Day Columns Grid (Segunda a Sexta) */}
       <div className="mt-5 overflow-x-auto pb-3 custom-scrollbar">
         <div
           className={`grid gap-3 transition-all ${
             focusMode
               ? 'grid-cols-1 max-w-2xl mx-auto'
-              : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 min-w-[1050px] xl:min-w-0'
+              : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 min-w-[850px] xl:min-w-0'
           }`}
         >
           {displayedDays.map((day) => {

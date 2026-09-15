@@ -32,6 +32,8 @@ import { BacklogPanel } from './components/BacklogPanel';
 import { TaskModal } from './components/TaskModal';
 import { ConfirmModal } from './components/ConfirmModal';
 import { BackupModal } from './components/BackupModal';
+import { JiraWeekPanel } from './components/JiraWeekPanel';
+import { JiraConfigModal } from './components/JiraConfigModal';
 
 interface ToastState {
   id: string;
@@ -51,7 +53,7 @@ export const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPriority, setSelectedPriority] = useState<Priority | 'all'>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [activeTab, setActiveTab] = useState<'all' | 'week' | 'upcoming' | 'backlog'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'week' | 'upcoming' | 'backlog' | 'jira'>('all');
 
   // Focus mode
   const [focusMode, setFocusMode] = useState(false);
@@ -67,6 +69,16 @@ export const App: React.FC = () => {
 
   // Backup modal state
   const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
+
+  // Jira integration state
+  const [isJiraModalOpen, setIsJiraModalOpen] = useState(false);
+  const [jiraWeekBaseDate, setJiraWeekBaseDate] = useState<Date>(new Date());
+  const [jiraRefreshKey, setJiraRefreshKey] = useState(0);
+
+  // Handlers for Jira Week Navigation
+  const handleJiraPrevWeek = () => setJiraWeekBaseDate((prev) => subWeeks(prev, 1));
+  const handleJiraNextWeek = () => setJiraWeekBaseDate((prev) => addWeeks(prev, 1));
+  const handleJiraToday = () => setJiraWeekBaseDate(new Date());
 
   // Toast notifications
   const [toasts, setToasts] = useState<ToastState[]>([]);
@@ -369,6 +381,7 @@ export const App: React.FC = () => {
         focusMode={focusMode}
         onToggleFocusMode={() => setFocusMode(!focusMode)}
         onOpenBackupModal={() => setIsBackupModalOpen(true)}
+        onOpenJiraSettings={() => setIsJiraModalOpen(true)}
         onShowToast={showToast}
       />
 
@@ -424,6 +437,20 @@ export const App: React.FC = () => {
             >
               <Inbox className="w-3.5 h-3.5" />
               <span>Backlog</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('jira')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                activeTab === 'jira'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                <path d="M11.53 2c0 2.4 1.97 4.35 4.38 4.35h2.15v2.17c0 2.4 1.97 4.35 4.39 4.35V2h-10.92zm-5.77 5.79c0 2.4 1.97 4.35 4.39 4.35h2.14v2.17c0 2.4 1.97 4.35 4.39 4.35V7.79H5.76zm-5.76 5.79c0 2.4 1.97 4.35 4.39 4.35h2.14v2.17c0 2.4 1.97 4.35 4.39 4.35v-10.87H0z"/>
+              </svg>
+              <span>Demandas Jira</span>
             </button>
           </div>
 
@@ -530,6 +557,22 @@ export const App: React.FC = () => {
               </div>
             )}
 
+            {/* Panel 4: Jira Demands Week (Demandas Jira com Entrega na Semana) */}
+            {(activeTab === 'all' || activeTab === 'jira') && (
+              <section className="pt-2">
+                <JiraWeekPanel
+                  key={jiraRefreshKey}
+                  weekStartDate={format(startOfWeek(jiraWeekBaseDate, { weekStartsOn: 1 }), 'yyyy-MM-dd')}
+                  onPrevWeek={handleJiraPrevWeek}
+                  onNextWeek={handleJiraNextWeek}
+                  onToday={handleJiraToday}
+                  onOpenSettings={() => setIsJiraModalOpen(true)}
+                  searchQuery={searchQuery}
+                  onShowToast={showToast}
+                />
+              </section>
+            )}
+
           </div>
         ) : null}
 
@@ -567,6 +610,16 @@ export const App: React.FC = () => {
         isOpen={isBackupModalOpen}
         onClose={() => setIsBackupModalOpen(false)}
         onSuccess={fetchDashboard}
+        onShowToast={showToast}
+      />
+
+      {/* Jira Configuration Modal */}
+      <JiraConfigModal
+        isOpen={isJiraModalOpen}
+        onClose={() => setIsJiraModalOpen(false)}
+        onSaved={() => {
+          setJiraRefreshKey((prev) => prev + 1);
+        }}
         onShowToast={showToast}
       />
 

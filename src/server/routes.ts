@@ -18,6 +18,13 @@ import {
 } from './recurrence';
 import { sendWindowsNotification } from './notifier';
 import { isAutostartEnabled, setAutostart } from './autostart';
+import {
+  getJiraConfig,
+  saveJiraConfig,
+  testJiraConnection,
+  getJiraDemandsForWeek,
+  ALL_POSSIBLE_STATUSES,
+} from './jira';
 
 export const router = Router();
 
@@ -38,7 +45,7 @@ router.get('/tasks/dashboard', async (req: Request, res: Response) => {
 
     // Monday as start of week (weekStartsOn: 1)
     const weekStartDate = startOfWeek(baseDate, { weekStartsOn: 1 });
-    const weekEndDate = addDays(weekStartDate, 6);
+    const weekEndDate = addDays(weekStartDate, 4); // Monday to Friday (5 days)
 
     const weekStartStr = format(weekStartDate, 'yyyy-MM-dd');
     const weekEndStr = format(weekEndDate, 'yyyy-MM-dd');
@@ -67,11 +74,11 @@ router.get('/tasks/dashboard', async (req: Request, res: Response) => {
       )
     );
 
-    // 3. Build Panel 1: 7 Days of the Week
+    // 3. Build Panel 1: 5 Days of the Week (Segunda a Sexta)
     const today = new Date();
     const days = [];
 
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 5; i++) {
       const currentDay = addDays(weekStartDate, i);
       const dateStr = format(currentDay, 'yyyy-MM-dd');
       const dayOfWeek = currentDay.getDay(); // 0=Dom ... 6=Sab
@@ -818,4 +825,105 @@ router.get('/backup/export/csv', async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Erro ao exportar CSV' });
   }
 });
+
+// ==========================================
+// ROTAS DE INTEGRAÇÃO COM JIRA CLOUD
+// ==========================================
+
+/**
+ * GET /api/jira/settings
+ * Retorna as configurações salvas do Jira e a lista de status disponíveis
+ */
+router.get('/jira/settings', async (req: Request, res: Response) => {
+  try {
+    const config = await getJiraConfig();
+    res.json({
+      domain: config.domain,
+      email: config.email,
+      projects: config.projects,
+      statuses: config.statuses,
+      custom_fields: config.custom_fields,
+      hasApiToken: Boolean(config.api_token),
+      allPossibleStatuses: ALL_POSSIBLE_STATUSES,
+    });
+  } catch (err: any) {
+    console.error('[API] Erro ao buscar configurações do Jira:', err);
+    res.status(500).json({ error: 'Erro ao buscar configurações do Jira' });
+  }
+});
+
+/**
+ * PUT /api/jira/settings
+ * Atualiza as configurações do Jira no banco de dados
+ */
+router.put('/jira/settings', async (req: Request, res: Response) => {
+  try {
+    const { domain, email, api_token, projects, statuses, custom_fields } = req.body;
+
+    const updated = await saveJiraConfig({
+      ...(domain !== undefined && { domain }),
+      ...(email !== undefined && { email }),
+      ...(api_token && { api_token }),
+      ...(projects !== undefined && { projects }),
+      ...(statuses !== undefined && { statuses }),
+      ...(custom_fields !== undefined && { custom_fields }),
+    });
+
+    res.json({
+      success: true,
+      message: 'Configurações do Jira salvas com sucesso!',
+      config: {
+        domain: updated.domain,
+        email: updated.email,
+        projects: updated.projects,
+        statuses: updated.statuses,
+        custom_fields: updated.custom_fields,
+        hasApiToken: Boolean(updated.api_token),
+      },
+    });
+  } catch (err: any) {
+    console.error('[API] Erro ao salvar configurações do Jira:', err);
+    res.status(500).json({ error: 'Erro ao salvar configurações do Jira' });
+  }
+});
+
+/**
+ * POST /api/jira/test
+ * Testa a conexão com a API do Jira
+ */
+router.post('/jira/test', async (req: Request, res: Response) => {
+  try {
+    const { domain, email, api_token } = req.body;
+    const testResult = await testJiraConnection({
+      ...(domain && { domain }),
+      ...(email && { email }),
+      ...(api_token && { api_token }),
+    });
+
+    res.json(testResult);
+  } catch (err: any) {
+    console.error('[API] Erro ao testar conexão com Jira:', err);
+    res.status(500).json({ success: false, message: `Erro ao testar conexão: ${err.message}` });
+  }
+});
+
+/**
+ * GET /api/jira/demands
+ * Busca demandas da semana especificada (Segunda a Sexta)
+ */
+router.get('/jira/demands', async (req: Request, res: Response) => {
+  try {
+    const { weekStart } = req.query;
+    const baseDateStr = typeof weekStart === 'string' && weekStart
+      ? weekStart
+      : format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+
+    const result = await getJiraDemandsForWeek(baseDateStr);
+    res.json(result);
+  } catch (err: any) {
+    console.error('[API] Erro ao buscar demandas do Jira:', err);
+    res.status(500).json({ error: err.message || 'Erro ao buscar demandas do Jira' });
+  }
+});
+
 
