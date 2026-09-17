@@ -29,10 +29,9 @@ export const ALL_POSSIBLE_STATUSES = [
 ];
 
 export const DEFAULT_JIRA_CONFIG: JiraConfig = {
-  domain: 'sysmiddle.atlassian.net',
-  email: 'daniel.schmitz@sysmiddle.com.br',
-  api_token:
-    'ATATT3xFfGF06mDt3NdqPtIOOYJ7jKYE_C0HKgBuwhQN2LICEge7mlvNtaV3yCK3tMqHv1kfrNmcb13kqk_5TT-0sH0VesY79FEZ5IjT-MJUE9tuPa-spbrSFs4OB4Y9u098E0Ui16RjFmx0Q9fVxnuDFN-ArGFtiIq9yTcnJ9fRLxF1PVpW5-w=37CE1DBA',
+  domain: process.env.JIRA_DOMAIN || 'sysmiddle.atlassian.net',
+  email: process.env.JIRA_EMAIL || 'daniel.schmitz@sysmiddle.com.br',
+  api_token: process.env.JIRA_API_TOKEN || '',
   projects: ['NEO', 'ESM'],
   statuses: [...ALL_POSSIBLE_STATUSES],
   custom_fields: {
@@ -87,24 +86,36 @@ export interface JiraWeekResponse {
  * Obtém a configuração atual do Jira salva no PostgreSQL
  */
 export async function getJiraConfig(): Promise<JiraConfig> {
+  const currentDefaults: JiraConfig = {
+    domain: process.env.JIRA_DOMAIN || DEFAULT_JIRA_CONFIG.domain,
+    email: process.env.JIRA_EMAIL || DEFAULT_JIRA_CONFIG.email,
+    api_token: process.env.JIRA_API_TOKEN || '',
+    projects: DEFAULT_JIRA_CONFIG.projects,
+    statuses: DEFAULT_JIRA_CONFIG.statuses,
+    custom_fields: { ...DEFAULT_JIRA_CONFIG.custom_fields },
+  };
+
   const res = await pool.query(`SELECT value FROM app_settings WHERE key = 'jira_config'`);
   if (res.rows.length === 0) {
     // Seed initial configuration
     await pool.query(
       `INSERT INTO app_settings (key, value) VALUES ('jira_config', $1) ON CONFLICT (key) DO NOTHING`,
-      [JSON.stringify(DEFAULT_JIRA_CONFIG)]
+      [JSON.stringify(currentDefaults)]
     );
-    return DEFAULT_JIRA_CONFIG;
+    return currentDefaults;
   }
 
   const saved = res.rows[0].value;
   return {
-    ...DEFAULT_JIRA_CONFIG,
+    ...currentDefaults,
     ...saved,
-    projects: saved.projects || DEFAULT_JIRA_CONFIG.projects,
-    statuses: saved.statuses || DEFAULT_JIRA_CONFIG.statuses,
+    api_token: saved.api_token || process.env.JIRA_API_TOKEN || '',
+    domain: saved.domain || process.env.JIRA_DOMAIN || currentDefaults.domain,
+    email: saved.email || process.env.JIRA_EMAIL || currentDefaults.email,
+    projects: saved.projects || currentDefaults.projects,
+    statuses: saved.statuses || currentDefaults.statuses,
     custom_fields: {
-      ...DEFAULT_JIRA_CONFIG.custom_fields,
+      ...currentDefaults.custom_fields,
       ...(saved.custom_fields || {}),
     },
   };
@@ -267,8 +278,8 @@ export async function getJiraDemandsForWeek(
 
   const todayStr = new Date().toISOString().split('T')[0];
 
-  // Se não houver projetos configurados, retorna estrutura vazia
-  if (!config.projects || config.projects.length === 0) {
+  // Se não houver projetos configurados ou token de API ausente, retorna estrutura vazia
+  if (!config.projects || config.projects.length === 0 || !config.api_token) {
     return {
       startDate: mondayStr,
       endDate: fridayStr,

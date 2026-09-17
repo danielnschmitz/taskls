@@ -1,6 +1,11 @@
+import dotenv from 'dotenv';
+import path from 'path';
+
+// Carregar variáveis de ambiente do arquivo .env
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+
 import express from 'express';
 import cors from 'cors';
-import path from 'path';
 import fs from 'fs';
 import { pool, initDatabase } from './db';
 import { router } from './routes';
