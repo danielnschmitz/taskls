@@ -1,0 +1,41 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy to Oracle Cloud
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Conectar via SSH e atualizar a aplicação
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: 22
+          script: |
+            # Garantir PATH para Node, NPM e PM2 em sessão SSH não-interativa
+            export PATH=$PATH:/usr/local/bin:/usr/bin:~/.nvm/versions/node/$(ls ~/.nvm/versions/node 2>/dev/null | tail -n 1)/bin
+
+            echo "==> Acessando diretório do projeto..."
+            cd ~/taskls
+
+            echo "==> Puxando as últimas alterações da branch main..."
+            git fetch https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git main
+            git reset --hard FETCH_HEAD
+
+            echo "==> Instalando dependências..."
+            npm install
+
+            echo "==> Compilando frontend e backend..."
+            npm run build
+
+            echo "==> Reiniciando o processo no PM2..."
+            pm2 restart taskls
+
+            echo "==> Deploy concluído com sucesso!"
