@@ -8,7 +8,6 @@ import {
   Loader2,
   AlertCircle,
   ShieldCheck,
-  Globe,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -160,14 +159,6 @@ export const LoginScreen: React.FC = () => {
               </button>
             </div>
           </form>
-
-          {/* Dica de Acesso Inicial */}
-          <div className="mt-6 pt-5 border-t border-slate-800/80 text-center">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-950/40 border border-indigo-500/20 text-[11px] text-indigo-300 font-medium">
-              <Globe className="w-3 h-3 text-indigo-400" />
-              <span>Acesso Inicial: usuário <strong>admin</strong> e senha <strong>admin</strong></span>
-            </div>
-          </div>
         </div>
 
         {/* Footer info */}
