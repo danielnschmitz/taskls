@@ -11,9 +11,19 @@ import {
   Loader2,
   ChevronDown,
   Clock,
+  LogOut,
+  KeyRound,
+  User as UserIcon,
 } from 'lucide-react';
 import { Priority, Task, DndStatus, CategoryInfo } from '../types';
 import { PomodoroTimer } from './PomodoroTimer';
+import { useAuth } from '../contexts/AuthContext';
+import {
+  triggerBrowserNotification,
+  requestBrowserNotificationPermission,
+  getNotificationPermission,
+  isNotificationSupported,
+} from '../utils/notifications';
 
 interface HeaderProps {
   onNewTask: () => void;
@@ -32,6 +42,7 @@ interface HeaderProps {
   onToggleFocusMode: () => void;
   onOpenBackupModal: () => void;
   onOpenJiraSettings?: () => void;
+  onOpenChangePassword?: () => void;
   onShowToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
 
@@ -52,8 +63,11 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleFocusMode,
   onOpenBackupModal,
   onOpenJiraSettings,
+  onOpenChangePassword,
   onShowToast,
 }) => {
+  const { user, logout, isDefaultPassword } = useAuth();
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const [autostartEnabled, setAutostartEnabled] = useState(false);
   const [isTogglingAutostart, setIsTogglingAutostart] = useState(false);
   const [isTestingNotif, setIsTestingNotif] = useState(false);
@@ -93,26 +107,34 @@ export const Header: React.FC<HeaderProps> = ({
 
   const handleTestNotification = async () => {
     if (dndStatus?.enabled) {
-      onShowToast('Modo Não Perturbe está ativado. Desative para ouvir notificações.', 'info');
+      onShowToast('Modo Não Perturbe está ativado. Desative para ouvir alertas sonoros.', 'info');
     }
     setIsTestingNotif(true);
     try {
-      const res = await fetch('/api/notifications/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: 'TaskLS - Notificação de Teste',
-          message: 'Notificação do Windows disparada com sucesso!',
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        onShowToast('Notificação do Windows enviada com sucesso!', 'success');
-      } else {
-        onShowToast('A notificação pode estar bloqueada nas configurações do Windows.', 'info');
+      if (!isNotificationSupported()) {
+        onShowToast('Seu navegador não suporta a API de Notificações.', 'error');
+        return;
+      }
+
+      let permission = getNotificationPermission();
+      if (permission === 'default') {
+        permission = await requestBrowserNotificationPermission();
+      }
+
+      if (permission === 'granted') {
+        await triggerBrowserNotification('TaskLS - Notificação de Teste', {
+          body: 'Notificação do navegador configurada e funcionando perfeitamente!',
+        });
+        onShowToast('Notificação do navegador disparada com sucesso!', 'success');
+      } else if (permission === 'denied') {
+        onShowToast(
+          'Notificações bloqueadas pelo navegador. Habilite a permissão de notificações nas configurações da página.',
+          'error'
+        );
       }
     } catch (err) {
-      onShowToast('Erro ao disparar notificação de teste', 'error');
+      console.error(err);
+      onShowToast('Erro ao disparar notificação no navegador', 'error');
     } finally {
       setIsTestingNotif(false);
     }
@@ -342,11 +364,11 @@ export const Header: React.FC<HeaderProps> = ({
             </span>
           </button>
 
-          {/* Windows Notification Test */}
+          {/* Browser Notification Test */}
           <button
             onClick={handleTestNotification}
             disabled={isTestingNotif}
-            title="Enviar notificação de teste no Windows"
+            title="Enviar notificação de teste no navegador"
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/60 text-xs font-semibold transition-all shadow-sm"
           >
             {isTestingNotif ? (
@@ -365,6 +387,64 @@ export const Header: React.FC<HeaderProps> = ({
             <Plus className="w-4 h-4 stroke-[2.5]" />
             <span>Nova Tarefa</span>
           </button>
+
+          {/* User Profile Menu */}
+          {user && (
+            <div className="relative">
+              <button
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/60 text-xs font-semibold transition-all"
+                title={`Conectado como ${user.username}`}
+              >
+                <div className="w-5 h-5 rounded-lg bg-indigo-600/30 text-indigo-400 flex items-center justify-center font-bold text-[10px]">
+                  {user.username.charAt(0).toUpperCase()}
+                </div>
+                <span className="hidden md:inline">{user.username}</span>
+                {isDefaultPassword && (
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" title="Senha padrão em uso. Altere sua senha." />
+                )}
+                <ChevronDown className="w-3 h-3 opacity-60" />
+              </button>
+
+              {showUserMenu && (
+                <div className="absolute right-0 mt-2 w-48 bg-[#0c1222] border border-slate-700 rounded-2xl shadow-2xl p-1.5 z-50 text-xs animate-in fade-in slide-in-from-top-1">
+                  <div className="px-3 py-2 border-b border-slate-800 mb-1">
+                    <span className="text-[10px] text-slate-400 block">Usuário Conectado</span>
+                    <span className="font-bold text-white text-xs">{user.username}</span>
+                    {isDefaultPassword && (
+                      <span className="inline-block mt-1 text-[10px] text-amber-400 font-semibold">
+                        ⚠️ Senha padrão ativa
+                      </span>
+                    )}
+                  </div>
+
+                  {onOpenChangePassword && (
+                    <button
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        onOpenChangePassword();
+                      }}
+                      className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-800 text-slate-300 flex items-center gap-2"
+                    >
+                      <KeyRound className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Alterar Senha</span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => {
+                      setShowUserMenu(false);
+                      logout();
+                    }}
+                    className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-rose-950/40 text-rose-400 font-semibold flex items-center gap-2 border-t border-slate-800/80 mt-1"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Sair (Logout)</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
       </div>

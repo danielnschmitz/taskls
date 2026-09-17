@@ -36,12 +36,16 @@ export const BackupModal: React.FC<BackupModalProps> = ({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleExportJson = () => {
-    window.location.href = '/api/backup/export';
+    const token = localStorage.getItem('taskls_auth_token');
+    const query = token ? `?token=${encodeURIComponent(token)}` : '';
+    window.location.href = `/api/backup/export${query}`;
     onShowToast('Download do backup JSON iniciado com sucesso!', 'success');
   };
 
   const handleExportCsv = () => {
-    window.location.href = '/api/backup/export/csv';
+    const token = localStorage.getItem('taskls_auth_token');
+    const query = token ? `?token=${encodeURIComponent(token)}` : '';
+    window.location.href = `/api/backup/export/csv${query}`;
     onShowToast('Download da planilha CSV iniciado com sucesso!', 'success');
   };
 

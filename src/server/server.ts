@@ -4,6 +4,8 @@ import path from 'path';
 import fs from 'fs';
 import { pool, initDatabase } from './db';
 import { router } from './routes';
+import { authRouter } from './authRoutes';
+import { authenticateToken } from './auth';
 import { startScheduler, stopScheduler } from './scheduler';
 
 const app = express();
@@ -13,7 +15,11 @@ app.use(cors());
 app.use(express.json());
 
 // API Routes
-app.use('/api', router);
+// 1. Rotas de autenticação (login público)
+app.use('/api/auth', authRouter);
+
+// 2. Todas as demais rotas da API são protegidas por autenticação
+app.use('/api', authenticateToken, router);
 
 // Serve static frontend files if built
 const clientDistPath = path.resolve(process.cwd(), 'dist/client');

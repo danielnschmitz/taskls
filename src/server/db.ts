@@ -1,6 +1,7 @@
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
 import path from 'path';
+import crypto from 'crypto';
 
 // Load .env from project root
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
@@ -93,7 +94,46 @@ export async function initDatabase(): Promise<void> {
       INSERT INTO app_settings (key, value) VALUES
         ('dnd', '{"enabled": false, "until": null}'::jsonb)
       ON CONFLICT (key) DO NOTHING;
+
+      -- Tabela de Usuários para Autenticação
+      CREATE TABLE IF NOT EXISTS users (
+        id VARCHAR(36) PRIMARY KEY,
+        username VARCHAR(50) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        salt VARCHAR(64) NOT NULL,
+        is_default_password BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- Fila de Notificações para o Navegador
+      CREATE TABLE IF NOT EXISTS notification_queue (
+        id SERIAL PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        task_id VARCHAR(36),
+        delivered BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_notification_queue_delivered ON notification_queue(delivered);
     `);
+
+    // Seed de Usuário Administrador Inicial (se não houver nenhum)
+    const userCountRes = await client.query('SELECT COUNT(*) FROM users');
+    if (parseInt(userCountRes.rows[0].count, 10) === 0) {
+      const initialUser = process.env.INITIAL_ADMIN_USER || 'admin';
+      const initialPassword = process.env.INITIAL_ADMIN_PASSWORD || 'admin';
+      const salt = crypto.randomBytes(16).toString('hex');
+      const hash = crypto.pbkdf2Sync(initialPassword, salt, 100000, 64, 'sha512').toString('hex');
+      const userId = crypto.randomUUID();
+
+      await client.query(
+        `INSERT INTO users (id, username, password_hash, salt, is_default_password)
+         VALUES ($1, $2, $3, $4, TRUE)`,
+        [userId, initialUser, hash, salt]
+      );
+      console.log(`[DB] Usuário administrador inicial criado: ${initialUser}`);
+    }
 
     console.log('[DB] Banco de dados inicializado com sucesso.');
   } catch (error) {

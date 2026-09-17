@@ -34,6 +34,15 @@ import { ConfirmModal } from './components/ConfirmModal';
 import { BackupModal } from './components/BackupModal';
 import { JiraWeekPanel } from './components/JiraWeekPanel';
 import { JiraConfigModal } from './components/JiraConfigModal';
+import { LoginScreen } from './components/LoginScreen';
+import { ChangePasswordModal } from './components/ChangePasswordModal';
+import { useAuth } from './contexts/AuthContext';
+import {
+  triggerBrowserNotification,
+  requestBrowserNotificationPermission,
+  getNotificationPermission,
+  isNotificationSupported,
+} from './utils/notifications';
 
 interface ToastState {
   id: string;
@@ -75,6 +84,10 @@ export const App: React.FC = () => {
   const [jiraWeekBaseDate, setJiraWeekBaseDate] = useState<Date>(new Date());
   const [jiraRefreshKey, setJiraRefreshKey] = useState(0);
 
+  // Auth state
+  const { isAuthenticated, isLoading: isAuthLoading, isDefaultPassword } = useAuth();
+  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
+
   // Handlers for Jira Week Navigation
   const handleJiraPrevWeek = () => setJiraWeekBaseDate((prev) => subWeeks(prev, 1));
   const handleJiraNextWeek = () => setJiraWeekBaseDate((prev) => addWeeks(prev, 1));
@@ -96,6 +109,7 @@ export const App: React.FC = () => {
 
   // Fetch dashboard data
   const fetchDashboard = useCallback(async () => {
+    if (!isAuthenticated) return;
     try {
       const weekStartStr = format(
         startOfWeek(currentWeekBaseDate, { weekStartsOn: 1 }),
@@ -111,11 +125,47 @@ export const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [currentWeekBaseDate, showToast]);
+  }, [currentWeekBaseDate, showToast, isAuthenticated]);
 
   useEffect(() => {
-    fetchDashboard();
-  }, [fetchDashboard]);
+    if (isAuthenticated) {
+      fetchDashboard();
+    }
+  }, [fetchDashboard, isAuthenticated]);
+
+  // Polling de Notificações do Navegador (a cada 15 segundos)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    // Solicitar permissão de notificação no navegador se ainda estiver em 'default'
+    if (isNotificationSupported() && getNotificationPermission() === 'default') {
+      requestBrowserNotificationPermission().catch(() => {});
+    }
+
+    const pollNotifications = async () => {
+      try {
+        const res = await fetch('/api/notifications/pending');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.notifications && data.notifications.length > 0) {
+          for (const notif of data.notifications) {
+            await triggerBrowserNotification(notif.title, { body: notif.message });
+            showToast(`${notif.title}: ${notif.message}`, 'info');
+          }
+        }
+      } catch (err) {
+        // Silencioso em caso de instabilidade pontual de rede
+      }
+    };
+
+    const initialTimer = setTimeout(pollNotifications, 2000);
+    const interval = setInterval(pollNotifications, 15000);
+
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(interval);
+    };
+  }, [isAuthenticated, showToast]);
 
   // Extract list of all tasks
   const allTasksList = dashboardData
@@ -362,6 +412,19 @@ export const App: React.FC = () => {
     setIsTaskModalOpen(true);
   };
 
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-[#070b14] flex flex-col items-center justify-center text-slate-400 gap-3">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+        <span className="text-xs font-semibold">Carregando TaskLS...</span>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginScreen />;
+  }
+
   return (
     <div className="min-h-screen bg-[#090d16] text-slate-100 flex flex-col">
       {/* Top Header */}
@@ -382,12 +445,31 @@ export const App: React.FC = () => {
         onToggleFocusMode={() => setFocusMode(!focusMode)}
         onOpenBackupModal={() => setIsBackupModalOpen(true)}
         onOpenJiraSettings={() => setIsJiraModalOpen(true)}
+        onOpenChangePassword={() => setIsChangePasswordModalOpen(true)}
         onShowToast={showToast}
       />
 
       {/* Main Container */}
       <main className="flex-1 max-w-[1680px] w-full mx-auto px-4 lg:px-8 py-6 space-y-6">
         
+        {/* Aviso de Senha Padrão */}
+        {isDefaultPassword && (
+          <div className="p-3.5 rounded-2xl bg-amber-950/40 border border-amber-500/30 text-amber-200 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg shadow-amber-950/10">
+            <div className="flex items-center gap-2.5">
+              <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+              <span>
+                <strong>Aviso de Segurança:</strong> Você está utilizando a senha padrão inicial (<code>admin</code>). Se for disponibilizar o TaskLS na internet, recomendamos alterar sua senha.
+              </span>
+            </div>
+            <button
+              onClick={() => setIsChangePasswordModalOpen(true)}
+              className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold border border-amber-500/40 text-xs transition-all flex-shrink-0"
+            >
+              Alterar Senha Agora
+            </button>
+          </div>
+        )}
+
         {/* Navigation Tabs (Quick focus) */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center gap-1.5 p-1 bg-slate-900/80 border border-slate-800 rounded-xl">
@@ -620,6 +702,13 @@ export const App: React.FC = () => {
         onSaved={() => {
           setJiraRefreshKey((prev) => prev + 1);
         }}
+        onShowToast={showToast}
+      />
+
+      {/* Change Password Modal */}
+      <ChangePasswordModal
+        isOpen={isChangePasswordModalOpen}
+        onClose={() => setIsChangePasswordModalOpen(false)}
         onShowToast={showToast}
       />
 

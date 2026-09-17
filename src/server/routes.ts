@@ -468,18 +468,55 @@ router.post('/tasks/:id/toggle', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/notifications/pending
+ * Retorna as notificações pendentes para o navegador e as marca como entregues
+ */
+router.get('/notifications/pending', async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query<{
+      id: number;
+      title: string;
+      message: string;
+      task_id: string | null;
+      created_at: string;
+    }>(
+      `SELECT id, title, message, task_id, created_at
+       FROM notification_queue
+       WHERE delivered = FALSE AND created_at >= NOW() - INTERVAL '5 minutes'
+       ORDER BY created_at ASC`
+    );
+
+    if (result.rows.length > 0) {
+      const ids = result.rows.map((r) => r.id);
+      await pool.query(
+        `UPDATE notification_queue SET delivered = TRUE WHERE id = ANY($1::int[])`,
+        [ids]
+      );
+    }
+
+    res.json({ notifications: result.rows });
+  } catch (err: any) {
+    console.error('[API] Erro ao buscar notificações pendentes:', err);
+    res.status(500).json({ error: 'Erro ao buscar notificações pendentes' });
+  }
+});
+
+/**
  * POST /api/notifications/test
- * Triggers a test Windows Toast notification
+ * Enfileira uma notificação de teste para o navegador
  */
 router.post('/notifications/test', async (req: Request, res: Response) => {
   try {
-    const { title = 'TaskLS - Notificação de Teste', message = 'Suas notificações do Windows estão configuradas e funcionando!' } = req.body;
+    const {
+      title = 'TaskLS - Notificação de Teste',
+      message = 'Suas notificações do navegador estão configuradas e funcionando!',
+    } = req.body;
     const result = await sendWindowsNotification(title, message);
     res.json({
       success: result,
       message: result
-        ? 'Notificação do Windows enviada com sucesso!'
-        : 'Falha ao disparar notificação do Windows.',
+        ? 'Notificação do navegador enfileirada com sucesso!'
+        : 'Falha ao enfileirar notificação do navegador.',
     });
   } catch (err) {
     console.error('[API] Erro no teste de notificação:', err);
