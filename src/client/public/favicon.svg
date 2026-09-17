@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="bgGradient" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#4f46e5" />
+      <stop offset="50%" stop-color="#6366f1" />
+      <stop offset="100%" stop-color="#8b5cf6" />
+    </linearGradient>
+    <linearGradient id="checkGradient" x1="18" y1="32" x2="48" y2="44" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#e0e7ff" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#4f46e5" flood-opacity="0.4" />
+    </filter>
+  </defs>
+
+  <!-- Background rounded squircle -->
+  <rect x="4" y="4" width="56" height="56" rx="16" fill="url(#bgGradient)" filter="url(#glow)" />
+  
+  <!-- Subtle inner border -->
+  <rect x="5" y="5" width="54" height="54" rx="15" stroke="#ffffff" stroke-opacity="0.2" stroke-width="1.5" />
+
+  <!-- Task list line indicators (representing modular tasks & cards) -->
+  <rect x="18" y="19" width="16" height="4" rx="2" fill="#ffffff" fill-opacity="0.4" />
+  <rect x="38" y="19" width="8" height="4" rx="2" fill="#ffffff" fill-opacity="0.3" />
+
+  <!-- Bold dynamic checkmark -->
+  <path d="M20 33.5L27.5 41L45 23.5" stroke="url(#checkGradient)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+  
+  <!-- Accent spark dot -->
+  <circle cx="45.5" cy="42.5" r="2.5" fill="#38bdf8" />
+</svg>

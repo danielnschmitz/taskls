@@ -25,8 +25,12 @@ import {
   getJiraDemandsForWeek,
   ALL_POSSIBLE_STATUSES,
 } from './jira';
+import { requireModule } from './auth';
 
 export const router = Router();
+
+// Garantir que as rotas de tarefas exijam o módulo 'tasks'
+router.use('/tasks', requireModule('tasks'));
 
 /**
  * GET /api/tasks/dashboard

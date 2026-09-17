@@ -111,6 +111,8 @@ export async function initDatabase(): Promise<void> {
       -- Migrações incrementais para tabela de usuários
       ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS can_access_jira BOOLEAN DEFAULT FALSE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS allowed_modules TEXT[] DEFAULT ARRAY['tasks', 'cards']::TEXT[];
+      UPDATE users SET allowed_modules = ARRAY['tasks', 'cards'] WHERE allowed_modules IS NULL;
 
       -- Vincular tarefas ao usuário
       ALTER TABLE tasks ADD COLUMN IF NOT EXISTS user_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE;
@@ -129,6 +131,34 @@ export async function initDatabase(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_notification_queue_delivered ON notification_queue(delivered);
       ALTER TABLE notification_queue ADD COLUMN IF NOT EXISTS user_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE;
       CREATE INDEX IF NOT EXISTS idx_notification_queue_user_id ON notification_queue(user_id);
+
+      -- Módulo de Escrita de Cards: Templates de Card
+      CREATE TABLE IF NOT EXISTS card_templates (
+        id VARCHAR(36) PRIMARY KEY,
+        user_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        category VARCHAR(50) DEFAULT 'Geral',
+        content TEXT NOT NULL,
+        is_system BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_card_templates_user_id ON card_templates(user_id);
+
+      -- Módulo de Escrita de Cards: Histórico de Cards Salvos
+      CREATE TABLE IF NOT EXISTS saved_cards (
+        id VARCHAR(36) PRIMARY KEY,
+        user_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,
+        template_id VARCHAR(36) REFERENCES card_templates(id) ON DELETE SET NULL,
+        template_title VARCHAR(255),
+        title VARCHAR(255) NOT NULL,
+        macro_values JSONB DEFAULT '{}'::jsonb,
+        content_markdown TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_saved_cards_user_id ON saved_cards(user_id);
     `);
 
     // Seed de Usuário Administrador Inicial (se não houver nenhum)
@@ -169,6 +199,97 @@ export async function initDatabase(): Promise<void> {
         `UPDATE notification_queue SET user_id = $1 WHERE user_id IS NULL`,
         [adminId]
       );
+    }
+
+    // Seed de Templates Padrão de Card (se a tabela estiver vazia)
+    const templateCountRes = await client.query('SELECT COUNT(*) FROM card_templates');
+    if (parseInt(templateCountRes.rows[0].count, 10) === 0) {
+      console.log('[DB] Criando templates padrão de card...');
+      const defaultTemplates = [
+        {
+          id: 'template-user-story',
+          title: 'História de Usuário (User Story)',
+          description: 'Estrutura padrão ágil com Como, Quero, Para que, Critérios de Aceite e Regras de Negócio.',
+          category: 'Ágil',
+          content: `# [{{ID_OU_CHAVE}}] {{Título da História}}
+
+### 👤 Como:
+{{Como (Papel do Usuário)}}
+
+### 🎯 Quero:
+{{Quero (Necessidade / Ação)}}
+
+### 💡 Para que:
+{{Para que (Benefício / Valor de Negócio)}}
+
+---
+
+### 📋 Critérios de Aceitação:
+{{Critérios de Aceitação}}
+
+### ⚙️ Regras de Negócio & Validações:
+{{Regras de Negócio}}
+
+### 📌 Observações Técnicas:
+{{Observações Técnicas}}`,
+          is_system: true,
+        },
+        {
+          id: 'template-bug-report',
+          title: 'Reporte de Bug / Defeito',
+          description: 'Modelo completo para descrição de falhas, passos de reprodução, logs e comportamentos.',
+          category: 'Qualidade',
+          content: `# 🐛 [BUG] {{Título do Defeito}}
+
+### 📍 Cenário / Ambiente:
+{{Ambiente (Ex: Produção, HML, Navegador)}}
+
+### 📝 Descrição do Problema:
+{{Descrição do Problema}}
+
+### 🔁 Passos para Reprodução:
+{{Passos para Reprodução}}
+
+### ❌ Comportamento Atual:
+{{Comportamento Atual}}
+
+### ✅ Comportamento Esperado:
+{{Comportamento Esperado}}
+
+### 📎 Evidências / Logs:
+{{Evidências e Logs}}`,
+          is_system: true,
+        },
+        {
+          id: 'template-tech-task',
+          title: 'Demanda Técnica / Task',
+          description: 'Estrutura para refatorações, infraestrutura, modelagens de banco de dados e integrações.',
+          category: 'Técnico',
+          content: `# 🛠️ [TASK] {{Título da Tarefa}}
+
+### 🎯 Objetivo:
+{{Objetivo da Tarefa}}
+
+### 📋 Escopo Técnico:
+{{Escopo da Solução Técnica}}
+
+### 🔍 Pré-requisitos & Dependências:
+{{Dependências}}
+
+### 🧪 Plano de Testes & Validação:
+{{Plano de Testes}}`,
+          is_system: true,
+        },
+      ];
+
+      for (const t of defaultTemplates) {
+        await client.query(
+          `INSERT INTO card_templates (id, title, description, category, content, is_system)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (id) DO NOTHING`,
+          [t.id, t.title, t.description, t.category, t.content, t.is_system]
+        );
+      }
     }
 
     console.log('[DB] Banco de dados inicializado com sucesso.');

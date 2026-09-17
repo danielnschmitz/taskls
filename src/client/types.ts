@@ -144,3 +144,35 @@ export interface JiraConfig {
   allPossibleStatuses?: string[];
 }
 
+export type ModuleType = 'tasks' | 'cards' | 'settings';
+
+export interface CardTemplate {
+  id: string;
+  userId?: string;
+  title: string;
+  description?: string | null;
+  category: string;
+  content: string;
+  isSystem: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SavedCard {
+  id: string;
+  userId: string;
+  templateId?: string | null;
+  templateTitle?: string;
+  title: string;
+  macroValues: Record<string, string>;
+  contentMarkdown: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface CardMacro {
+  name: string;
+  label: string;
+  isMultiline: boolean;
+}
+

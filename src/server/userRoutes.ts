@@ -17,6 +17,7 @@ userRoutes.get('/', async (req: Request, res: Response): Promise<void> => {
         username, 
         is_admin AS "isAdmin", 
         can_access_jira AS "canAccessJira", 
+        allowed_modules AS "allowedModules",
         is_default_password AS "isDefaultPassword", 
         created_at AS "createdAt",
         updated_at AS "updatedAt"
@@ -37,7 +38,7 @@ userRoutes.get('/', async (req: Request, res: Response): Promise<void> => {
  */
 userRoutes.post('/', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { username, password, canAccessJira } = req.body;
+    const { username, password, canAccessJira, allowedModules } = req.body;
 
     if (!username || !username.trim()) {
       res.status(400).json({ error: 'O nome de usuário é obrigatório.' });
@@ -71,11 +72,15 @@ userRoutes.post('/', async (req: Request, res: Response): Promise<void> => {
     const hash = hashPassword(password.trim(), salt);
     const userId = crypto.randomUUID();
 
+    const modules = Array.isArray(allowedModules) && allowedModules.length > 0
+      ? allowedModules
+      : ['tasks', 'cards'];
+
     const insertResult = await pool.query(
-      `INSERT INTO users (id, username, password_hash, salt, is_default_password, is_admin, can_access_jira)
-       VALUES ($1, $2, $3, $4, TRUE, FALSE, $5)
-       RETURNING id, username, is_admin AS "isAdmin", can_access_jira AS "canAccessJira", is_default_password AS "isDefaultPassword", created_at AS "createdAt"`,
-      [userId, cleanUsername, hash, salt, Boolean(canAccessJira)]
+      `INSERT INTO users (id, username, password_hash, salt, is_default_password, is_admin, can_access_jira, allowed_modules)
+       VALUES ($1, $2, $3, $4, TRUE, FALSE, $5, $6)
+       RETURNING id, username, is_admin AS "isAdmin", can_access_jira AS "canAccessJira", allowed_modules AS "allowedModules", is_default_password AS "isDefaultPassword", created_at AS "createdAt"`,
+      [userId, cleanUsername, hash, salt, Boolean(canAccessJira), modules]
     );
 
     res.status(201).json(insertResult.rows[0]);
@@ -92,9 +97,9 @@ userRoutes.post('/', async (req: Request, res: Response): Promise<void> => {
 userRoutes.put('/:id', async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const { canAccessJira } = req.body;
+    const { canAccessJira, allowedModules } = req.body;
 
-    const userCheck = await pool.query(`SELECT id, username, is_admin FROM users WHERE id = $1`, [id]);
+    const userCheck = await pool.query(`SELECT id, username, is_admin, allowed_modules FROM users WHERE id = $1`, [id]);
     if (userCheck.rows.length === 0) {
       res.status(404).json({ error: 'Usuário não encontrado.' });
       return;
@@ -102,18 +107,23 @@ userRoutes.put('/:id', async (req: Request, res: Response): Promise<void> => {
 
     const targetUser = userCheck.rows[0];
 
-    // O admin principal sempre mantém acesso ao Jira
+    // O admin principal sempre mantém acesso total
     let finalCanAccessJira = Boolean(canAccessJira);
+    let finalAllowedModules = Array.isArray(allowedModules)
+      ? allowedModules
+      : (targetUser.allowed_modules || ['tasks', 'cards']);
+
     if (targetUser.username.toLowerCase() === 'admin') {
       finalCanAccessJira = true;
+      finalAllowedModules = ['tasks', 'cards'];
     }
 
     const updateResult = await pool.query(
       `UPDATE users
-       SET can_access_jira = $1, updated_at = NOW()
-       WHERE id = $2
-       RETURNING id, username, is_admin AS "isAdmin", can_access_jira AS "canAccessJira", is_default_password AS "isDefaultPassword", created_at AS "createdAt"`,
-      [finalCanAccessJira, id]
+       SET can_access_jira = $1, allowed_modules = $2, updated_at = NOW()
+       WHERE id = $3
+       RETURNING id, username, is_admin AS "isAdmin", can_access_jira AS "canAccessJira", allowed_modules AS "allowedModules", is_default_password AS "isDefaultPassword", created_at AS "createdAt"`,
+      [finalCanAccessJira, finalAllowedModules, id]
     );
 
     res.json(updateResult.rows[0]);

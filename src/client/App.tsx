@@ -24,6 +24,7 @@ import {
   Priority,
   CategoryInfo,
   DndStatus,
+  ModuleType,
 } from './types';
 import { Header } from './components/Header';
 import { WeekPanel } from './components/WeekPanel';
@@ -37,6 +38,8 @@ import { JiraConfigModal } from './components/JiraConfigModal';
 import { LoginScreen } from './components/LoginScreen';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { UserManagementModal } from './components/UserManagementModal';
+import { CardWriterModule } from './components/CardWriterModule';
+import { SettingsModule } from './components/SettingsModule';
 import { useAuth } from './contexts/AuthContext';
 import {
   triggerBrowserNotification,
@@ -93,6 +96,32 @@ export const App: React.FC = () => {
   // Jira permission check
   const canAccessJira = Boolean(user?.isAdmin || user?.canAccessJira);
 
+  // Modular access checks
+  const userModules = user?.allowedModules || ['tasks', 'cards'];
+  const canAccessTasks = Boolean(user?.isAdmin || userModules.includes('tasks'));
+  const canAccessCards = Boolean(user?.isAdmin || userModules.includes('cards'));
+
+  const [activeModule, setActiveModule] = useState<ModuleType>(() => {
+    if (canAccessTasks) return 'tasks';
+    if (canAccessCards) return 'cards';
+    if (user?.isAdmin) return 'settings';
+    return 'tasks';
+  });
+
+  // Sync active module if user or permissions change
+  useEffect(() => {
+    if (activeModule === 'tasks' && !canAccessTasks) {
+      if (canAccessCards) setActiveModule('cards');
+      else if (user?.isAdmin) setActiveModule('settings');
+    } else if (activeModule === 'cards' && !canAccessCards) {
+      if (canAccessTasks) setActiveModule('tasks');
+      else if (user?.isAdmin) setActiveModule('settings');
+    } else if (activeModule === 'settings' && !user?.isAdmin) {
+      if (canAccessTasks) setActiveModule('tasks');
+      else if (canAccessCards) setActiveModule('cards');
+    }
+  }, [user, activeModule, canAccessTasks, canAccessCards]);
+
   // Handlers for Jira Week Navigation
   const handleJiraPrevWeek = () => setJiraWeekBaseDate((prev) => subWeeks(prev, 1));
   const handleJiraNextWeek = () => setJiraWeekBaseDate((prev) => addWeeks(prev, 1));
@@ -114,7 +143,7 @@ export const App: React.FC = () => {
 
   // Fetch dashboard data
   const fetchDashboard = useCallback(async () => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || !canAccessTasks) return;
     try {
       const weekStartStr = format(
         startOfWeek(currentWeekBaseDate, { weekStartsOn: 1 }),
@@ -130,17 +159,19 @@ export const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [currentWeekBaseDate, showToast, isAuthenticated]);
+  }, [currentWeekBaseDate, showToast, isAuthenticated, canAccessTasks]);
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && canAccessTasks) {
       fetchDashboard();
+    } else {
+      setIsLoading(false);
     }
-  }, [fetchDashboard, isAuthenticated]);
+  }, [fetchDashboard, isAuthenticated, canAccessTasks]);
 
   // Polling de Notificações do Navegador (a cada 15 segundos)
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || !canAccessTasks) return;
 
     // Solicitar permissão de notificação no navegador se ainda estiver em 'default'
     if (isNotificationSupported() && getNotificationPermission() === 'default') {
@@ -170,7 +201,7 @@ export const App: React.FC = () => {
       clearTimeout(initialTimer);
       clearInterval(interval);
     };
-  }, [isAuthenticated, showToast]);
+  }, [isAuthenticated, canAccessTasks, showToast]);
 
   // Extract list of all tasks
   const allTasksList = dashboardData
@@ -434,6 +465,8 @@ export const App: React.FC = () => {
     <div className="min-h-screen bg-[#090d16] text-slate-100 flex flex-col">
       {/* Top Header */}
       <Header
+        activeModule={activeModule}
+        onSelectModule={setActiveModule}
         onNewTask={handleOpenNewTask}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
@@ -476,195 +509,218 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        {/* Navigation Tabs (Quick focus) */}
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-          <div className="flex items-center gap-1.5 p-1 bg-slate-900/80 border border-slate-800 rounded-xl">
-            <button
-              onClick={() => setActiveTab('all')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                activeTab === 'all'
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <LayoutGrid className="w-3.5 h-3.5" />
-              <span>Todos os Painéis</span>
-            </button>
+        {/* Módulo: Escrita de Cards */}
+        {activeModule === 'cards' && canAccessCards && (
+          <CardWriterModule onShowToast={showToast} />
+        )}
 
-            <button
-              onClick={() => setActiveTab('week')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                activeTab === 'week'
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Calendar className="w-3.5 h-3.5" />
-              <span>Semana Atual</span>
-            </button>
+        {/* Módulo: Configurações (Apenas Administrador) */}
+        {activeModule === 'settings' && user?.isAdmin && (
+          <SettingsModule onShowToast={showToast} />
+        )}
 
-            <button
-              onClick={() => setActiveTab('upcoming')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                activeTab === 'upcoming'
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <CalendarDays className="w-3.5 h-3.5" />
-              <span>Agenda & Mensais</span>
-            </button>
+        {/* Módulo: Gestão de Tarefas */}
+        {activeModule === 'tasks' && canAccessTasks && (
+          <>
+            {/* Navigation Tabs (Quick focus) */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-1.5 p-1 bg-slate-900/80 border border-slate-800 rounded-xl">
+                <button
+                  onClick={() => setActiveTab('all')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    activeTab === 'all'
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <span>Todos os Painéis</span>
+                </button>
 
-            <button
-              onClick={() => setActiveTab('backlog')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                activeTab === 'backlog'
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Inbox className="w-3.5 h-3.5" />
-              <span>Backlog</span>
-            </button>
+                <button
+                  onClick={() => setActiveTab('week')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    activeTab === 'week'
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>Semana Atual</span>
+                </button>
 
-            {canAccessJira && (
-              <button
-                onClick={() => setActiveTab('jira')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  activeTab === 'jira'
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
-                  <path d="M11.53 2c0 2.4 1.97 4.35 4.38 4.35h2.15v2.17c0 2.4 1.97 4.35 4.39 4.35V2h-10.92zm-5.77 5.79c0 2.4 1.97 4.35 4.39 4.35h2.14v2.17c0 2.4 1.97 4.35 4.39 4.35V7.79H5.76zm-5.76 5.79c0 2.4 1.97 4.35 4.39 4.35h2.14v2.17c0 2.4 1.97 4.35 4.39 4.35v-10.87H0z"/>
-                </svg>
-                <span>Demandas Jira</span>
-              </button>
-            )}
-          </div>
+                <button
+                  onClick={() => setActiveTab('upcoming')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    activeTab === 'upcoming'
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <CalendarDays className="w-3.5 h-3.5" />
+                  <span>Agenda & Mensais</span>
+                </button>
 
-          <div className="flex items-center gap-4 text-xs text-slate-400">
-            {focusMode && (
-              <span className="text-amber-400 font-bold flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-lg">
-                <Target className="w-3.5 h-3.5" />
-                Modo Foco Ativo
-              </span>
-            )}
-            <div className="hidden sm:flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-              <span>PostgreSQL Conectado</span>
-            </div>
-          </div>
-        </div>
+                <button
+                  onClick={() => setActiveTab('backlog')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    activeTab === 'backlog'
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Inbox className="w-3.5 h-3.5" />
+                  <span>Backlog</span>
+                </button>
 
-        {/* Loading Spinner */}
-        {isLoading && !dashboardData ? (
-          <div className="py-24 flex flex-col items-center justify-center gap-3">
-            <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
-            <p className="text-sm text-slate-400 font-medium">Carregando painéis do TaskLS...</p>
-          </div>
-        ) : dashboardData ? (
-          <div className="space-y-6">
-            
-            {/* Panel 1: Current Week (Semana Atual) */}
-            {(activeTab === 'all' || activeTab === 'week') && (
-              <section>
-                <WeekPanel
-                  days={dashboardData.week.days}
-                  weekStartDate={dashboardData.week.startDate}
-                  weekEndDate={dashboardData.week.endDate}
-                  categories={categoriesInfo}
-                  focusMode={focusMode}
-                  onToggleFocusMode={() => setFocusMode(!focusMode)}
-                  onPrevWeek={handlePrevWeek}
-                  onNextWeek={handleNextWeek}
-                  onToday={handleToday}
-                  onToggleComplete={handleToggleComplete}
-                  onEdit={handleEditTask}
-                  onDelete={(task) => setTaskToDelete(task)}
-                  onAddTaskForDay={handleAddTaskForDay}
-                  onToggleSubtask={handleToggleSubtask}
-                  onSnooze={handleSnooze}
-                  onCancelSnooze={handleCancelSnooze}
-                  onDropTaskOnDay={handleDropTaskOnDay}
-                  searchQuery={searchQuery}
-                  selectedPriority={selectedPriority}
-                  selectedCategory={selectedCategory}
-                />
-              </section>
-            )}
-
-            {/* Split Panels: Panel 2 & Panel 3 */}
-            {(activeTab === 'all' || activeTab === 'upcoming' || activeTab === 'backlog') && (
-              <div
-                className={`grid gap-6 ${
-                  activeTab === 'all'
-                    ? 'grid-cols-1 lg:grid-cols-12'
-                    : 'grid-cols-1'
-                }`}
-              >
-                {/* Panel 2: Single & Monthly Tasks */}
-                {(activeTab === 'all' || activeTab === 'upcoming') && (
-                  <section className={activeTab === 'all' ? 'lg:col-span-7' : 'w-full'}>
-                    <UpcomingPanel
-                      tasks={dashboardData.upcoming}
-                      categories={categoriesInfo}
-                      onToggleComplete={handleToggleComplete}
-                      onEdit={handleEditTask}
-                      onDelete={(task) => setTaskToDelete(task)}
-                      onNewTask={handleOpenNewTask}
-                      onToggleSubtask={handleToggleSubtask}
-                      onSnooze={handleSnooze}
-                      onCancelSnooze={handleCancelSnooze}
-                      searchQuery={searchQuery}
-                      selectedPriority={selectedPriority}
-                      selectedCategory={selectedCategory}
-                    />
-                  </section>
-                )}
-
-                {/* Panel 3: Backlog (Tarefas Sem Data) */}
-                {(activeTab === 'all' || activeTab === 'backlog') && (
-                  <section className={activeTab === 'all' ? 'lg:col-span-5' : 'w-full'}>
-                    <BacklogPanel
-                      tasks={dashboardData.backlog}
-                      categories={categoriesInfo}
-                      onToggleComplete={handleToggleComplete}
-                      onEdit={handleEditTask}
-                      onDelete={(task) => setTaskToDelete(task)}
-                      onNewTask={handleOpenNewTask}
-                      onScheduleForToday={handleScheduleForToday}
-                      onToggleSubtask={handleToggleSubtask}
-                      onSnooze={handleSnooze}
-                      onCancelSnooze={handleCancelSnooze}
-                      searchQuery={searchQuery}
-                      selectedPriority={selectedPriority}
-                      selectedCategory={selectedCategory}
-                    />
-                  </section>
+                {canAccessJira && (
+                  <button
+                    onClick={() => setActiveTab('jira')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      activeTab === 'jira'
+                        ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                      <path d="M11.53 2c0 2.4 1.97 4.35 4.38 4.35h2.15v2.17c0 2.4 1.97 4.35 4.39 4.35V2h-10.92zm-5.77 5.79c0 2.4 1.97 4.35 4.39 4.35h2.14v2.17c0 2.4 1.97 4.35 4.39 4.35V7.79H5.76zm-5.76 5.79c0 2.4 1.97 4.35 4.39 4.35h2.14v2.17c0 2.4 1.97 4.35 4.39 4.35v-10.87H0z"/>
+                    </svg>
+                    <span>Demandas Jira</span>
+                  </button>
                 )}
               </div>
-            )}
 
-            {/* Panel 4: Jira Demands Week (Demandas Jira com Entrega na Semana) */}
-            {canAccessJira && (activeTab === 'all' || activeTab === 'jira') && (
-              <section className="pt-2">
-                <JiraWeekPanel
-                  key={jiraRefreshKey}
-                  weekStartDate={format(startOfWeek(jiraWeekBaseDate, { weekStartsOn: 1 }), 'yyyy-MM-dd')}
-                  onPrevWeek={handleJiraPrevWeek}
-                  onNextWeek={handleJiraNextWeek}
-                  onToday={handleJiraToday}
-                  onOpenSettings={user?.isAdmin ? () => setIsJiraModalOpen(true) : undefined}
-                  searchQuery={searchQuery}
-                  onShowToast={showToast}
-                />
-              </section>
-            )}
+              <div className="flex items-center gap-4 text-xs text-slate-400">
+                {focusMode && (
+                  <span className="text-amber-400 font-bold flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-lg">
+                    <Target className="w-3.5 h-3.5" />
+                    Modo Foco Ativo
+                  </span>
+                )}
+                <div className="hidden sm:flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                  <span>PostgreSQL Conectado</span>
+                </div>
+              </div>
+            </div>
 
+            {/* Loading Spinner */}
+            {isLoading && !dashboardData ? (
+              <div className="py-24 flex flex-col items-center justify-center gap-3">
+                <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+                <p className="text-sm text-slate-400 font-medium">Carregando painéis do TaskLS...</p>
+              </div>
+            ) : dashboardData ? (
+              <div className="space-y-6">
+                
+                {/* Panel 1: Current Week (Semana Atual) */}
+                {(activeTab === 'all' || activeTab === 'week') && (
+                  <section>
+                    <WeekPanel
+                      days={dashboardData.week.days}
+                      weekStartDate={dashboardData.week.startDate}
+                      weekEndDate={dashboardData.week.endDate}
+                      categories={categoriesInfo}
+                      focusMode={focusMode}
+                      onToggleFocusMode={() => setFocusMode(!focusMode)}
+                      onPrevWeek={handlePrevWeek}
+                      onNextWeek={handleNextWeek}
+                      onToday={handleToday}
+                      onToggleComplete={handleToggleComplete}
+                      onEdit={handleEditTask}
+                      onDelete={(task) => setTaskToDelete(task)}
+                      onAddTaskForDay={handleAddTaskForDay}
+                      onToggleSubtask={handleToggleSubtask}
+                      onSnooze={handleSnooze}
+                      onCancelSnooze={handleCancelSnooze}
+                      onDropTaskOnDay={handleDropTaskOnDay}
+                      searchQuery={searchQuery}
+                      selectedPriority={selectedPriority}
+                      selectedCategory={selectedCategory}
+                    />
+                  </section>
+                )}
+
+                {/* Split Panels: Panel 2 & Panel 3 */}
+                {(activeTab === 'all' || activeTab === 'upcoming' || activeTab === 'backlog') && (
+                  <div
+                    className={`grid gap-6 ${
+                      activeTab === 'all'
+                        ? 'grid-cols-1 lg:grid-cols-12'
+                        : 'grid-cols-1'
+                    }`}
+                  >
+                    {/* Panel 2: Single & Monthly Tasks */}
+                    {(activeTab === 'all' || activeTab === 'upcoming') && (
+                      <section className={activeTab === 'all' ? 'lg:col-span-7' : 'w-full'}>
+                        <UpcomingPanel
+                          tasks={dashboardData.upcoming}
+                          categories={categoriesInfo}
+                          onToggleComplete={handleToggleComplete}
+                          onEdit={handleEditTask}
+                          onDelete={(task) => setTaskToDelete(task)}
+                          onNewTask={handleOpenNewTask}
+                          onToggleSubtask={handleToggleSubtask}
+                          onSnooze={handleSnooze}
+                          onCancelSnooze={handleCancelSnooze}
+                          searchQuery={searchQuery}
+                          selectedPriority={selectedPriority}
+                          selectedCategory={selectedCategory}
+                        />
+                      </section>
+                    )}
+
+                    {/* Panel 3: Backlog (Tarefas Sem Data) */}
+                    {(activeTab === 'all' || activeTab === 'backlog') && (
+                      <section className={activeTab === 'all' ? 'lg:col-span-5' : 'w-full'}>
+                        <BacklogPanel
+                          tasks={dashboardData.backlog}
+                          categories={categoriesInfo}
+                          onToggleComplete={handleToggleComplete}
+                          onEdit={handleEditTask}
+                          onDelete={(task) => setTaskToDelete(task)}
+                          onNewTask={handleOpenNewTask}
+                          onScheduleForToday={handleScheduleForToday}
+                          onToggleSubtask={handleToggleSubtask}
+                          onSnooze={handleSnooze}
+                          onCancelSnooze={handleCancelSnooze}
+                          searchQuery={searchQuery}
+                          selectedPriority={selectedPriority}
+                          selectedCategory={selectedCategory}
+                        />
+                      </section>
+                    )}
+                  </div>
+                )}
+
+                {/* Panel 4: Jira Demands Week (Demandas Jira com Entrega na Semana) */}
+                {canAccessJira && (activeTab === 'all' || activeTab === 'jira') && (
+                  <section className="pt-2">
+                    <JiraWeekPanel
+                      key={jiraRefreshKey}
+                      weekStartDate={format(startOfWeek(jiraWeekBaseDate, { weekStartsOn: 1 }), 'yyyy-MM-dd')}
+                      onPrevWeek={handleJiraPrevWeek}
+                      onNextWeek={handleJiraNextWeek}
+                      onToday={handleJiraToday}
+                      onOpenSettings={user?.isAdmin ? () => setIsJiraModalOpen(true) : undefined}
+                      searchQuery={searchQuery}
+                      onShowToast={showToast}
+                    />
+                  </section>
+                )}
+
+              </div>
+            ) : null}
+          </>
+        )}
+
+        {/* Sem Permissões de Módulo */}
+        {!canAccessTasks && !canAccessCards && !user?.isAdmin && (
+          <div className="py-24 text-center text-slate-400 bg-slate-900/30 rounded-2xl border border-slate-800 p-8">
+            <p className="text-base font-semibold text-slate-200">Você não possui permissão para acessar nenhum módulo no momento.</p>
+            <p className="text-xs text-slate-500 mt-2">Entre em contato com o administrador do sistema para solicitar a liberação de módulos na sua conta.</p>
           </div>
-        ) : null}
+        )}
 
       </main>
 

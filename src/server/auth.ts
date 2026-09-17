@@ -7,6 +7,7 @@ export interface TokenPayload {
   username: string;
   isAdmin: boolean;
   canAccessJira: boolean;
+  allowedModules?: string[];
   isDefaultPassword?: boolean;
   exp: number;
 }
@@ -70,6 +71,7 @@ export async function generateToken(
     username: string;
     is_admin?: boolean;
     can_access_jira?: boolean;
+    allowed_modules?: string[];
     is_default_password?: boolean;
   },
   expiresInDays = 30
@@ -83,6 +85,7 @@ export async function generateToken(
     username: user.username,
     isAdmin: Boolean(user.is_admin),
     canAccessJira: Boolean(user.can_access_jira),
+    allowedModules: user.allowed_modules || ['tasks', 'cards'],
     isDefaultPassword: Boolean(user.is_default_password),
     exp,
   };
@@ -201,5 +204,27 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction): v
     return;
   }
   next();
+}
+
+/**
+ * Middleware para garantir que o usuário tenha permissão ao módulo solicitado
+ */
+export function requireModule(moduleName: string) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const user = (req as any).user as TokenPayload | undefined;
+    if (!user) {
+      res.status(401).json({ error: 'Acesso não autorizado. Faça login para continuar.' });
+      return;
+    }
+    if (user.isAdmin) {
+      return next();
+    }
+    const modules = user.allowedModules || ['tasks', 'cards'];
+    if (!modules.includes(moduleName)) {
+      res.status(403).json({ error: `Você não tem permissão para acessar o módulo '${moduleName}'. Solicite acesso ao administrador.` });
+      return;
+    }
+    next();
+  };
 }
 

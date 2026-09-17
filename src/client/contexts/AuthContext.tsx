@@ -5,6 +5,7 @@ export interface AuthUser {
   username: string;
   isAdmin: boolean;
   canAccessJira: boolean;
+  allowedModules?: string[];
   isDefaultPassword?: boolean;
 }
 
