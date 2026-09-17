@@ -50,21 +50,25 @@ router.get('/tasks/dashboard', async (req: Request, res: Response) => {
     const weekStartStr = format(weekStartDate, 'yyyy-MM-dd');
     const weekEndStr = format(weekEndDate, 'yyyy-MM-dd');
 
-    // 1. Fetch all tasks
+    const userId = (req as any).user.id;
+
+    // 1. Fetch user's tasks
     const tasksQuery = await pool.query<TaskRecord>(
-      'SELECT * FROM tasks ORDER BY created_at DESC'
+      'SELECT * FROM tasks WHERE user_id = $1 ORDER BY created_at DESC',
+      [userId]
     );
     const allTasks = tasksQuery.rows;
 
-    // 2. Fetch all completions in the week range
+    // 2. Fetch completions for user's tasks in the week range
     const completionsQuery = await pool.query<{
       task_id: string;
       completion_date: string;
     }>(
-      `SELECT task_id, to_char(completion_date, 'YYYY-MM-DD') as completion_date
-       FROM task_completions
-       WHERE completion_date >= $1 AND completion_date <= $2`,
-      [weekStartStr, weekEndStr]
+      `SELECT c.task_id, to_char(c.completion_date, 'YYYY-MM-DD') as completion_date
+       FROM task_completions c
+       JOIN tasks t ON t.id = c.task_id
+       WHERE t.user_id = $1 AND c.completion_date >= $2 AND c.completion_date <= $3`,
+      [userId, weekStartStr, weekEndStr]
     );
 
     // Set of completed keys: "taskId:YYYY-MM-DD"
@@ -189,9 +193,10 @@ router.get('/tasks/dashboard', async (req: Request, res: Response) => {
  */
 router.get('/tasks', async (req: Request, res: Response) => {
   try {
+    const userId = (req as any).user.id;
     const { type, priority, category } = req.query;
-    let query = 'SELECT * FROM tasks WHERE 1=1';
-    const params: any[] = [];
+    let query = 'SELECT * FROM tasks WHERE user_id = $1';
+    const params: any[] = [userId];
 
     if (type) {
       params.push(type);
@@ -222,6 +227,7 @@ router.get('/tasks', async (req: Request, res: Response) => {
  */
 router.post('/tasks', async (req: Request, res: Response) => {
   try {
+    const userId = (req as any).user.id;
     const {
       title,
       description,
@@ -256,12 +262,12 @@ router.post('/tasks', async (req: Request, res: Response) => {
         id, title, description, type, priority, category,
         due_date, weekly_days, monthly_type, monthly_day,
         monthly_pattern, monthly_weekday, notification_times,
-        is_completed, subtasks, snoozed_until, created_at, updated_at
+        is_completed, subtasks, snoozed_until, user_id, created_at, updated_at
       ) VALUES (
         $1, $2, $3, $4, $5, $6,
         $7, $8, $9, $10,
         $11, $12, $13,
-        false, $14, $15, NOW(), NOW()
+        false, $14, $15, $16, NOW(), NOW()
       )
       RETURNING *;
     `;
@@ -282,6 +288,7 @@ router.post('/tasks', async (req: Request, res: Response) => {
       Array.isArray(notification_times) ? notification_times : [],
       JSON.stringify(subtasks || []),
       snoozed_until || null,
+      userId,
     ];
 
     const result = await pool.query<TaskRecord>(insertQuery, values);
@@ -298,6 +305,7 @@ router.post('/tasks', async (req: Request, res: Response) => {
  */
 router.put('/tasks/:id', async (req: Request, res: Response) => {
   try {
+    const userId = (req as any).user.id;
     const { id } = req.params;
     const {
       title,
@@ -317,7 +325,7 @@ router.put('/tasks/:id', async (req: Request, res: Response) => {
       snoozed_until,
     } = req.body;
 
-    const checkRes = await pool.query('SELECT * FROM tasks WHERE id = $1', [id]);
+    const checkRes = await pool.query('SELECT * FROM tasks WHERE id = $1 AND user_id = $2', [id, userId]);
     if (checkRes.rowCount === 0) {
       res.status(404).json({ error: 'Tarefa não encontrada' });
       return;
@@ -343,7 +351,7 @@ router.put('/tasks/:id', async (req: Request, res: Response) => {
         subtasks = $14,
         snoozed_until = $15,
         updated_at = NOW()
-      WHERE id = $16
+      WHERE id = $16 AND user_id = $17
       RETURNING *;
     `;
 
@@ -364,6 +372,7 @@ router.put('/tasks/:id', async (req: Request, res: Response) => {
       subtasks !== undefined ? JSON.stringify(subtasks) : JSON.stringify(current.subtasks || []),
       snoozed_until !== undefined ? snoozed_until : current.snoozed_until,
       id,
+      userId,
     ];
 
     const result = await pool.query<TaskRecord>(updateQuery, values);
@@ -380,8 +389,9 @@ router.put('/tasks/:id', async (req: Request, res: Response) => {
  */
 router.delete('/tasks/:id', async (req: Request, res: Response) => {
   try {
+    const userId = (req as any).user.id;
     const { id } = req.params;
-    const result = await pool.query('DELETE FROM tasks WHERE id = $1 RETURNING id', [id]);
+    const result = await pool.query('DELETE FROM tasks WHERE id = $1 AND user_id = $2 RETURNING id', [id, userId]);
     if (result.rowCount === 0) {
       res.status(404).json({ error: 'Tarefa não encontrada' });
       return;
@@ -401,10 +411,11 @@ router.delete('/tasks/:id', async (req: Request, res: Response) => {
  */
 router.post('/tasks/:id/toggle', async (req: Request, res: Response) => {
   try {
+    const userId = (req as any).user.id;
     const { id } = req.params;
     const { date: targetDateParam } = req.body;
 
-    const taskRes = await pool.query<TaskRecord>('SELECT * FROM tasks WHERE id = $1', [id]);
+    const taskRes = await pool.query<TaskRecord>('SELECT * FROM tasks WHERE id = $1 AND user_id = $2', [id, userId]);
     if (taskRes.rowCount === 0) {
       res.status(404).json({ error: 'Tarefa não encontrada' });
       return;
@@ -418,9 +429,9 @@ router.post('/tasks/:id/toggle', async (req: Request, res: Response) => {
       const updateRes = await pool.query<TaskRecord>(
         `UPDATE tasks
          SET is_completed = $1, completed_at = $2, updated_at = NOW()
-         WHERE id = $3
+         WHERE id = $3 AND user_id = $4
          RETURNING *`,
-        [newStatus, newStatus ? new Date() : null, id]
+        [newStatus, newStatus ? new Date() : null, id, userId]
       );
       res.json({
         success: true,
@@ -473,6 +484,7 @@ router.post('/tasks/:id/toggle', async (req: Request, res: Response) => {
  */
 router.get('/notifications/pending', async (req: Request, res: Response) => {
   try {
+    const userId = (req as any).user.id;
     const result = await pool.query<{
       id: number;
       title: string;
@@ -482,8 +494,9 @@ router.get('/notifications/pending', async (req: Request, res: Response) => {
     }>(
       `SELECT id, title, message, task_id, created_at
        FROM notification_queue
-       WHERE delivered = FALSE AND created_at >= NOW() - INTERVAL '5 minutes'
-       ORDER BY created_at ASC`
+       WHERE delivered = FALSE AND user_id = $1 AND created_at >= NOW() - INTERVAL '5 minutes'
+       ORDER BY created_at ASC`,
+      [userId]
     );
 
     if (result.rows.length > 0) {
@@ -507,11 +520,12 @@ router.get('/notifications/pending', async (req: Request, res: Response) => {
  */
 router.post('/notifications/test', async (req: Request, res: Response) => {
   try {
+    const userId = (req as any).user.id;
     const {
       title = 'TaskLS - Notificação de Teste',
       message = 'Suas notificações do navegador estão configuradas e funcionando!',
     } = req.body;
-    const result = await sendWindowsNotification(title, message);
+    const result = await sendWindowsNotification(title, message, undefined, userId);
     res.json({
       success: result,
       message: result
@@ -559,11 +573,12 @@ router.post('/system/autostart', (req: Request, res: Response) => {
  */
 router.patch('/tasks/:id/subtasks', async (req: Request, res: Response) => {
   try {
+    const userId = (req as any).user.id;
     const { id } = req.params;
     const { subtasks } = req.body;
     const result = await pool.query(
-      `UPDATE tasks SET subtasks = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
-      [JSON.stringify(subtasks || []), id]
+      `UPDATE tasks SET subtasks = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3 RETURNING *`,
+      [JSON.stringify(subtasks || []), id, userId]
     );
     if (result.rowCount === 0) {
       res.status(404).json({ error: 'Tarefa não encontrada' });
@@ -582,12 +597,13 @@ router.patch('/tasks/:id/subtasks', async (req: Request, res: Response) => {
  */
 router.post('/tasks/:id/snooze', async (req: Request, res: Response) => {
   try {
+    const userId = (req as any).user.id;
     const { id } = req.params;
     const { minutes = 15 } = req.body;
     const snoozedUntil = new Date(Date.now() + Number(minutes) * 60 * 1000);
     const result = await pool.query(
-      `UPDATE tasks SET snoozed_until = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
-      [snoozedUntil, id]
+      `UPDATE tasks SET snoozed_until = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3 RETURNING *`,
+      [snoozedUntil, id, userId]
     );
     if (result.rowCount === 0) {
       res.status(404).json({ error: 'Tarefa não encontrada' });
@@ -606,10 +622,11 @@ router.post('/tasks/:id/snooze', async (req: Request, res: Response) => {
  */
 router.delete('/tasks/:id/snooze', async (req: Request, res: Response) => {
   try {
+    const userId = (req as any).user.id;
     const { id } = req.params;
     const result = await pool.query(
-      `UPDATE tasks SET snoozed_until = NULL, updated_at = NOW() WHERE id = $1 RETURNING *`,
-      [id]
+      `UPDATE tasks SET snoozed_until = NULL, updated_at = NOW() WHERE id = $1 AND user_id = $2 RETURNING *`,
+      [id, userId]
     );
     res.json({ success: true, task: result.rows[0] });
   } catch (err) {
@@ -696,8 +713,15 @@ router.post('/categories', async (req: Request, res: Response) => {
  */
 router.get('/backup/export', async (req: Request, res: Response) => {
   try {
-    const tasksRes = await pool.query('SELECT * FROM tasks ORDER BY created_at ASC');
-    const completionsRes = await pool.query('SELECT * FROM task_completions ORDER BY id ASC');
+    const userId = (req as any).user.id;
+    const tasksRes = await pool.query('SELECT * FROM tasks WHERE user_id = $1 ORDER BY created_at ASC', [userId]);
+    const completionsRes = await pool.query(
+      `SELECT c.* FROM task_completions c
+       JOIN tasks t ON t.id = c.task_id
+       WHERE t.user_id = $1
+       ORDER BY c.id ASC`,
+      [userId]
+    );
     const categoriesRes = await pool.query('SELECT * FROM categories ORDER BY name ASC');
     const settingsRes = await pool.query('SELECT * FROM app_settings');
 
@@ -730,6 +754,7 @@ router.get('/backup/export', async (req: Request, res: Response) => {
 router.post('/backup/import', async (req: Request, res: Response) => {
   const client = await pool.connect();
   try {
+    const userId = (req as any).user.id;
     const { mode = 'merge', data } = req.body;
     if (!data || !Array.isArray(data.tasks)) {
       res.status(400).json({ error: 'Arquivo de backup inválido ou sem lista de tarefas.' });
@@ -739,9 +764,18 @@ router.post('/backup/import', async (req: Request, res: Response) => {
     await client.query('BEGIN');
 
     if (mode === 'replace') {
-      await client.query('DELETE FROM task_notifications_sent');
-      await client.query('DELETE FROM task_completions');
-      await client.query('DELETE FROM tasks');
+      await client.query(
+        `DELETE FROM task_notifications_sent WHERE task_id IN (SELECT id FROM tasks WHERE user_id = $1)`,
+        [userId]
+      );
+      await client.query(
+        `DELETE FROM task_completions WHERE task_id IN (SELECT id FROM tasks WHERE user_id = $1)`,
+        [userId]
+      );
+      await client.query(
+        `DELETE FROM tasks WHERE user_id = $1`,
+        [userId]
+      );
     }
 
     // Restore categories
@@ -755,7 +789,7 @@ router.post('/backup/import', async (req: Request, res: Response) => {
       }
     }
 
-    // Restore tasks
+    // Restore tasks (vinculando ao usuário logado)
     let importedTasksCount = 0;
     for (const t of data.tasks) {
       await client.query(
@@ -763,12 +797,12 @@ router.post('/backup/import', async (req: Request, res: Response) => {
           id, title, description, type, priority, category,
           due_date, weekly_days, monthly_type, monthly_day,
           monthly_pattern, monthly_weekday, notification_times,
-          is_completed, completed_at, subtasks, snoozed_until, created_at, updated_at
+          is_completed, completed_at, subtasks, snoozed_until, user_id, created_at, updated_at
         ) VALUES (
           $1, $2, $3, $4, $5, $6,
           $7, $8, $9, $10,
           $11, $12, $13,
-          $14, $15, $16, $17, $18, $19
+          $14, $15, $16, $17, $18, $19, $20
         )
         ON CONFLICT (id) DO UPDATE SET
           title = EXCLUDED.title,
@@ -786,13 +820,14 @@ router.post('/backup/import', async (req: Request, res: Response) => {
           is_completed = EXCLUDED.is_completed,
           subtasks = EXCLUDED.subtasks,
           snoozed_until = EXCLUDED.snoozed_until,
+          user_id = EXCLUDED.user_id,
           updated_at = NOW()`,
         [
           t.id, t.title, t.description, t.type, t.priority, t.category,
           t.due_date, t.weekly_days, t.monthly_type, t.monthly_day,
           t.monthly_pattern, t.monthly_weekday, t.notification_times,
           t.is_completed, t.completed_at, JSON.stringify(t.subtasks || []),
-          t.snoozed_until || null, t.created_at || new Date(), t.updated_at || new Date()
+          t.snoozed_until || null, userId, t.created_at || new Date(), t.updated_at || new Date()
         ]
       );
       importedTasksCount++;
@@ -827,7 +862,11 @@ router.post('/backup/import', async (req: Request, res: Response) => {
  */
 router.get('/backup/export/csv', async (req: Request, res: Response) => {
   try {
-    const tasksRes = await pool.query<TaskRecord>('SELECT * FROM tasks ORDER BY created_at DESC');
+    const userId = (req as any).user.id;
+    const tasksRes = await pool.query<TaskRecord>(
+      'SELECT * FROM tasks WHERE user_id = $1 ORDER BY created_at DESC',
+      [userId]
+    );
     
     const headers = ['ID', 'Título', 'Tipo', 'Prioridade', 'Categoria', 'Data/Dias', 'Concluída', 'Horários Notificação', 'Subtarefas'];
     const rows = tasksRes.rows.map(t => {
@@ -873,6 +912,12 @@ router.get('/backup/export/csv', async (req: Request, res: Response) => {
  */
 router.get('/jira/settings', async (req: Request, res: Response) => {
   try {
+    const authUser = (req as any).user;
+    if (!authUser?.isAdmin) {
+      res.status(403).json({ error: 'Apenas administradores podem acessar as configurações do Jira.' });
+      return;
+    }
+
     const config = await getJiraConfig();
     res.json({
       domain: config.domain,
@@ -895,6 +940,12 @@ router.get('/jira/settings', async (req: Request, res: Response) => {
  */
 router.put('/jira/settings', async (req: Request, res: Response) => {
   try {
+    const authUser = (req as any).user;
+    if (!authUser?.isAdmin) {
+      res.status(403).json({ error: 'Apenas administradores podem alterar as configurações do Jira.' });
+      return;
+    }
+
     const { domain, email, api_token, projects, statuses, custom_fields } = req.body;
 
     const updated = await saveJiraConfig({
@@ -930,6 +981,12 @@ router.put('/jira/settings', async (req: Request, res: Response) => {
  */
 router.post('/jira/test', async (req: Request, res: Response) => {
   try {
+    const authUser = (req as any).user;
+    if (!authUser?.isAdmin) {
+      res.status(403).json({ error: 'Apenas administradores podem testar a conexão do Jira.' });
+      return;
+    }
+
     const { domain, email, api_token } = req.body;
     const testResult = await testJiraConnection({
       ...(domain && { domain }),
@@ -950,6 +1007,12 @@ router.post('/jira/test', async (req: Request, res: Response) => {
  */
 router.get('/jira/demands', async (req: Request, res: Response) => {
   try {
+    const authUser = (req as any).user;
+    if (!authUser?.isAdmin && !authUser?.canAccessJira) {
+      res.status(403).json({ error: 'Você não tem permissão para visualizar o painel do Jira.' });
+      return;
+    }
+
     const { weekStart } = req.query;
     const baseDateStr = typeof weekStart === 'string' && weekStart
       ? weekStart

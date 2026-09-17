@@ -5,6 +5,8 @@ import { pool } from './db';
 export interface TokenPayload {
   id: string;
   username: string;
+  isAdmin: boolean;
+  canAccessJira: boolean;
   isDefaultPassword?: boolean;
   exp: number;
 }
@@ -63,7 +65,13 @@ function base64UrlDecode(str: string): string {
  * Gera um token JWT assinado com validade padrão de 30 dias
  */
 export async function generateToken(
-  user: { id: string; username: string; is_default_password?: boolean },
+  user: {
+    id: string;
+    username: string;
+    is_admin?: boolean;
+    can_access_jira?: boolean;
+    is_default_password?: boolean;
+  },
   expiresInDays = 30
 ): Promise<string> {
   const secret = await getJwtSecret();
@@ -73,6 +81,8 @@ export async function generateToken(
   const payload: TokenPayload = {
     id: user.id,
     username: user.username,
+    isAdmin: Boolean(user.is_admin),
+    canAccessJira: Boolean(user.can_access_jira),
     isDefaultPassword: Boolean(user.is_default_password),
     exp,
   };
@@ -180,3 +190,16 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
   (req as any).user = payload;
   next();
 }
+
+/**
+ * Middleware para garantir que apenas administradores acessem determinadas rotas
+ */
+export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
+  const user = (req as any).user as TokenPayload | undefined;
+  if (!user || !user.isAdmin) {
+    res.status(403).json({ error: 'Acesso negado. Apenas administradores podem realizar esta operação.' });
+    return;
+  }
+  next();
+}
+

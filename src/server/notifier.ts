@@ -8,19 +8,20 @@ import { pool } from './db';
 export async function queueNotification(
   title: string,
   message: string,
-  taskId?: string
+  taskId?: string,
+  userId?: string
 ): Promise<boolean> {
   try {
     const cleanTitle = title || 'TaskLS - Lembrete';
     const cleanMessage = message || 'Você tem uma tarefa agendada!';
 
     await pool.query(
-      `INSERT INTO notification_queue (title, message, task_id)
-       VALUES ($1, $2, $3)`,
-      [cleanTitle, cleanMessage, taskId || null]
+      `INSERT INTO notification_queue (title, message, task_id, user_id)
+       VALUES ($1, $2, $3, $4)`,
+      [cleanTitle, cleanMessage, taskId || null, userId || null]
     );
 
-    console.log(`[Notifier] Notificação enfileirada para o navegador: "${cleanTitle}"`);
+    console.log(`[Notifier] Notificação enfileirada para o navegador: "${cleanTitle}" (User: ${userId || 'admin'})`);
     return true;
   } catch (err) {
     console.error('[Notifier] Falha ao enfileirar notificação para o navegador:', err);

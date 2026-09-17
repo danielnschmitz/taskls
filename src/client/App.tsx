@@ -36,6 +36,7 @@ import { JiraWeekPanel } from './components/JiraWeekPanel';
 import { JiraConfigModal } from './components/JiraConfigModal';
 import { LoginScreen } from './components/LoginScreen';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
+import { UserManagementModal } from './components/UserManagementModal';
 import { useAuth } from './contexts/AuthContext';
 import {
   triggerBrowserNotification,
@@ -85,8 +86,12 @@ export const App: React.FC = () => {
   const [jiraRefreshKey, setJiraRefreshKey] = useState(0);
 
   // Auth state
-  const { isAuthenticated, isLoading: isAuthLoading, isDefaultPassword } = useAuth();
+  const { user, isAuthenticated, isLoading: isAuthLoading, isDefaultPassword } = useAuth();
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
+  const [isUserManagementModalOpen, setIsUserManagementModalOpen] = useState(false);
+
+  // Jira permission check
+  const canAccessJira = Boolean(user?.isAdmin || user?.canAccessJira);
 
   // Handlers for Jira Week Navigation
   const handleJiraPrevWeek = () => setJiraWeekBaseDate((prev) => subWeeks(prev, 1));
@@ -444,7 +449,8 @@ export const App: React.FC = () => {
         focusMode={focusMode}
         onToggleFocusMode={() => setFocusMode(!focusMode)}
         onOpenBackupModal={() => setIsBackupModalOpen(true)}
-        onOpenJiraSettings={() => setIsJiraModalOpen(true)}
+        onOpenJiraSettings={user?.isAdmin ? () => setIsJiraModalOpen(true) : undefined}
+        onOpenUserManagement={user?.isAdmin ? () => setIsUserManagementModalOpen(true) : undefined}
         onOpenChangePassword={() => setIsChangePasswordModalOpen(true)}
         onShowToast={showToast}
       />
@@ -458,7 +464,7 @@ export const App: React.FC = () => {
             <div className="flex items-center gap-2.5">
               <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0" />
               <span>
-                <strong>Aviso de Segurança:</strong> Você está utilizando a senha padrão inicial (<code>admin</code>). Se for disponibilizar o TaskLS na internet, recomendamos alterar sua senha.
+                <strong>Aviso de Segurança:</strong> Você está utilizando uma senha temporária/inicial. É obrigatório definir uma nova senha pessoal para prosseguir.
               </span>
             </div>
             <button
@@ -521,19 +527,21 @@ export const App: React.FC = () => {
               <span>Backlog</span>
             </button>
 
-            <button
-              onClick={() => setActiveTab('jira')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                activeTab === 'jira'
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
-                <path d="M11.53 2c0 2.4 1.97 4.35 4.38 4.35h2.15v2.17c0 2.4 1.97 4.35 4.39 4.35V2h-10.92zm-5.77 5.79c0 2.4 1.97 4.35 4.39 4.35h2.14v2.17c0 2.4 1.97 4.35 4.39 4.35V7.79H5.76zm-5.76 5.79c0 2.4 1.97 4.35 4.39 4.35h2.14v2.17c0 2.4 1.97 4.35 4.39 4.35v-10.87H0z"/>
-              </svg>
-              <span>Demandas Jira</span>
-            </button>
+            {canAccessJira && (
+              <button
+                onClick={() => setActiveTab('jira')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  activeTab === 'jira'
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                  <path d="M11.53 2c0 2.4 1.97 4.35 4.38 4.35h2.15v2.17c0 2.4 1.97 4.35 4.39 4.35V2h-10.92zm-5.77 5.79c0 2.4 1.97 4.35 4.39 4.35h2.14v2.17c0 2.4 1.97 4.35 4.39 4.35V7.79H5.76zm-5.76 5.79c0 2.4 1.97 4.35 4.39 4.35h2.14v2.17c0 2.4 1.97 4.35 4.39 4.35v-10.87H0z"/>
+                </svg>
+                <span>Demandas Jira</span>
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-4 text-xs text-slate-400">
@@ -640,7 +648,7 @@ export const App: React.FC = () => {
             )}
 
             {/* Panel 4: Jira Demands Week (Demandas Jira com Entrega na Semana) */}
-            {(activeTab === 'all' || activeTab === 'jira') && (
+            {canAccessJira && (activeTab === 'all' || activeTab === 'jira') && (
               <section className="pt-2">
                 <JiraWeekPanel
                   key={jiraRefreshKey}
@@ -648,7 +656,7 @@ export const App: React.FC = () => {
                   onPrevWeek={handleJiraPrevWeek}
                   onNextWeek={handleJiraNextWeek}
                   onToday={handleJiraToday}
-                  onOpenSettings={() => setIsJiraModalOpen(true)}
+                  onOpenSettings={user?.isAdmin ? () => setIsJiraModalOpen(true) : undefined}
                   searchQuery={searchQuery}
                   onShowToast={showToast}
                 />
@@ -695,19 +703,31 @@ export const App: React.FC = () => {
         onShowToast={showToast}
       />
 
-      {/* Jira Configuration Modal */}
-      <JiraConfigModal
-        isOpen={isJiraModalOpen}
-        onClose={() => setIsJiraModalOpen(false)}
-        onSaved={() => {
-          setJiraRefreshKey((prev) => prev + 1);
-        }}
-        onShowToast={showToast}
-      />
+      {/* Jira Configuration Modal (Apenas Admin) */}
+      {user?.isAdmin && (
+        <JiraConfigModal
+          isOpen={isJiraModalOpen}
+          onClose={() => setIsJiraModalOpen(false)}
+          onSaved={() => {
+            setJiraRefreshKey((prev) => prev + 1);
+          }}
+          onShowToast={showToast}
+        />
+      )}
 
-      {/* Change Password Modal */}
+      {/* User Management Modal (Apenas Admin) */}
+      {user?.isAdmin && (
+        <UserManagementModal
+          isOpen={isUserManagementModalOpen}
+          onClose={() => setIsUserManagementModalOpen(false)}
+          onShowToast={showToast}
+        />
+      )}
+
+      {/* Change Password Modal (Forçado se for primeiro acesso com senha padrão) */}
       <ChangePasswordModal
-        isOpen={isChangePasswordModalOpen}
+        isOpen={isDefaultPassword || isChangePasswordModalOpen}
+        isForced={isDefaultPassword}
         onClose={() => setIsChangePasswordModalOpen(false)}
         onShowToast={showToast}
       />

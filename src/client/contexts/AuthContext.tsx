@@ -3,6 +3,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 export interface AuthUser {
   id: string;
   username: string;
+  isAdmin: boolean;
+  canAccessJira: boolean;
   isDefaultPassword?: boolean;
 }
 

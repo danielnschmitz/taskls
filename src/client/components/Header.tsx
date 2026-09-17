@@ -14,6 +14,7 @@ import {
   LogOut,
   KeyRound,
   User as UserIcon,
+  Users,
 } from 'lucide-react';
 import { Priority, Task, DndStatus, CategoryInfo } from '../types';
 import { PomodoroTimer } from './PomodoroTimer';
@@ -42,6 +43,7 @@ interface HeaderProps {
   onToggleFocusMode: () => void;
   onOpenBackupModal: () => void;
   onOpenJiraSettings?: () => void;
+  onOpenUserManagement?: () => void;
   onOpenChangePassword?: () => void;
   onShowToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
@@ -63,6 +65,7 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleFocusMode,
   onOpenBackupModal,
   onOpenJiraSettings,
+  onOpenUserManagement,
   onOpenChangePassword,
   onShowToast,
 }) => {
@@ -324,8 +327,8 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="hidden lg:inline">Backup</span>
           </button>
 
-          {/* Jira Settings Button */}
-          {onOpenJiraSettings && (
+          {/* Jira Settings Button (Apenas Admin) */}
+          {user?.isAdmin && onOpenJiraSettings && (
             <button
               onClick={onOpenJiraSettings}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/60 text-xs font-semibold transition-all"
@@ -417,6 +420,19 @@ export const Header: React.FC<HeaderProps> = ({
                       </span>
                     )}
                   </div>
+
+                  {user?.isAdmin && onOpenUserManagement && (
+                    <button
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        onOpenUserManagement();
+                      }}
+                      className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-800 text-slate-300 flex items-center gap-2"
+                    >
+                      <Users className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Gerenciar Usuários</span>
+                    </button>
+                  )}
 
                   {onOpenChangePassword && (
                     <button

@@ -35,6 +35,7 @@ export interface TaskRecord {
   completed_at: string | null;
   subtasks?: SubtaskItem[];
   snoozed_until?: string | null;
+  user_id?: string;
   created_at: string;
   updated_at: string;
 }

@@ -13,12 +13,14 @@ import { useAuth } from '../contexts/AuthContext';
 
 interface ChangePasswordModalProps {
   isOpen: boolean;
+  isForced?: boolean;
   onClose: () => void;
   onShowToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
 
 export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
   isOpen,
+  isForced = false,
   onClose,
   onShowToast,
 }) => {
@@ -74,25 +76,44 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/60">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+            <div className={`w-9 h-9 rounded-xl border flex items-center justify-center ${
+              isForced
+                ? 'bg-amber-500/15 border-amber-500/30 text-amber-400'
+                : 'bg-indigo-500/15 border-indigo-500/30 text-indigo-400'
+            }`}>
               <KeyRound className="w-5 h-5" />
             </div>
             <div>
               <h3 className="text-base font-bold text-white tracking-tight">
-                Alterar Senha de Acesso
+                {isForced ? 'Definir Senha Pessoal (Primeiro Acesso)' : 'Alterar Senha de Acesso'}
               </h3>
               <p className="text-xs text-slate-400">
-                Defina uma nova senha para proteger seu TaskLS
+                {isForced
+                  ? 'É obrigatório definir sua própria senha para continuar'
+                  : 'Defina uma nova senha para proteger seu TaskLS'}
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          {!isForced && (
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
+
+        {/* Banner de Primeiro Acesso Obrigatório */}
+        {isForced && (
+          <div className="px-6 py-3 bg-amber-500/10 border-b border-amber-500/20 text-amber-300 text-xs flex items-start gap-2.5">
+            <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <strong className="font-semibold block text-amber-200">Troca de Senha Obrigatória</strong>
+              Para a segurança da sua conta, você deve alterar a senha inicial antes de acessar o sistema.
+            </div>
+          </div>
+        )}
 
         {/* Modal Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
@@ -163,13 +184,15 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
 
           {/* Ações */}
           <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-2.5">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-xl transition-all"
-            >
-              Cancelar
-            </button>
+            {!isForced && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-xl transition-all"
+              >
+                Cancelar
+              </button>
+            )}
             <button
               type="submit"
               disabled={isLoading}

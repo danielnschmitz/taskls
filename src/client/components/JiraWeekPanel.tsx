@@ -20,7 +20,7 @@ interface JiraWeekPanelProps {
   onPrevWeek: () => void;
   onNextWeek: () => void;
   onToday: () => void;
-  onOpenSettings: () => void;
+  onOpenSettings?: () => void;
   searchQuery?: string;
   onShowToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
@@ -220,14 +220,16 @@ export const JiraWeekPanel: React.FC<JiraWeekPanelProps> = ({
           </button>
 
           {/* Settings Button */}
-          <button
-            onClick={onOpenSettings}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700/80 text-slate-300 hover:text-white text-xs font-semibold hover:bg-slate-800 transition-all shadow-sm"
-            title="Configurar projetos e status do Jira"
-          >
-            <Settings className="w-3.5 h-3.5 text-slate-400" />
-            <span className="hidden sm:inline">Configurações</span>
-          </button>
+          {onOpenSettings && (
+            <button
+              onClick={onOpenSettings}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700/80 text-slate-300 hover:text-white text-xs font-semibold hover:bg-slate-800 transition-all shadow-sm"
+              title="Configurar projetos e status do Jira"
+            >
+              <Settings className="w-3.5 h-3.5 text-slate-400" />
+              <span className="hidden sm:inline">Configurações</span>
+            </button>
+          )}
 
           {/* Week interval label */}
           <span className="text-xs font-medium text-slate-400 mx-1 hidden lg:inline">
@@ -357,12 +359,14 @@ export const JiraWeekPanel: React.FC<JiraWeekPanelProps> = ({
             <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-400" />
             <span>{errorMsg}</span>
           </div>
-          <button
-            onClick={onOpenSettings}
-            className="px-2.5 py-1 rounded-lg bg-rose-900/60 hover:bg-rose-800 border border-rose-500/40 text-rose-200 text-xs font-semibold transition-all"
-          >
-            Verificar Configurações
-          </button>
+          {onOpenSettings && (
+            <button
+              onClick={onOpenSettings}
+              className="px-2.5 py-1 rounded-lg bg-rose-900/60 hover:bg-rose-800 border border-rose-500/40 text-rose-200 text-xs font-semibold transition-all"
+            >
+              Verificar Configurações
+            </button>
+          )}
         </div>
       )}
 

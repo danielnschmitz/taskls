@@ -102,9 +102,19 @@ export async function initDatabase(): Promise<void> {
         password_hash VARCHAR(255) NOT NULL,
         salt VARCHAR(64) NOT NULL,
         is_default_password BOOLEAN DEFAULT TRUE,
+        is_admin BOOLEAN DEFAULT FALSE,
+        can_access_jira BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
+
+      -- Migrações incrementais para tabela de usuários
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS can_access_jira BOOLEAN DEFAULT FALSE;
+
+      -- Vincular tarefas ao usuário
+      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS user_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE;
+      CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON tasks(user_id);
 
       -- Fila de Notificações para o Navegador
       CREATE TABLE IF NOT EXISTS notification_queue (
@@ -112,10 +122,13 @@ export async function initDatabase(): Promise<void> {
         title VARCHAR(255) NOT NULL,
         message TEXT NOT NULL,
         task_id VARCHAR(36),
+        user_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,
         delivered BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
       CREATE INDEX IF NOT EXISTS idx_notification_queue_delivered ON notification_queue(delivered);
+      ALTER TABLE notification_queue ADD COLUMN IF NOT EXISTS user_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE;
+      CREATE INDEX IF NOT EXISTS idx_notification_queue_user_id ON notification_queue(user_id);
     `);
 
     // Seed de Usuário Administrador Inicial (se não houver nenhum)
@@ -128,11 +141,34 @@ export async function initDatabase(): Promise<void> {
       const userId = crypto.randomUUID();
 
       await client.query(
-        `INSERT INTO users (id, username, password_hash, salt, is_default_password)
-         VALUES ($1, $2, $3, $4, TRUE)`,
+        `INSERT INTO users (id, username, password_hash, salt, is_default_password, is_admin, can_access_jira)
+         VALUES ($1, $2, $3, $4, TRUE, TRUE, TRUE)`,
         [userId, initialUser, hash, salt]
       );
       console.log(`[DB] Usuário administrador inicial criado: ${initialUser}`);
+    }
+
+    // Garantir que o usuário 'admin' tenha permissões de administrador e Jira ativas
+    await client.query(
+      `UPDATE users SET is_admin = TRUE, can_access_jira = TRUE WHERE LOWER(username) = 'admin'`
+    );
+
+    // Migrar tarefas e notificações antigas sem user_id para o usuário admin
+    const adminQuery = await client.query(`SELECT id FROM users WHERE LOWER(username) = 'admin' LIMIT 1`);
+    if (adminQuery.rows.length > 0) {
+      const adminId = adminQuery.rows[0].id;
+      const updatedTasks = await client.query(
+        `UPDATE tasks SET user_id = $1 WHERE user_id IS NULL`,
+        [adminId]
+      );
+      if (updatedTasks.rowCount && updatedTasks.rowCount > 0) {
+        console.log(`[DB] ${updatedTasks.rowCount} tarefas antigas migradas para o usuário admin (${adminId}).`);
+      }
+
+      await client.query(
+        `UPDATE notification_queue SET user_id = $1 WHERE user_id IS NULL`,
+        [adminId]
+      );
     }
 
     console.log('[DB] Banco de dados inicializado com sucesso.');

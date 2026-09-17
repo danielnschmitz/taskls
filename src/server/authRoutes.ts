@@ -44,6 +44,8 @@ authRouter.post('/login', async (req: Request, res: Response): Promise<void> => 
     const token = await generateToken({
       id: user.id,
       username: user.username,
+      is_admin: user.is_admin,
+      can_access_jira: user.can_access_jira,
       is_default_password: user.is_default_password,
     });
 
@@ -52,6 +54,8 @@ authRouter.post('/login', async (req: Request, res: Response): Promise<void> => 
       user: {
         id: user.id,
         username: user.username,
+        isAdmin: Boolean(user.is_admin),
+        canAccessJira: Boolean(user.can_access_jira),
         isDefaultPassword: Boolean(user.is_default_password),
       },
     });
@@ -70,7 +74,7 @@ authRouter.get('/me', authenticateToken, async (req: Request, res: Response): Pr
     const authUser = (req as any).user;
 
     const query = await pool.query(
-      `SELECT id, username, is_default_password, created_at FROM users WHERE id = $1`,
+      `SELECT id, username, is_admin, can_access_jira, is_default_password, created_at FROM users WHERE id = $1`,
       [authUser.id]
     );
 
@@ -84,6 +88,8 @@ authRouter.get('/me', authenticateToken, async (req: Request, res: Response): Pr
       user: {
         id: user.id,
         username: user.username,
+        isAdmin: Boolean(user.is_admin),
+        canAccessJira: Boolean(user.can_access_jira),
         isDefaultPassword: Boolean(user.is_default_password),
         createdAt: user.created_at,
       },
@@ -142,6 +148,8 @@ authRouter.post('/change-password', authenticateToken, async (req: Request, res:
     const newToken = await generateToken({
       id: user.id,
       username: user.username,
+      is_admin: user.is_admin,
+      can_access_jira: user.can_access_jira,
       is_default_password: false,
     });
 
@@ -152,6 +160,8 @@ authRouter.post('/change-password', authenticateToken, async (req: Request, res:
       user: {
         id: user.id,
         username: user.username,
+        isAdmin: Boolean(user.is_admin),
+        canAccessJira: Boolean(user.can_access_jira),
         isDefaultPassword: false,
       },
     });

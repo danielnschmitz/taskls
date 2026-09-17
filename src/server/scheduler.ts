@@ -110,7 +110,7 @@ export async function checkAndSendNotifications(): Promise<void> {
           ? task.description
           : `Horário agendado: ${targetTime}. Não se esqueça de concluir!`;
 
-        await sendWindowsNotification(notifTitle, notifBody);
+        await sendWindowsNotification(notifTitle, notifBody, task.id, task.user_id);
 
         // Record sent notification
         await pool.query(

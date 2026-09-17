@@ -5,7 +5,8 @@ import fs from 'fs';
 import { pool, initDatabase } from './db';
 import { router } from './routes';
 import { authRouter } from './authRoutes';
-import { authenticateToken } from './auth';
+import { userRoutes } from './userRoutes';
+import { authenticateToken, requireAdmin } from './auth';
 import { startScheduler, stopScheduler } from './scheduler';
 
 const app = express();
@@ -18,7 +19,10 @@ app.use(express.json());
 // 1. Rotas de autenticação (login público)
 app.use('/api/auth', authRouter);
 
-// 2. Todas as demais rotas da API são protegidas por autenticação
+// 2. Rotas de gestão de usuários (exclusivo admin)
+app.use('/api/users', authenticateToken, requireAdmin, userRoutes);
+
+// 3. Todas as demais rotas da API são protegidas por autenticação
 app.use('/api', authenticateToken, router);
 
 // Serve static frontend files if built
