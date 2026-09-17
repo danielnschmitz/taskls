@@ -46,6 +46,7 @@ import {
   requestBrowserNotificationPermission,
   getNotificationPermission,
   isNotificationSupported,
+  getServiceWorkerRegistration,
 } from './utils/notifications';
 
 interface ToastState {
@@ -172,6 +173,9 @@ export const App: React.FC = () => {
   // Polling de Notificações do Navegador (a cada 15 segundos)
   useEffect(() => {
     if (!isAuthenticated || !canAccessTasks) return;
+
+    // Registrar Service Worker para notificações em background
+    getServiceWorkerRegistration().catch(() => {});
 
     // Solicitar permissão de notificação no navegador se ainda estiver em 'default'
     if (isNotificationSupported() && getNotificationPermission() === 'default') {

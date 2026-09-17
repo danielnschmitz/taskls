@@ -28,6 +28,7 @@ import {
   requestBrowserNotificationPermission,
   getNotificationPermission,
   isNotificationSupported,
+  isSecureOrigin,
 } from '../utils/notifications';
 
 interface HeaderProps {
@@ -140,31 +141,60 @@ export const Header: React.FC<HeaderProps> = ({
   const handleTestNotification = async () => {
     setIsTestingNotif(true);
     try {
-      if (isNotificationSupported()) {
-        const perm = getNotificationPermission();
-        if (perm === 'default') {
-          const granted = await requestBrowserNotificationPermission();
-          if (!granted) {
-            onShowToast('Permissão de notificação negada no navegador.', 'error');
-            setIsTestingNotif(false);
-            return;
-          }
+      if (!isNotificationSupported()) {
+        onShowToast('Seu navegador não suporta a API de Notificações do sistema.', 'error');
+        setIsTestingNotif(false);
+        return;
+      }
+
+      const isSecure = isSecureOrigin();
+      if (!isSecure) {
+        onShowToast('Atenção: Notificações nativas requerem HTTPS ou localhost (origem HTTP detectada).', 'error');
+      }
+
+      let perm = getNotificationPermission();
+      if (perm === 'denied') {
+        onShowToast('Permissão de notificação está BLOQUEADA no navegador. Acesse as permissões do site ao lado da URL para permitir.', 'error');
+        setIsTestingNotif(false);
+        return;
+      }
+
+      if (perm === 'default') {
+        perm = await requestBrowserNotificationPermission();
+        if (perm !== 'granted') {
+          onShowToast('Permissão não concedida no navegador. Ative as notificações para receber alertas.', 'error');
+          setIsTestingNotif(false);
+          return;
         }
       }
 
-      await triggerBrowserNotification('🔔 TaskLS Notificação', {
-        body: 'Notificação do navegador funcionando perfeitamente!',
+      // Disparar notificação nativa do navegador (usando Service Worker com fallback nativo)
+      const result = await triggerBrowserNotification('🔔 TaskLS - Notificação de Teste', {
+        body: 'Notificação do navegador funcionando perfeitamente! Som e ícone ativos.',
       });
 
-      const res = await fetch('/api/notifications/test', { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        onShowToast('Notificação disparada com sucesso!', 'success');
+      if (result && result.success) {
+        const methodLabel = result.method === 'serviceworker' ? 'Service Worker' : 'Navegador';
+        onShowToast(`Notificação disparada (${methodLabel})! Se não viu o banner, verifique o "Não Incomodar" ou a Central de Ações (Win+N).`, 'success');
       } else {
-        onShowToast('Erro ao testar notificação no servidor.', 'error');
+        onShowToast(result?.error || 'Não foi possível exibir a notificação nativa.', 'error');
       }
-    } catch (err) {
-      onShowToast('Falha ao enviar notificação de teste.', 'error');
+
+      // Testar enfileiramento no servidor em segundo plano
+      try {
+        await fetch('/api/notifications/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: 'TaskLS - Notificação Agendada',
+            message: 'O agendador e o navegador estão devidamente sincronizados!',
+          }),
+        });
+      } catch (srvErr) {
+        console.warn('[Header] Erro ao sincronizar notificação com servidor:', srvErr);
+      }
+    } catch (err: any) {
+      onShowToast(`Falha no teste: ${err?.message || 'Erro inesperado'}`, 'error');
     } finally {
       setIsTestingNotif(false);
     }

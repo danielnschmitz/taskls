@@ -4,6 +4,9 @@ import path from 'path';
 // Carregar variáveis de ambiente do arquivo .env
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
+// Definir fuso horário padrão para sincronização de agendamentos (America/Sao_Paulo)
+process.env.TZ = process.env.TZ || 'America/Sao_Paulo';
+
 import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
@@ -38,6 +41,14 @@ app.use('/api', authenticateToken, router);
 const clientDistPath = path.resolve(process.cwd(), 'dist/client');
 if (fs.existsSync(clientDistPath)) {
   console.log(`[Server] Servindo frontend a partir de: ${clientDistPath}`);
+
+  // Header específico para Service Worker
+  app.get('/sw.js', (req, res) => {
+    res.setHeader('Service-Worker-Allowed', '/');
+    res.setHeader('Content-Type', 'application/javascript');
+    res.sendFile(path.join(clientDistPath, 'sw.js'));
+  });
+
   app.use(express.static(clientDistPath));
 
   app.use((req, res, next) => {
