@@ -33,13 +33,13 @@ import {
 
 interface HeaderProps {
   onNewTask: () => void;
-  searchQuery: string;
-  onSearchChange: (q: string) => void;
-  selectedPriority: Priority | 'all';
-  onPriorityChange: (p: Priority | 'all') => void;
-  selectedCategory: string;
-  onCategoryChange: (c: string) => void;
-  categories: string[];
+  searchQuery?: string;
+  onSearchChange?: (q: string) => void;
+  selectedPriority?: Priority | 'all';
+  onPriorityChange?: (p: Priority | 'all') => void;
+  selectedCategory?: string;
+  onCategoryChange?: (c: string) => void;
+  categories?: string[];
   categoriesInfo?: CategoryInfo[];
   allTasks: Task[];
   dndStatus?: DndStatus;
@@ -57,13 +57,13 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({
   onNewTask,
-  searchQuery,
+  searchQuery = '',
   onSearchChange,
-  selectedPriority,
+  selectedPriority = 'all',
   onPriorityChange,
-  selectedCategory,
+  selectedCategory = 'all',
   onCategoryChange,
-  categories,
+  categories = [],
   categoriesInfo = [],
   allTasks,
   dndStatus,
@@ -350,57 +350,6 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
 
-        {/* Search & Filters (Exclusivo do Módulo Tarefas) */}
-        {activeModule === 'tasks' && (
-          <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto flex-1 max-w-2xl justify-center animate-in fade-in">
-            {/* Search Input */}
-            <div className="relative flex-1 min-w-[180px]">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Buscar tarefas..."
-                value={searchQuery}
-                onChange={(e) => onSearchChange(e.target.value)}
-                className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-900/90 border border-slate-700/60 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => onSearchChange('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-200"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-
-            {/* Priority Filter */}
-            <select
-              value={selectedPriority}
-              onChange={(e) => onPriorityChange(e.target.value as Priority | 'all')}
-              className="px-2.5 py-1.5 text-xs font-medium bg-slate-900/90 border border-slate-700/60 rounded-xl text-slate-300 focus:outline-none focus:border-indigo-500 cursor-pointer"
-            >
-              <option value="all">Todas Prioridades</option>
-              <option value="urgent">🚨 Urgente</option>
-              <option value="high">⚠️ Alta</option>
-              <option value="medium">🔹 Média</option>
-              <option value="low">▫️ Baixa</option>
-            </select>
-
-            {/* Category Filter */}
-            <select
-              value={selectedCategory}
-              onChange={(e) => onCategoryChange(e.target.value)}
-              className="px-2.5 py-1.5 text-xs font-medium bg-slate-900/90 border border-slate-700/60 rounded-xl text-slate-300 focus:outline-none focus:border-indigo-500 cursor-pointer"
-            >
-              <option value="all">Todas Categorias</option>
-              {categories.map((cat) => (
-                <option key={cat} value={cat}>
-                  📁 {cat}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
 
         {/* Productivity Tools & Controls */}
         <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-end">

@@ -17,6 +17,7 @@ import {
   X,
   Loader2,
   Target,
+  Search,
 } from 'lucide-react';
 import {
   DashboardData,
@@ -526,9 +527,10 @@ export const App: React.FC = () => {
         {/* Módulo: Gestão de Tarefas */}
         {activeModule === 'tasks' && canAccessTasks && (
           <>
-            {/* Navigation Tabs (Quick focus) */}
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-1.5 p-1 bg-slate-900/80 border border-slate-800 rounded-xl">
+            {/* Navigation Tabs (Seleção de Painéis) & Filtros de Tarefas */}
+            <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-3.5 border-b border-slate-800 pb-3.5">
+              {/* Seleção de Painéis */}
+              <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-900/80 border border-slate-800 rounded-xl shadow-inner">
                 <button
                   onClick={() => setActiveTab('all')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
@@ -594,17 +596,77 @@ export const App: React.FC = () => {
                 )}
               </div>
 
-              <div className="flex items-center gap-4 text-xs text-slate-400">
+              {/* Filtros de Tarefas (Posicionados ao lado da seleção de painéis) */}
+              <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
+                {/* Campo de Busca de Tarefas */}
+                <div className="relative flex-1 sm:w-56 min-w-[170px]">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Buscar tarefas..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-900/90 border border-slate-700/60 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all shadow-sm"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-200"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {/* Filtro de Prioridade */}
+                <select
+                  value={selectedPriority}
+                  onChange={(e) => setSelectedPriority(e.target.value as Priority | 'all')}
+                  className="px-2.5 py-1.5 text-xs font-medium bg-slate-900/90 border border-slate-700/60 rounded-xl text-slate-300 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-sm"
+                >
+                  <option value="all">Todas Prioridades</option>
+                  <option value="urgent">🚨 Urgente</option>
+                  <option value="high">⚠️ Alta</option>
+                  <option value="medium">🔹 Média</option>
+                  <option value="low">▫️ Baixa</option>
+                </select>
+
+                {/* Filtro de Categoria */}
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="px-2.5 py-1.5 text-xs font-medium bg-slate-900/90 border border-slate-700/60 rounded-xl text-slate-300 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-sm"
+                >
+                  <option value="all">Todas Categorias</option>
+                  {categories.map((cat) => (
+                    <option key={cat} value={cat}>
+                      📁 {cat}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Botão para Limpar Filtros quando algum estiver ativo */}
+                {(searchQuery || selectedPriority !== 'all' || selectedCategory !== 'all') && (
+                  <button
+                    onClick={() => {
+                      setSearchQuery('');
+                      setSelectedPriority('all');
+                      setSelectedCategory('all');
+                    }}
+                    title="Limpar todos os filtros"
+                    className="px-2.5 py-1.5 text-xs font-semibold text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-xl transition-all"
+                  >
+                    Limpar
+                  </button>
+                )}
+
+                {/* Modo Foco Badge */}
                 {focusMode && (
-                  <span className="text-amber-400 font-bold flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-lg">
+                  <span className="text-amber-400 font-bold flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-xl text-xs">
                     <Target className="w-3.5 h-3.5" />
                     Modo Foco Ativo
                   </span>
                 )}
-                <div className="hidden sm:flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-                  <span>PostgreSQL Conectado</span>
-                </div>
               </div>
             </div>
 
