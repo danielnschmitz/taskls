@@ -122,12 +122,19 @@ export interface JiraDayGroup {
   demands: JiraDemand[];
 }
 
+export interface JiraTimelineSection {
+  demands: JiraDemand[];
+  total: number;
+}
+
 export interface JiraWeekResponse {
   startDate: string;
   endDate: string;
   days: JiraDayGroup[];
   totalDemands: number;
   lastUpdated: string;
+  overdue?: JiraTimelineSection;
+  future?: JiraTimelineSection;
 }
 
 export interface JiraConfig {

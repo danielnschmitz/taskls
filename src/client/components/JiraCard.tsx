@@ -6,11 +6,14 @@ import {
   Building2,
   LayoutTemplate,
   Tag,
+  Calendar,
+  Clock,
 } from 'lucide-react';
 import { JiraDemand } from '../types';
 
 interface JiraCardProps {
   demand: JiraDemand;
+  showDueDateBadge?: boolean;
 }
 
 /**
@@ -47,8 +50,56 @@ function getStatusBadgeStyle(displayStatus: string): string {
   return 'bg-slate-800 text-slate-300 border-slate-700';
 }
 
-export const JiraCard: React.FC<JiraCardProps> = ({ demand }) => {
+export const JiraCard: React.FC<JiraCardProps> = ({ demand, showDueDateBadge = false }) => {
   const statusStyle = getStatusBadgeStyle(demand.displayStatus);
+
+  // Badge relativo de data de entrega para visualização em listas (atrasadas/futuras)
+  let dueDateBadge = null;
+  if (showDueDateBadge && demand.duedate) {
+    try {
+      const [year, month, day] = demand.duedate.split('-').map(Number);
+      const due = new Date(year, month - 1, day);
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const diffTime = due.getTime() - today.getTime();
+      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+      const dateFmt = `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}`;
+
+      if (diffDays < 0) {
+        const daysLate = Math.abs(diffDays);
+        dueDateBadge = (
+          <span
+            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-rose-950/60 text-rose-300 border border-rose-500/40 font-bold"
+            title={`Prazo vencido em ${demand.duedate} (há ${daysLate} dias)`}
+          >
+            <Clock className="w-2.5 h-2.5 text-rose-400" />
+            <span>{dateFmt} ({daysLate}d atrasado)</span>
+          </span>
+        );
+      } else if (diffDays === 0) {
+        dueDateBadge = (
+          <span
+            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-950/60 text-amber-300 border border-amber-500/40 font-bold"
+            title={`Prazo para hoje (${demand.duedate})`}
+          >
+            <Clock className="w-2.5 h-2.5 text-amber-400" />
+            <span>Hoje ({dateFmt})</span>
+          </span>
+        );
+      } else {
+        dueDateBadge = (
+          <span
+            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-sky-950/50 text-sky-300 border border-sky-500/30 font-medium"
+            title={`Prazo previsto: ${demand.duedate} (em ${diffDays} dias)`}
+          >
+            <Calendar className="w-2.5 h-2.5 text-sky-400" />
+            <span>{dateFmt} (em ${diffDays}d)</span>
+          </span>
+        );
+      }
+    } catch {}
+  }
 
   return (
     <a
@@ -83,6 +134,9 @@ export const JiraCard: React.FC<JiraCardProps> = ({ demand }) => {
 
       {/* Capsules / Badges */}
       <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-800/60 text-[10px]">
+        {/* Due Date Capsule (se aplicável) */}
+        {dueDateBadge}
+
         {/* Project Capsule */}
         <span
           className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-indigo-950/50 text-indigo-300 border border-indigo-500/25 font-bold"

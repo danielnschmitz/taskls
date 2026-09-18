@@ -8,6 +8,8 @@ import {
   Clock,
   ExternalLink,
   AlertCircle,
+  AlertTriangle,
+  CalendarClock,
   FolderOpen,
   Filter,
   X,
@@ -98,22 +100,29 @@ export const JiraWeekPanel: React.FC<JiraWeekPanelProps> = ({
     }
   };
 
-  // Coletar todos os projetos e usuários disponíveis na semana atual
+  // Coletar todas as demandas da semana, atrasadas e futuras para filtros de projeto e usuário
   const allWeekDemands = (data?.days || []).flatMap((d) => d.demands);
+  const overdueDemandsList = data?.overdue?.demands || [];
+  const futureDemandsList = data?.future?.demands || [];
+  const allDemandsCombined = [
+    ...allWeekDemands,
+    ...overdueDemandsList,
+    ...futureDemandsList,
+  ];
 
   const availableProjects = Array.from(
-    new Set(allWeekDemands.map((d) => d.project.key).filter(Boolean))
+    new Set(allDemandsCombined.map((d) => d.project.key).filter(Boolean))
   ).sort();
 
   const availableUsers = Array.from(
     new Set(
-      allWeekDemands
+      allDemandsCombined
         .map((d) => d.assignee?.displayName)
         .filter((name): name is string => Boolean(name))
     )
   ).sort();
 
-  const hasUnassigned = allWeekDemands.some((d) => !d.assignee);
+  const hasUnassigned = allDemandsCombined.some((d) => !d.assignee);
 
   // Filter demands by project, user, and search query
   const filterDemand = (demand: JiraDemand) => {
@@ -161,6 +170,9 @@ export const JiraWeekPanel: React.FC<JiraWeekPanelProps> = ({
 
     return true;
   };
+
+  const filteredOverdueDemands = overdueDemandsList.filter(filterDemand);
+  const filteredFutureDemands = futureDemandsList.filter(filterDemand);
 
   const totalDemandsInCurrentWeek = data ? data.totalDemands : 0;
   const filteredTotalCount = (data?.days || []).reduce((acc, day) => {
@@ -342,11 +354,21 @@ export const JiraWeekPanel: React.FC<JiraWeekPanelProps> = ({
           {selectedProject !== 'all' || selectedUser !== 'all' || searchQuery.trim() ? (
             <span>
               Exibindo <strong className="text-blue-400 font-bold">{filteredTotalCount}</strong> de{' '}
-              <strong className="text-slate-200">{totalDemandsInCurrentWeek}</strong> demandas
+              <strong className="text-slate-200">{totalDemandsInCurrentWeek}</strong> na semana
+              {(filteredOverdueDemands.length > 0 || filteredFutureDemands.length > 0) && (
+                <span className="text-slate-400 ml-1">
+                  ({filteredOverdueDemands.length} atrasada{filteredOverdueDemands.length === 1 ? '' : 's'}, {filteredFutureDemands.length} futura{filteredFutureDemands.length === 1 ? '' : 's'})
+                </span>
+              )}
             </span>
           ) : (
             <span>
-              Total: <strong className="text-slate-200">{totalDemandsInCurrentWeek}</strong> demandas na semana
+              Total: <strong className="text-slate-200">{totalDemandsInCurrentWeek}</strong> na semana
+              {(overdueDemandsList.length > 0 || futureDemandsList.length > 0) && (
+                <span className="text-slate-400 ml-1">
+                  · {overdueDemandsList.length} atrasada{overdueDemandsList.length === 1 ? '' : 's'} · {futureDemandsList.length} futura{futureDemandsList.length === 1 ? '' : 's'}
+                </span>
+              )}
             </span>
           )}
         </div>
@@ -444,6 +466,109 @@ export const JiraWeekPanel: React.FC<JiraWeekPanelProps> = ({
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* Painel Dividido: Demandas Atrasadas e Próximas Entregas */}
+      <div className="mt-8 pt-6 border-t border-slate-800/80">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+          <div>
+            <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+              <Layers className="w-4 h-4 text-blue-400" />
+              Visão Geral de Prazos (Fora da Semana)
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Demandas atrasadas de semanas anteriores (últimos 2 meses) e entregas agendadas para as próximas semanas.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          {/* Coluna 1: Demandas Atrasadas (Últimos 2 meses) */}
+          <div className="bg-slate-950/60 border border-rose-900/30 rounded-xl p-3.5 flex flex-col shadow-lg shadow-black/20">
+            <div className="flex items-center justify-between pb-3 mb-3 border-b border-rose-950/40">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400">
+                  <AlertTriangle className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-rose-200">
+                    Demandas Atrasadas
+                  </h4>
+                  <span className="text-[11px] text-slate-400">
+                    Últimos 2 meses até a semana atual (mais antigas primeiro)
+                  </span>
+                </div>
+              </div>
+              <span
+                className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                  filteredOverdueDemands.length > 0
+                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                    : 'bg-slate-900 text-slate-500 border border-slate-800'
+                }`}
+              >
+                {filteredOverdueDemands.length}
+              </span>
+            </div>
+
+            {/* Lista de Cards Atrasados */}
+            <div className="space-y-2.5 max-h-[500px] overflow-y-auto pr-1.5 custom-scrollbar flex-1">
+              {filteredOverdueDemands.length === 0 ? (
+                <div className="h-32 flex flex-col items-center justify-center text-center p-4 border border-dashed border-slate-800/80 rounded-lg">
+                  <p className="text-xs text-slate-500 font-medium">
+                    Nenhuma demanda atrasada encontrada no período.
+                  </p>
+                </div>
+              ) : (
+                filteredOverdueDemands.map((demand) => (
+                  <JiraCard key={demand.id} demand={demand} showDueDateBadge={true} />
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Coluna 2: Demandas Futuras / Próximas Entregas */}
+          <div className="bg-slate-950/60 border border-indigo-900/30 rounded-xl p-3.5 flex flex-col shadow-lg shadow-black/20">
+            <div className="flex items-center justify-between pb-3 mb-3 border-b border-indigo-950/40">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+                  <CalendarClock className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-indigo-200">
+                    Próximas Entregas (Futuras)
+                  </h4>
+                  <span className="text-[11px] text-slate-400">
+                    Após esta semana (mais próximas primeiro)
+                  </span>
+                </div>
+              </div>
+              <span
+                className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                  filteredFutureDemands.length > 0
+                    ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
+                    : 'bg-slate-900 text-slate-500 border border-slate-800'
+                }`}
+              >
+                {filteredFutureDemands.length}
+              </span>
+            </div>
+
+            {/* Lista de Cards Futuros */}
+            <div className="space-y-2.5 max-h-[500px] overflow-y-auto pr-1.5 custom-scrollbar flex-1">
+              {filteredFutureDemands.length === 0 ? (
+                <div className="h-32 flex flex-col items-center justify-center text-center p-4 border border-dashed border-slate-800/80 rounded-lg">
+                  <p className="text-xs text-slate-500 font-medium">
+                    Nenhuma demanda futura agendada além desta semana.
+                  </p>
+                </div>
+              ) : (
+                filteredFutureDemands.map((demand) => (
+                  <JiraCard key={demand.id} demand={demand} showDueDateBadge={true} />
+                ))
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -74,12 +74,19 @@ export interface JiraDayGroup {
   demands: JiraDemand[];
 }
 
+export interface JiraTimelineSection {
+  demands: JiraDemand[];
+  total: number;
+}
+
 export interface JiraWeekResponse {
   startDate: string;
   endDate: string;
   days: JiraDayGroup[];
   totalDemands: number;
   lastUpdated: string;
+  overdue?: JiraTimelineSection;
+  future?: JiraTimelineSection;
 }
 
 /**
@@ -247,120 +254,52 @@ function extractFieldValue(val: any): string | null {
   return String(val);
 }
 
+const DONE_STATUS_NAMES = new Set([
+  'concluído',
+  'concluido',
+  'resolvido',
+  'em produção',
+  'em producao',
+  'cancelado',
+  'desativado',
+  'done',
+  'closed',
+  'resolved',
+]);
+
 /**
- * Busca e formata as demandas da semana na API do Jira
+ * Converte issues do Jira no formato JiraDemand[]
  */
-export async function getJiraDemandsForWeek(
-  weekStartStr: string // 'YYYY-MM-DD' (Segunda-feira)
-): Promise<JiraWeekResponse> {
-  const config = await getJiraConfig();
-
-  // Calcular dias úteis da semana (Segunda a Sexta)
-  const baseDate = new Date(`${weekStartStr}T12:00:00Z`);
-  const workDaysDates: { dateStr: string; date: Date; dayOfWeek: number }[] = [];
-
-  for (let i = 0; i < 5; i++) {
-    const d = new Date(baseDate);
-    d.setDate(baseDate.getDate() + i);
-    const dateStr = d.toISOString().split('T')[0];
-    workDaysDates.push({
-      dateStr,
-      date: d,
-      dayOfWeek: i + 1, // 1 = Seg, 5 = Sex
-    });
-  }
-
-  const mondayStr = workDaysDates[0].dateStr;
-  const fridayStr = workDaysDates[4].dateStr;
-
-  const monthNames = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-  const dayNames = ['Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira'];
-
-  const todayStr = new Date().toISOString().split('T')[0];
-
-  // Se não houver projetos configurados ou token de API ausente, retorna estrutura vazia
-  if (!config.projects || config.projects.length === 0 || !config.api_token) {
-    return {
-      startDate: mondayStr,
-      endDate: fridayStr,
-      days: workDaysDates.map((item, idx) => ({
-        date: item.dateStr,
-        dayOfWeek: item.dayOfWeek,
-        dayName: dayNames[idx],
-        dayNumber: item.date.getDate(),
-        monthName: monthNames[item.date.getMonth()],
-        isToday: item.dateStr === todayStr,
-        demands: [],
-      })),
-      totalDemands: 0,
-      lastUpdated: new Date().toISOString(),
-    };
-  }
-
-  const host = config.domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
-  const url = `https://${host}/rest/api/3/search/jql`;
-
-  // Construção do JQL:
-  // Filtra por projetos configurados e duedate entre a Segunda e Sexta da semana
-  const projectsJql = config.projects.map((p) => `"${p}"`).join(', ');
-  const jql = `project in (${projectsJql}) AND duedate is not EMPTY AND duedate >= "${mondayStr}" AND duedate <= "${fridayStr}" ORDER BY duedate ASC`;
-
-  const industryField = config.custom_fields.industry || 'customfield_10780';
-  const layoutField = config.custom_fields.layout || 'customfield_10714';
-
-  const bodyPayload = {
-    jql,
-    fields: [
-      'summary',
-      'duedate',
-      'project',
-      'parent',
-      'status',
-      'priority',
-      'assignee',
-      industryField,
-      layoutField,
-    ],
-    maxResults: 100,
-  };
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      Authorization: getAuthHeader(config),
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
-    body: JSON.stringify(bodyPayload),
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    console.error('[Jira] Erro ao buscar demandas via JQL:', response.status, errText);
-    throw new Error(`Erro na API do Jira (${response.status}): ${errText.substring(0, 200)}`);
-  }
-
-  const searchData = await response.json();
-  const issues: any[] = searchData.issues || [];
-
-  // Conjunto de status permitidos (se configurado)
-  const allowedStatuses = new Set(
-    (config.statuses || ALL_POSSIBLE_STATUSES).map((s) => s.toLowerCase().trim())
-  );
-
+function parseJiraIssues(
+  issues: any[],
+  host: string,
+  industryField: string,
+  layoutField: string,
+  allowedStatuses: Set<string>,
+  excludeDone: boolean = false
+): JiraDemand[] {
   const demands: JiraDemand[] = [];
 
   for (const issue of issues) {
     const rawStatus = issue.fields?.status?.name || 'Desconhecido';
-    
+    const normStatus = rawStatus.toLowerCase().trim();
+
+    if (excludeDone && DONE_STATUS_NAMES.has(normStatus)) {
+      continue;
+    }
+
     // Se o status da demanda não estiver habilitado na configuração, ignora
-    if (allowedStatuses.size > 0 && !allowedStatuses.has(rawStatus.toLowerCase().trim())) {
+    if (allowedStatuses.size > 0 && !allowedStatuses.has(normStatus)) {
       continue;
     }
 
     const projKey = issue.fields?.project?.key || '';
     const projName = issue.fields?.project?.name || projKey;
     const displayStatus = formatDisplayStatus(projKey, rawStatus);
+
+    if (excludeDone && DONE_STATUS_NAMES.has(displayStatus.toLowerCase().trim())) {
+      continue;
+    }
 
     let epicInfo: { key: string; summary?: string } | null = null;
     if (issue.fields?.parent) {
@@ -402,9 +341,173 @@ export async function getJiraDemandsForWeek(
     });
   }
 
-  // Agrupar por dia (Segunda a Sexta)
+  return demands;
+}
+
+/**
+ * Executa uma busca JQL no Jira REST API v3
+ */
+async function executeJqlSearch(
+  url: string,
+  config: JiraConfig,
+  jql: string,
+  fields: string[],
+  maxResults: number = 100
+): Promise<any[]> {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: getAuthHeader(config),
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      jql,
+      fields,
+      maxResults,
+    }),
+  });
+
+  const loginReason = response.headers.get('x-seraph-loginreason');
+  if (response.status === 401 || loginReason === 'AUTHENTICATED_FAILED') {
+    throw new Error('Falha de autenticação com o Jira (401). O seu token de API pode ter expirado ou sido revogado. Por favor, atualize o token no módulo Configurações.');
+  }
+
+  if (!response.ok) {
+    const errText = await response.text();
+    console.error('[Jira] Erro ao buscar via JQL:', response.status, errText);
+    throw new Error(`Erro na API do Jira (${response.status}): ${errText.substring(0, 200)}`);
+  }
+
+  const searchData = await response.json();
+  return searchData.issues || [];
+}
+
+/**
+ * Busca e formata as demandas da semana, atrasadas e futuras na API do Jira
+ */
+export async function getJiraDemandsForWeek(
+  weekStartStr?: string // 'YYYY-MM-DD' (Segunda-feira)
+): Promise<JiraWeekResponse> {
+  const config = await getJiraConfig();
+
+  // Calcular dias úteis da semana (Segunda a Sexta)
+  let baseDate = weekStartStr ? new Date(`${weekStartStr}T12:00:00Z`) : new Date();
+  if (isNaN(baseDate.getTime())) {
+    baseDate = new Date();
+  }
+  // Se não foi passada uma data válida, posicionar na segunda-feira da semana
+  if (!weekStartStr || isNaN(new Date(`${weekStartStr}T12:00:00Z`).getTime())) {
+    const day = baseDate.getDay();
+    const diff = baseDate.getDate() - day + (day === 0 ? -6 : 1);
+    baseDate = new Date(baseDate.setDate(diff));
+  }
+  const workDaysDates: { dateStr: string; date: Date; dayOfWeek: number }[] = [];
+
+  for (let i = 0; i < 5; i++) {
+    const d = new Date(baseDate);
+    d.setDate(baseDate.getDate() + i);
+    const dateStr = d.toISOString().split('T')[0];
+    workDaysDates.push({
+      dateStr,
+      date: d,
+      dayOfWeek: i + 1, // 1 = Seg, 5 = Sex
+    });
+  }
+
+  const mondayStr = workDaysDates[0].dateStr;
+  const fridayStr = workDaysDates[4].dateStr;
+
+  const monthNames = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  const dayNames = ['Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira'];
+
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  // Se não houver projetos configurados ou token de API ausente, retorna estrutura vazia
+  if (!config.projects || config.projects.length === 0 || !config.api_token) {
+    return {
+      startDate: mondayStr,
+      endDate: fridayStr,
+      days: workDaysDates.map((item, idx) => ({
+        date: item.dateStr,
+        dayOfWeek: item.dayOfWeek,
+        dayName: dayNames[idx],
+        dayNumber: item.date.getDate(),
+        monthName: monthNames[item.date.getMonth()],
+        isToday: item.dateStr === todayStr,
+        demands: [],
+      })),
+      totalDemands: 0,
+      lastUpdated: new Date().toISOString(),
+      overdue: {
+        demands: [],
+        total: 0,
+      },
+      future: {
+        demands: [],
+        total: 0,
+      },
+    };
+  }
+
+  const host = config.domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  const url = `https://${host}/rest/api/3/search/jql`;
+
+  const industryField = config.custom_fields.industry || 'customfield_10780';
+  const layoutField = config.custom_fields.layout || 'customfield_10714';
+  const fields = [
+    'summary',
+    'duedate',
+    'project',
+    'parent',
+    'status',
+    'priority',
+    'assignee',
+    industryField,
+    layoutField,
+  ];
+
+  const projectsJql = config.projects.map((p) => `"${p}"`).join(', ');
+
+  // 1. JQL da semana atual (Segunda a Sexta)
+  const weekJql = `project in (${projectsJql}) AND duedate is not EMPTY AND duedate >= "${mondayStr}" AND duedate <= "${fridayStr}" ORDER BY duedate ASC`;
+
+  // 2. JQL de atrasadas: últimos 2 meses até antes de segunda-feira da semana em visualização
+  const twoMonthsAgo = new Date(baseDate);
+  twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+  const twoMonthsAgoStr = twoMonthsAgo.toISOString().split('T')[0];
+  const overdueJql = `project in (${projectsJql}) AND duedate is not EMPTY AND duedate >= "${twoMonthsAgoStr}" AND duedate < "${mondayStr}" AND statusCategory != Done ORDER BY duedate ASC`;
+
+  // 3. JQL de futuras: além da semana em visualização (depois de sexta-feira)
+  const futureJql = `project in (${projectsJql}) AND duedate is not EMPTY AND duedate > "${fridayStr}" AND statusCategory != Done ORDER BY duedate ASC`;
+
+  // Executar as 3 consultas ao Jira em paralelo
+  const [weekIssues, overdueIssues, futureIssues] = await Promise.all([
+    executeJqlSearch(url, config, weekJql, fields, 100),
+    executeJqlSearch(url, config, overdueJql, fields, 100).catch((err) => {
+      console.warn('[Jira] Falha ao buscar demandas atrasadas:', err?.message);
+      if (err?.message?.includes('401') || err?.message?.includes('autenticação')) throw err;
+      return [];
+    }),
+    executeJqlSearch(url, config, futureJql, fields, 100).catch((err) => {
+      console.warn('[Jira] Falha ao buscar demandas futuras:', err?.message);
+      if (err?.message?.includes('401') || err?.message?.includes('autenticação')) throw err;
+      return [];
+    }),
+  ]);
+
+  // Conjunto de status permitidos (se configurado)
+  const allowedStatuses = new Set(
+    (config.statuses || ALL_POSSIBLE_STATUSES).map((s) => s.toLowerCase().trim())
+  );
+
+  const weekDemands = parseJiraIssues(weekIssues, host, industryField, layoutField, allowedStatuses, false);
+  const overdueDemands = parseJiraIssues(overdueIssues, host, industryField, layoutField, allowedStatuses, true);
+  const futureDemands = parseJiraIssues(futureIssues, host, industryField, layoutField, allowedStatuses, true);
+
+  // Agrupar demandas da semana por dia (Segunda a Sexta)
   const days: JiraDayGroup[] = workDaysDates.map((item, idx) => {
-    const dayDemands = demands.filter((d) => d.duedate === item.dateStr);
+    const dayDemands = weekDemands.filter((d) => d.duedate === item.dateStr);
     return {
       date: item.dateStr,
       dayOfWeek: item.dayOfWeek,
@@ -420,7 +523,15 @@ export async function getJiraDemandsForWeek(
     startDate: mondayStr,
     endDate: fridayStr,
     days,
-    totalDemands: demands.length,
+    totalDemands: weekDemands.length,
     lastUpdated: new Date().toISOString(),
+    overdue: {
+      demands: overdueDemands,
+      total: overdueDemands.length,
+    },
+    future: {
+      demands: futureDemands,
+      total: futureDemands.length,
+    },
   };
 }
