@@ -17,6 +17,7 @@ import { userRoutes } from './userRoutes';
 import { cardRouter } from './cardRoutes';
 import { authenticateToken, requireAdmin, requireModule } from './auth';
 import { startScheduler, stopScheduler } from './scheduler';
+import { processWebhookPayload } from './jiraEvents';
 
 const app = express();
 const PORT = process.env.PORT || 3333;
@@ -28,13 +29,28 @@ app.use(express.json());
 // 1. Rotas de autenticação (login público)
 app.use('/api/auth', authRouter);
 
-// 2. Rotas de gestão de usuários (exclusivo admin)
+// 2. Webhook público do Jira (recebe POST direto da nuvem Atlassian)
+app.get('/api/jira/webhook', (req, res) => {
+  res.status(200).json({ status: 'ok', message: 'TaskLS Jira Webhook endpoint is active and listening.' });
+});
+
+app.post('/api/jira/webhook', async (req, res) => {
+  try {
+    const result = await processWebhookPayload(req.body);
+    res.status(200).json({ success: true, ...result });
+  } catch (err: any) {
+    console.error('[Jira Webhook] Erro ao processar payload:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 3. Rotas de gestão de usuários (exclusivo admin)
 app.use('/api/users', authenticateToken, requireAdmin, userRoutes);
 
-// 3. Rotas do módulo de Escrita de Cards
+// 4. Rotas do módulo de Escrita de Cards
 app.use('/api/cards', authenticateToken, requireModule('cards'), cardRouter);
 
-// 4. Todas as demais rotas da API são protegidas por autenticação
+// 5. Todas as demais rotas da API são protegidas por autenticação
 app.use('/api', authenticateToken, router);
 
 // Serve static frontend files if built

@@ -13,6 +13,7 @@ import {
   FolderOpen,
   Filter,
   X,
+  AlertOctagon,
 } from 'lucide-react';
 import { JiraWeekResponse, JiraDemand } from '../types';
 import { JiraCard } from './JiraCard';
@@ -41,9 +42,10 @@ export const JiraWeekPanel: React.FC<JiraWeekPanelProps> = ({
   const [lastUpdatedTime, setLastUpdatedTime] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Filter states: Projeto e Usuário
+  // Filter states: Projeto, Usuário e Apenas Bloqueadas
   const [selectedProject, setSelectedProject] = useState<string>('all');
   const [selectedUser, setSelectedUser] = useState<string>('all');
+  const [onlyBlocked, setOnlyBlocked] = useState<boolean>(false);
 
   // Fetch Jira demands for current week
   const fetchJiraDemands = useCallback(async (isSilent = false) => {
@@ -123,9 +125,15 @@ export const JiraWeekPanel: React.FC<JiraWeekPanelProps> = ({
   ).sort();
 
   const hasUnassigned = allDemandsCombined.some((d) => !d.assignee);
+  const blockedCount = allDemandsCombined.filter((d) => d.isBlocked).length;
 
-  // Filter demands by project, user, and search query
+  // Filter demands by project, user, blocked status, and search query
   const filterDemand = (demand: JiraDemand) => {
+    // Filtro por Apenas Bloqueadas
+    if (onlyBlocked && !demand.isBlocked) {
+      return false;
+    }
+
     // Filtro por Projeto
     if (selectedProject !== 'all' && demand.project.key !== selectedProject) {
       return false;
@@ -153,6 +161,14 @@ export const JiraWeekPanel: React.FC<JiraWeekPanelProps> = ({
       const matchIndustry = demand.industry?.toLowerCase().includes(q);
       const matchLayout = demand.layout?.toLowerCase().includes(q);
       const matchStatus = demand.displayStatus.toLowerCase().includes(q);
+      const matchBlocked =
+        demand.isBlocked &&
+        (q.includes('bloque') ||
+          q.includes('imped') ||
+          'bloqueado'.includes(q) ||
+          'bloqueada'.includes(q) ||
+          'impedimento'.includes(q) ||
+          (demand.blockedReason && demand.blockedReason.toLowerCase().includes(q)));
 
       if (
         !matchKey &&
@@ -162,7 +178,8 @@ export const JiraWeekPanel: React.FC<JiraWeekPanelProps> = ({
         !matchEpic &&
         !matchIndustry &&
         !matchLayout &&
-        !matchStatus
+        !matchStatus &&
+        !matchBlocked
       ) {
         return false;
       }
@@ -333,12 +350,29 @@ export const JiraWeekPanel: React.FC<JiraWeekPanelProps> = ({
             </select>
           </div>
 
+          {/* Botão Filtro Bloqueadas */}
+          {blockedCount > 0 && (
+            <button
+              onClick={() => setOnlyBlocked((prev) => !prev)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all ${
+                onlyBlocked
+                  ? 'bg-red-500/25 border-red-500/70 text-red-200 ring-1 ring-red-500/40 shadow-sm'
+                  : 'bg-slate-900/90 border-slate-700/70 text-red-300/90 hover:text-red-200 hover:bg-slate-800'
+              }`}
+              title={onlyBlocked ? 'Exibir todas as demandas' : 'Exibir apenas demandas bloqueadas'}
+            >
+              <AlertOctagon className="w-3.5 h-3.5 text-red-400" />
+              <span>Bloqueadas ({blockedCount})</span>
+            </button>
+          )}
+
           {/* Botão Limpar Filtros */}
-          {(selectedProject !== 'all' || selectedUser !== 'all') && (
+          {(selectedProject !== 'all' || selectedUser !== 'all' || onlyBlocked) && (
             <button
               onClick={() => {
                 setSelectedProject('all');
                 setSelectedUser('all');
+                setOnlyBlocked(false);
               }}
               className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs font-semibold transition-all"
               title="Limpar filtros aplicados"
@@ -351,7 +385,7 @@ export const JiraWeekPanel: React.FC<JiraWeekPanelProps> = ({
 
         {/* Indicador de demandas filtradas vs total */}
         <div className="text-[11px] font-medium text-slate-400">
-          {selectedProject !== 'all' || selectedUser !== 'all' || searchQuery.trim() ? (
+          {selectedProject !== 'all' || selectedUser !== 'all' || onlyBlocked || searchQuery.trim() ? (
             <span>
               Exibindo <strong className="text-blue-400 font-bold">{filteredTotalCount}</strong> de{' '}
               <strong className="text-slate-200">{totalDemandsInCurrentWeek}</strong> na semana

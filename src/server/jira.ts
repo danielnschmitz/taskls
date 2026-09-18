@@ -9,6 +9,7 @@ export interface JiraConfig {
   custom_fields: {
     industry: string;
     layout: string;
+    flagged?: string;
   };
 }
 
@@ -37,6 +38,7 @@ export const DEFAULT_JIRA_CONFIG: JiraConfig = {
   custom_fields: {
     industry: 'customfield_10780',
     layout: 'customfield_10714',
+    flagged: 'customfield_10021',
   },
 };
 
@@ -61,6 +63,8 @@ export interface JiraDemand {
   } | null;
   industry: string | null;
   layout: string | null;
+  isBlocked?: boolean;
+  blockedReason?: string | null;
   url: string;
 }
 
@@ -161,7 +165,7 @@ export async function saveJiraConfig(newConfig: Partial<JiraConfig>): Promise<Ji
 /**
  * Monta o cabeçalho Basic Auth para a API Atlassian
  */
-function getAuthHeader(config: JiraConfig): string {
+export function getAuthHeader(config: JiraConfig): string {
   const credentials = `${config.email.trim()}:${config.api_token.trim()}`;
   return `Basic ${Buffer.from(credentials).toString('base64')}`;
 }
@@ -275,6 +279,7 @@ function parseJiraIssues(
   host: string,
   industryField: string,
   layoutField: string,
+  flaggedField: string,
   allowedStatuses: Set<string>,
   excludeDone: boolean = false
 ): JiraDemand[] {
@@ -322,6 +327,39 @@ function parseJiraIssues(
     const industryVal = extractFieldValue(issue.fields?.[industryField]);
     const layoutVal = extractFieldValue(issue.fields?.[layoutField]);
 
+    // Verificação se o card está bloqueado / com impedimento (Flagged[Checkboxes] = Impediment)
+    const flaggedVal =
+      issue.fields?.[flaggedField] ??
+      issue.fields?.customfield_10021 ??
+      issue.fields?.['Flagged[Checkboxes]'] ??
+      issue.fields?.flagged;
+
+    let isBlocked = false;
+    let blockedReason: string | null = null;
+
+    if (Array.isArray(flaggedVal)) {
+      for (const item of flaggedVal) {
+        const valStr = (typeof item === 'string' ? item : item?.value || '').trim();
+        if (valStr.toLowerCase().includes('impediment') || valStr.toLowerCase().includes('impedimento')) {
+          isBlocked = true;
+          blockedReason = valStr;
+          break;
+        }
+      }
+    } else if (typeof flaggedVal === 'string') {
+      const valStr = flaggedVal.trim();
+      if (valStr.toLowerCase().includes('impediment') || valStr.toLowerCase().includes('impedimento')) {
+        isBlocked = true;
+        blockedReason = valStr;
+      }
+    } else if (flaggedVal && typeof flaggedVal === 'object') {
+      const valStr = (flaggedVal.value || '').trim();
+      if (valStr.toLowerCase().includes('impediment') || valStr.toLowerCase().includes('impedimento')) {
+        isBlocked = true;
+        blockedReason = valStr;
+      }
+    }
+
     demands.push({
       id: issue.id,
       key: issue.key,
@@ -337,6 +375,8 @@ function parseJiraIssues(
       epic: epicInfo,
       industry: industryVal,
       layout: layoutVal,
+      isBlocked,
+      blockedReason,
       url: `https://${host}/browse/${issue.key}`,
     });
   }
@@ -347,7 +387,7 @@ function parseJiraIssues(
 /**
  * Executa uma busca JQL no Jira REST API v3
  */
-async function executeJqlSearch(
+export async function executeJqlSearch(
   url: string,
   config: JiraConfig,
   jql: string,
@@ -453,8 +493,9 @@ export async function getJiraDemandsForWeek(
   const host = config.domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
   const url = `https://${host}/rest/api/3/search/jql`;
 
-  const industryField = config.custom_fields.industry || 'customfield_10780';
-  const layoutField = config.custom_fields.layout || 'customfield_10714';
+  const industryField = config.custom_fields?.industry || 'customfield_10780';
+  const layoutField = config.custom_fields?.layout || 'customfield_10714';
+  const flaggedField = config.custom_fields?.flagged || 'customfield_10021';
   const fields = [
     'summary',
     'duedate',
@@ -463,6 +504,7 @@ export async function getJiraDemandsForWeek(
     'status',
     'priority',
     'assignee',
+    flaggedField,
     industryField,
     layoutField,
   ];
@@ -501,9 +543,9 @@ export async function getJiraDemandsForWeek(
     (config.statuses || ALL_POSSIBLE_STATUSES).map((s) => s.toLowerCase().trim())
   );
 
-  const weekDemands = parseJiraIssues(weekIssues, host, industryField, layoutField, allowedStatuses, false);
-  const overdueDemands = parseJiraIssues(overdueIssues, host, industryField, layoutField, allowedStatuses, true);
-  const futureDemands = parseJiraIssues(futureIssues, host, industryField, layoutField, allowedStatuses, true);
+  const weekDemands = parseJiraIssues(weekIssues, host, industryField, layoutField, flaggedField, allowedStatuses, false);
+  const overdueDemands = parseJiraIssues(overdueIssues, host, industryField, layoutField, flaggedField, allowedStatuses, true);
+  const futureDemands = parseJiraIssues(futureIssues, host, industryField, layoutField, flaggedField, allowedStatuses, true);
 
   // Agrupar demandas da semana por dia (Segunda a Sexta)
   const days: JiraDayGroup[] = workDaysDates.map((item, idx) => {

@@ -25,6 +25,14 @@ import {
   getJiraDemandsForWeek,
   ALL_POSSIBLE_STATUSES,
 } from './jira';
+import {
+  listJiraEvents,
+  markEventAsReviewed,
+  unmarkEventAsReviewed,
+  markAllEventsAsReviewed,
+  syncJiraEventsFromRest,
+  getPendingEventsCount,
+} from './jiraEvents';
 import { requireModule } from './auth';
 
 export const router = Router();
@@ -1029,5 +1037,193 @@ router.get('/jira/demands', async (req: Request, res: Response) => {
     res.status(500).json({ error: err.message || 'Erro ao buscar demandas do Jira' });
   }
 });
+
+/**
+ * GET /api/jira/events
+ * Lista eventos do Jira para revisão
+ */
+router.get('/jira/events', async (req: Request, res: Response) => {
+  try {
+    const authUser = (req as any).user;
+    if (!authUser?.isAdmin && !authUser?.canAccessJira) {
+      res.status(403).json({ error: 'Sem permissão para acessar o painel de eventos do Jira.' });
+      return;
+    }
+
+    const { status, project, eventType, search, limit, offset } = req.query;
+    const data = await listJiraEvents({
+      status: (status as any) || 'pending',
+      project: typeof project === 'string' ? project : 'all',
+      eventType: typeof eventType === 'string' ? eventType : 'all',
+      search: typeof search === 'string' ? search : '',
+      limit: limit ? parseInt(String(limit), 10) : 50,
+      offset: offset ? parseInt(String(offset), 10) : 0,
+    });
+
+    res.json(data);
+  } catch (err: any) {
+    console.error('[API] Erro ao listar eventos do Jira:', err);
+    res.status(500).json({ error: err.message || 'Erro ao listar eventos do Jira' });
+  }
+});
+
+/**
+ * GET /api/jira/events/count
+ * Retorna contagem de eventos pendentes de revisão
+ */
+router.get('/jira/events/count', async (req: Request, res: Response) => {
+  try {
+    const authUser = (req as any).user;
+    if (!authUser?.isAdmin && !authUser?.canAccessJira) {
+      res.status(403).json({ error: 'Sem permissão.' });
+      return;
+    }
+
+    const pendingCount = await getPendingEventsCount();
+    res.json({ pendingCount });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao contar pendências do Jira' });
+  }
+});
+
+/**
+ * PUT /api/jira/events/:id/review
+ * Marca um evento como revisado
+ */
+router.put('/jira/events/:id/review', async (req: Request, res: Response) => {
+  try {
+    const authUser = (req as any).user;
+    if (!authUser?.isAdmin && !authUser?.canAccessJira) {
+      res.status(403).json({ error: 'Sem permissão.' });
+      return;
+    }
+
+    const eventId = parseInt(String(req.params.id), 10);
+    if (isNaN(eventId)) {
+      res.status(400).json({ error: 'ID de evento inválido' });
+      return;
+    }
+
+    const success = await markEventAsReviewed(eventId, authUser.id);
+    if (!success) {
+      res.status(404).json({ error: 'Evento não encontrado' });
+      return;
+    }
+
+    res.json({ success: true, message: 'Evento marcado como revisado com sucesso.' });
+  } catch (err: any) {
+    console.error('[API] Erro ao revisar evento do Jira:', err);
+    res.status(500).json({ error: err.message || 'Erro ao marcar evento como revisado' });
+  }
+});
+
+/**
+ * PUT /api/jira/events/:id/unreview
+ * Reverte a revisão de um evento (move de volta para pendente)
+ */
+router.put('/jira/events/:id/unreview', async (req: Request, res: Response) => {
+  try {
+    const authUser = (req as any).user;
+    if (!authUser?.isAdmin && !authUser?.canAccessJira) {
+      res.status(403).json({ error: 'Sem permissão.' });
+      return;
+    }
+
+    const eventId = parseInt(String(req.params.id), 10);
+    if (isNaN(eventId)) {
+      res.status(400).json({ error: 'ID de evento inválido' });
+      return;
+    }
+
+    const success = await unmarkEventAsReviewed(eventId);
+    if (!success) {
+      res.status(404).json({ error: 'Evento não encontrado' });
+      return;
+    }
+
+    res.json({ success: true, message: 'Evento retornado para a lista de pendências.' });
+  } catch (err: any) {
+    console.error('[API] Erro ao reverter revisão:', err);
+    res.status(500).json({ error: err.message || 'Erro ao reverter revisão' });
+  }
+});
+
+/**
+ * PUT /api/jira/events/review-all
+ * Marca todos os eventos pendentes como revisados
+ */
+router.put('/jira/events/review-all', async (req: Request, res: Response) => {
+  try {
+    const authUser = (req as any).user;
+    if (!authUser?.isAdmin && !authUser?.canAccessJira) {
+      res.status(403).json({ error: 'Sem permissão.' });
+      return;
+    }
+
+    const { projectKey } = req.body || {};
+    const affectedCount = await markAllEventsAsReviewed(projectKey, authUser.id);
+
+    res.json({ success: true, count: affectedCount, message: `${affectedCount} eventos marcados como revisados.` });
+  } catch (err: any) {
+    console.error('[API] Erro ao marcar todos os eventos como revisados:', err);
+    res.status(500).json({ error: err.message || 'Erro ao revisar todos os eventos' });
+  }
+});
+
+/**
+ * POST /api/jira/events/sync
+ * Sincroniza eventos recentes via REST API do Jira
+ */
+router.post('/jira/events/sync', async (req: Request, res: Response) => {
+  try {
+    const authUser = (req as any).user;
+    if (!authUser?.isAdmin && !authUser?.canAccessJira) {
+      res.status(403).json({ error: 'Sem permissão.' });
+      return;
+    }
+
+    const daysBack = parseInt(String(req.body?.daysBack || 7), 10);
+    const syncResult = await syncJiraEventsFromRest(isNaN(daysBack) ? 7 : daysBack);
+
+    res.json({ success: true, ...syncResult });
+  } catch (err: any) {
+    console.error('[API] Erro ao sincronizar eventos do Jira:', err);
+    res.status(500).json({ error: err.message || 'Erro ao sincronizar eventos do Jira' });
+  }
+});
+
+/**
+ * GET /api/jira/webhook-info
+ * Retorna dados para configuração do Webhook no Jira Cloud
+ */
+router.get('/jira/webhook-info', async (req: Request, res: Response) => {
+  try {
+    const authUser = (req as any).user;
+    if (!authUser?.isAdmin && !authUser?.canAccessJira) {
+      res.status(403).json({ error: 'Sem permissão.' });
+      return;
+    }
+
+    const config = await getJiraConfig();
+    const domain = config.domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    const webhookUrl = 'https://taskls.duckdns.org/api/jira/webhook';
+    const settingsUrl = `https://${domain}/plugins/servlet/webhooks`;
+
+    res.json({
+      webhookUrl,
+      settingsUrl,
+      projects: config.projects || [],
+      recommendedEvents: [
+        'jira:issue_created',
+        'jira:issue_updated',
+        'comment_created',
+        'comment_updated',
+      ],
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao obter informações do webhook' });
+  }
+});
+
 
 

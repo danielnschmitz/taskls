@@ -18,6 +18,7 @@ import {
   Loader2,
   Target,
   Search,
+  BellRing,
 } from 'lucide-react';
 import {
   DashboardData,
@@ -35,6 +36,7 @@ import { TaskModal } from './components/TaskModal';
 import { ConfirmModal } from './components/ConfirmModal';
 import { BackupModal } from './components/BackupModal';
 import { JiraWeekPanel } from './components/JiraWeekPanel';
+import { JiraReviewPanel } from './components/JiraReviewPanel';
 import { JiraConfigModal } from './components/JiraConfigModal';
 import { LoginScreen } from './components/LoginScreen';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
@@ -68,7 +70,7 @@ export const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPriority, setSelectedPriority] = useState<Priority | 'all'>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [activeTab, setActiveTab] = useState<'all' | 'week' | 'upcoming' | 'backlog' | 'jira'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'week' | 'upcoming' | 'backlog' | 'jira' | 'jira_reviews'>('all');
 
   // Focus mode
   const [focusMode, setFocusMode] = useState(false);
@@ -89,6 +91,7 @@ export const App: React.FC = () => {
   const [isJiraModalOpen, setIsJiraModalOpen] = useState(false);
   const [jiraWeekBaseDate, setJiraWeekBaseDate] = useState<Date>(new Date());
   const [jiraRefreshKey, setJiraRefreshKey] = useState(0);
+  const [jiraPendingCount, setJiraPendingCount] = useState<number>(0);
 
   // Auth state
   const { user, isAuthenticated, isLoading: isAuthLoading, isDefaultPassword } = useAuth();
@@ -207,6 +210,25 @@ export const App: React.FC = () => {
       clearInterval(interval);
     };
   }, [isAuthenticated, canAccessTasks, showToast]);
+
+  // Polling de Contagem de Pendências de Revisão do Jira (a cada 30s)
+  const fetchJiraPendingCount = useCallback(async () => {
+    if (!isAuthenticated || !canAccessJira) return;
+    try {
+      const res = await fetch('/api/jira/events/count');
+      if (res.ok) {
+        const json = await res.json();
+        setJiraPendingCount(json.pendingCount || 0);
+      }
+    } catch {}
+  }, [isAuthenticated, canAccessJira]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !canAccessJira) return;
+    fetchJiraPendingCount();
+    const interval = setInterval(fetchJiraPendingCount, 30000);
+    return () => clearInterval(interval);
+  }, [fetchJiraPendingCount, isAuthenticated, canAccessJira]);
 
   // Extract list of all tasks
   const allTasksList = dashboardData
@@ -594,6 +616,25 @@ export const App: React.FC = () => {
                     <span>Demandas Jira</span>
                   </button>
                 )}
+
+                {canAccessJira && (
+                  <button
+                    onClick={() => setActiveTab('jira_reviews')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      activeTab === 'jira_reviews'
+                        ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <BellRing className="w-3.5 h-3.5" />
+                    <span>Revisões Jira</span>
+                    {jiraPendingCount > 0 && (
+                      <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-400 text-slate-950 shadow-sm animate-pulse">
+                        {jiraPendingCount}
+                      </span>
+                    )}
+                  </button>
+                )}
               </div>
 
               {/* Filtros de Tarefas (Posicionados ao lado da seleção de painéis) */}
@@ -771,6 +812,16 @@ export const App: React.FC = () => {
                       onOpenSettings={user?.isAdmin ? () => setIsJiraModalOpen(true) : undefined}
                       searchQuery={searchQuery}
                       onShowToast={showToast}
+                    />
+                  </section>
+                )}
+
+                {/* Panel 5: Jira Review Events (Feed de Revisões e Evoluções) */}
+                {canAccessJira && (activeTab === 'all' || activeTab === 'jira_reviews') && (
+                  <section className="pt-2">
+                    <JiraReviewPanel
+                      onShowToast={showToast}
+                      onRefreshCount={fetchJiraPendingCount}
                     />
                   </section>
                 )}

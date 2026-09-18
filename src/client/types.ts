@@ -109,6 +109,8 @@ export interface JiraDemand {
   } | null;
   industry: string | null;
   layout: string | null;
+  isBlocked?: boolean;
+  blockedReason?: string | null;
   url: string;
 }
 
@@ -181,5 +183,49 @@ export interface CardMacro {
   name: string;
   label: string;
   isMultiline: boolean;
+}
+
+export type JiraEventType =
+  | 'status_changed'
+  | 'flagged_changed'
+  | 'comment_added'
+  | 'issue_created'
+  | 'assignee_changed'
+  | 'field_updated';
+
+export interface JiraEventDiff {
+  field: string;
+  label: string;
+  from?: string | null;
+  to?: string | null;
+  text?: string;
+  isBlocked?: boolean;
+  [key: string]: any;
+}
+
+export interface JiraReviewEvent {
+  id: number;
+  eventId: string;
+  issueKey: string;
+  issueId?: string;
+  projectKey: string;
+  summary: string;
+  eventType: JiraEventType;
+  authorName: string;
+  authorAvatar?: string | null;
+  eventTime: string;
+  diff: JiraEventDiff;
+  cardData: JiraDemand;
+  isReviewed: boolean;
+  reviewedAt?: string | null;
+  reviewedBy?: string | null;
+  createdAt: string;
+}
+
+export interface JiraEventsResponse {
+  events: JiraReviewEvent[];
+  totalPending: number;
+  totalReviewed: number;
+  total: number;
 }
 

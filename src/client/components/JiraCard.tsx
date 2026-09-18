@@ -8,6 +8,7 @@ import {
   Tag,
   Calendar,
   Clock,
+  AlertOctagon,
 } from 'lucide-react';
 import { JiraDemand } from '../types';
 
@@ -52,6 +53,7 @@ function getStatusBadgeStyle(displayStatus: string): string {
 
 export const JiraCard: React.FC<JiraCardProps> = ({ demand, showDueDateBadge = false }) => {
   const statusStyle = getStatusBadgeStyle(demand.displayStatus);
+  const isBlocked = Boolean(demand.isBlocked);
 
   // Badge relativo de data de entrega para visualização em listas (atrasadas/futuras)
   let dueDateBadge = null;
@@ -101,21 +103,41 @@ export const JiraCard: React.FC<JiraCardProps> = ({ demand, showDueDateBadge = f
     } catch {}
   }
 
+  const containerClasses = isBlocked
+    ? 'group block relative p-3 rounded-xl bg-red-500/15 border border-red-500/40 hover:bg-red-500/20 hover:border-red-400/70 hover:shadow-lg hover:shadow-red-950/30 ring-1 ring-red-500/25 transition-all duration-200 text-left no-underline'
+    : 'group block relative p-3 rounded-xl bg-slate-900/90 border border-slate-800/90 hover:border-indigo-500/60 hover:bg-slate-850 hover:shadow-lg hover:shadow-indigo-950/20 transition-all duration-200 text-left no-underline';
+
   return (
     <a
       href={demand.url}
       target="_blank"
       rel="noopener noreferrer"
-      className="group block relative p-3 rounded-xl bg-slate-900/90 border border-slate-800/90 hover:border-indigo-500/60 hover:bg-slate-850 hover:shadow-lg hover:shadow-indigo-950/20 transition-all duration-200 text-left no-underline"
-      title={`Abrir ${demand.key} no Jira`}
+      className={containerClasses}
+      title={isBlocked ? `[BLOQUEADO] ${demand.key}: ${demand.summary}` : `Abrir ${demand.key} no Jira`}
     >
       {/* Top row: Key + Link icon & Status Badge */}
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className="text-xs font-black tracking-wide text-indigo-400 group-hover:text-indigo-300 group-hover:underline flex items-center gap-1">
+          <span
+            className={`text-xs font-black tracking-wide flex items-center gap-1 ${
+              isBlocked
+                ? 'text-red-300 group-hover:text-red-200 group-hover:underline'
+                : 'text-indigo-400 group-hover:text-indigo-300 group-hover:underline'
+            }`}
+          >
             {demand.key}
             <ExternalLink className="w-3 h-3 opacity-60 group-hover:opacity-100 transition-opacity flex-shrink-0" />
           </span>
+
+          {isBlocked && (
+            <span
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-red-500/25 text-red-200 border border-red-500/40 text-[9px] font-black uppercase tracking-wider shadow-sm flex-shrink-0"
+              title={`Demanda com impedimento / bloqueio: ${demand.blockedReason || 'Impediment'}`}
+            >
+              <AlertOctagon className="w-2.5 h-2.5 text-red-300 flex-shrink-0" />
+              <span>Bloqueado</span>
+            </span>
+          )}
         </div>
 
         {/* Status Capsule */}
@@ -128,12 +150,20 @@ export const JiraCard: React.FC<JiraCardProps> = ({ demand, showDueDateBadge = f
       </div>
 
       {/* Card Title / Summary */}
-      <h4 className="text-xs font-semibold text-slate-100 group-hover:text-white leading-snug line-clamp-3 mb-2.5">
+      <h4
+        className={`text-xs font-semibold leading-snug line-clamp-3 mb-2.5 ${
+          isBlocked ? 'text-red-50 group-hover:text-white' : 'text-slate-100 group-hover:text-white'
+        }`}
+      >
         {demand.summary}
       </h4>
 
       {/* Capsules / Badges */}
-      <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-800/60 text-[10px]">
+      <div
+        className={`flex flex-wrap items-center gap-1.5 pt-2 border-t text-[10px] ${
+          isBlocked ? 'border-red-500/25' : 'border-slate-800/60'
+        }`}
+      >
         {/* Due Date Capsule (se aplicável) */}
         {dueDateBadge}
 

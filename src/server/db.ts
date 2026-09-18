@@ -159,6 +159,30 @@ export async function initDatabase(): Promise<void> {
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
       CREATE INDEX IF NOT EXISTS idx_saved_cards_user_id ON saved_cards(user_id);
+
+      -- Módulo Jira: Tabela de Eventos e Evoluções para Revisão
+      CREATE TABLE IF NOT EXISTS jira_review_events (
+        id SERIAL PRIMARY KEY,
+        event_id VARCHAR(120) UNIQUE NOT NULL,
+        issue_key VARCHAR(50) NOT NULL,
+        issue_id VARCHAR(50),
+        project_key VARCHAR(50) NOT NULL,
+        summary TEXT NOT NULL,
+        event_type VARCHAR(50) NOT NULL,
+        author_name VARCHAR(100),
+        author_avatar TEXT,
+        event_time TIMESTAMPTZ NOT NULL,
+        diff_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+        card_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+        is_reviewed BOOLEAN DEFAULT FALSE,
+        reviewed_at TIMESTAMPTZ,
+        reviewed_by VARCHAR(36) REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_jira_events_reviewed ON jira_review_events(is_reviewed);
+      CREATE INDEX IF NOT EXISTS idx_jira_events_event_time ON jira_review_events(event_time DESC);
+      CREATE INDEX IF NOT EXISTS idx_jira_events_proj ON jira_review_events(project_key);
+      CREATE INDEX IF NOT EXISTS idx_jira_events_issue_key ON jira_review_events(issue_key);
     `);
 
     // Seed de Usuário Administrador Inicial (se não houver nenhum)

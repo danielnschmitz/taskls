@@ -1,0 +1,707 @@
+import { pool } from './db';
+import { getJiraConfig, formatDisplayStatus, getAuthHeader, executeJqlSearch, JiraDemand, JiraConfig } from './jira';
+
+export type JiraEventType =
+  | 'status_changed'
+  | 'flagged_changed'
+  | 'comment_added'
+  | 'issue_created'
+  | 'assignee_changed'
+  | 'field_updated';
+
+export interface JiraEventDiff {
+  field: string;
+  label: string;
+  from?: string | null;
+  to?: string | null;
+  text?: string;
+  isBlocked?: boolean;
+  [key: string]: any;
+}
+
+export interface JiraReviewEvent {
+  id: number;
+  eventId: string;
+  issueKey: string;
+  issueId?: string;
+  projectKey: string;
+  summary: string;
+  eventType: JiraEventType;
+  authorName: string;
+  authorAvatar?: string | null;
+  eventTime: string;
+  diff: JiraEventDiff;
+  cardData: JiraDemand;
+  isReviewed: boolean;
+  reviewedAt?: string | null;
+  reviewedBy?: string | null;
+  createdAt: string;
+}
+
+/**
+ * Cria snapshot de JiraDemand a partir do payload de uma issue
+ */
+export function buildCardSnapshot(issue: any, host: string, config: JiraConfig): JiraDemand {
+  const projKey = issue.fields?.project?.key || '';
+  const projName = issue.fields?.project?.name || projKey;
+  const rawStatus = issue.fields?.status?.name || 'Desconhecido';
+  const displayStatus = formatDisplayStatus(projKey, rawStatus);
+
+  let epicInfo: { key: string; summary?: string } | null = null;
+  if (issue.fields?.parent) {
+    epicInfo = {
+      key: issue.fields.parent.key,
+      summary: issue.fields.parent.fields?.summary || issue.fields.parent.key,
+    };
+  }
+
+  let assigneeInfo: { displayName: string; avatarUrl?: string } | null = null;
+  if (issue.fields?.assignee) {
+    assigneeInfo = {
+      displayName: issue.fields.assignee.displayName || issue.fields.assignee.name || 'Sem nome',
+      avatarUrl:
+        issue.fields.assignee.avatarUrls?.['32x32'] ||
+        issue.fields.assignee.avatarUrls?.['24x24'],
+    };
+  }
+
+  const industryField = config.custom_fields?.industry || 'customfield_10780';
+  const layoutField = config.custom_fields?.layout || 'customfield_10714';
+  const flaggedField = (config.custom_fields as any)?.flagged || 'customfield_10021';
+
+  const industryVal = issue.fields?.[industryField]?.value || issue.fields?.[industryField] || null;
+  const layoutVal = issue.fields?.[layoutField]?.value || issue.fields?.[layoutField] || null;
+
+  const flaggedVal =
+    issue.fields?.[flaggedField] ??
+    issue.fields?.customfield_10021 ??
+    issue.fields?.['Flagged[Checkboxes]'] ??
+    issue.fields?.flagged;
+
+  let isBlocked = false;
+  let blockedReason: string | null = null;
+
+  if (Array.isArray(flaggedVal)) {
+    for (const item of flaggedVal) {
+      const valStr = (typeof item === 'string' ? item : item?.value || '').trim();
+      if (valStr.toLowerCase().includes('impediment') || valStr.toLowerCase().includes('impedimento')) {
+        isBlocked = true;
+        blockedReason = valStr;
+        break;
+      }
+    }
+  } else if (typeof flaggedVal === 'string') {
+    const valStr = flaggedVal.trim();
+    if (valStr.toLowerCase().includes('impediment') || valStr.toLowerCase().includes('impedimento')) {
+      isBlocked = true;
+      blockedReason = valStr;
+    }
+  } else if (flaggedVal && typeof flaggedVal === 'object') {
+    const valStr = (flaggedVal.value || '').trim();
+    if (valStr.toLowerCase().includes('impediment') || valStr.toLowerCase().includes('impedimento')) {
+      isBlocked = true;
+      blockedReason = valStr;
+    }
+  }
+
+  return {
+    id: issue.id,
+    key: issue.key,
+    summary: issue.fields?.summary || 'Sem resumo',
+    duedate: issue.fields?.duedate,
+    project: {
+      key: projKey,
+      name: projName,
+    },
+    rawStatus,
+    displayStatus,
+    assignee: assigneeInfo,
+    epic: epicInfo,
+    industry: typeof industryVal === 'string' ? industryVal : null,
+    layout: typeof layoutVal === 'string' ? layoutVal : null,
+    isBlocked,
+    blockedReason,
+    url: `https://${host}/browse/${issue.key}`,
+  };
+}
+
+/**
+ * Salva um evento de revisão no banco com desduplicação por event_id
+ */
+export async function saveJiraEvent(event: {
+  eventId: string;
+  issueKey: string;
+  issueId?: string;
+  projectKey: string;
+  summary: string;
+  eventType: JiraEventType;
+  authorName: string;
+  authorAvatar?: string | null;
+  eventTime: string;
+  diff: JiraEventDiff;
+  cardData: JiraDemand;
+}): Promise<void> {
+  const query = `
+    INSERT INTO jira_review_events (
+      event_id, issue_key, issue_id, project_key, summary,
+      event_type, author_name, author_avatar, event_time,
+      diff_data, card_data, is_reviewed, created_at
+    ) VALUES (
+      $1, $2, $3, $4, $5,
+      $6, $7, $8, $9,
+      $10, $11, FALSE, NOW()
+    )
+    ON CONFLICT (event_id) DO UPDATE SET
+      summary = EXCLUDED.summary,
+      card_data = EXCLUDED.card_data
+    WHERE jira_review_events.is_reviewed = FALSE
+  `;
+
+  const values = [
+    event.eventId,
+    event.issueKey,
+    event.issueId || null,
+    event.projectKey,
+    event.summary,
+    event.eventType,
+    event.authorName || 'Jira',
+    event.authorAvatar || null,
+    event.eventTime,
+    JSON.stringify(event.diff),
+    JSON.stringify(event.cardData),
+  ];
+
+  await pool.query(query, values);
+}
+
+/**
+ * Processa payload recebido via Webhook do Jira
+ */
+export async function processWebhookPayload(payload: any): Promise<{ processed: number; events: string[] }> {
+  if (!payload || typeof payload !== 'object') {
+    return { processed: 0, events: [] };
+  }
+
+  const config = await getJiraConfig();
+  const host = config.domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  const webhookEvent = payload.webhookEvent || '';
+  const issue = payload.issue;
+
+  if (!issue || !issue.key) {
+    return { processed: 0, events: [] };
+  }
+
+  const projKey = issue.fields?.project?.key || '';
+  // Se houver restrição de projetos configurada, ignora outros projetos
+  if (config.projects && config.projects.length > 0) {
+    const isAllowed = config.projects.some((p) => p.toUpperCase() === projKey.toUpperCase());
+    if (!isAllowed) {
+      return { processed: 0, events: [] };
+    }
+  }
+
+  const cardSnapshot = buildCardSnapshot(issue, host, config);
+  const user = payload.user || {};
+  const authorName = user.displayName || user.name || 'Jira';
+  const authorAvatar = user.avatarUrls?.['32x32'] || user.avatarUrls?.['24x24'] || null;
+  const eventTime = payload.timestamp
+    ? new Date(payload.timestamp).toISOString()
+    : new Date().toISOString();
+
+  let processedCount = 0;
+  const eventsSaved: string[] = [];
+
+  // 1. Criação de Issue
+  if (webhookEvent === 'jira:issue_created') {
+    const eventId = `iss-${issue.key}-created`;
+    await saveJiraEvent({
+      eventId,
+      issueKey: issue.key,
+      issueId: issue.id,
+      projectKey: projKey,
+      summary: issue.fields?.summary || cardSnapshot.summary,
+      eventType: 'issue_created',
+      authorName,
+      authorAvatar,
+      eventTime,
+      diff: {
+        field: 'created',
+        label: 'Card Criado',
+        issueType: issue.fields?.issuetype?.name || 'Demanda',
+        priority: issue.fields?.priority?.name || 'Média',
+      },
+      cardData: cardSnapshot,
+    });
+    processedCount++;
+    eventsSaved.push(eventId);
+  }
+
+  // 2. Novo Comentário
+  if (webhookEvent === 'comment_created' || (webhookEvent === 'jira:issue_updated' && payload.comment)) {
+    const comment = payload.comment;
+    if (comment && comment.id) {
+      const commentAuthor = comment.author?.displayName || authorName;
+      const commentAvatar = comment.author?.avatarUrls?.['32x32'] || authorAvatar;
+      const commentTime = comment.created ? new Date(comment.created).toISOString() : eventTime;
+      const eventId = `cmt-${issue.key}-${comment.id}`;
+
+      await saveJiraEvent({
+        eventId,
+        issueKey: issue.key,
+        issueId: issue.id,
+        projectKey: projKey,
+        summary: issue.fields?.summary || cardSnapshot.summary,
+        eventType: 'comment_added',
+        authorName: commentAuthor,
+        authorAvatar: commentAvatar,
+        eventTime: commentTime,
+        diff: {
+          field: 'comment',
+          label: 'Novo Comentário',
+          text: typeof comment.body === 'string' ? comment.body : JSON.stringify(comment.body),
+          commentId: comment.id,
+        },
+        cardData: cardSnapshot,
+      });
+      processedCount++;
+      eventsSaved.push(eventId);
+    }
+  }
+
+  // 3. Atualizações de Campos (Changelog)
+  const changelog = payload.changelog;
+  if (changelog && Array.isArray(changelog.items)) {
+    for (const item of changelog.items) {
+      const field = (item.field || '').toLowerCase();
+      let eventType: JiraEventType = 'field_updated';
+      let label = `Campo ${item.field}`;
+      let diffData: JiraEventDiff = {
+        field: item.field,
+        label,
+        from: item.fromString,
+        to: item.toString,
+      };
+
+      if (field === 'status') {
+        eventType = 'status_changed';
+        label = 'Mudança de Status';
+        diffData = {
+          field: 'status',
+          label,
+          from: formatDisplayStatus(projKey, item.fromString || ''),
+          to: formatDisplayStatus(projKey, item.toString || ''),
+        };
+      } else if (field.includes('flagged') || field.includes('impediment')) {
+        eventType = 'flagged_changed';
+        const isBlocked = (item.toString || '').toLowerCase().includes('impediment');
+        label = isBlocked ? 'Impedimento Adicionado (Bloqueado)' : 'Impedimento Removido';
+        diffData = {
+          field: 'flagged',
+          label,
+          from: item.fromString,
+          to: item.toString,
+          isBlocked,
+        };
+      } else if (field === 'assignee') {
+        eventType = 'assignee_changed';
+        label = 'Troca de Responsável';
+        diffData = {
+          field: 'assignee',
+          label,
+          from: item.fromString || 'Não atribuído',
+          to: item.toString || 'Não atribuído',
+        };
+      } else if (field === 'duedate') {
+        eventType = 'field_updated';
+        label = 'Data de Entrega Alterada';
+        diffData = {
+          field: 'duedate',
+          label,
+          from: item.fromString || 'Sem prazo',
+          to: item.toString || 'Sem prazo',
+        };
+      }
+
+      const eventId = `chg-${issue.key}-${changelog.id}-${item.field}`;
+      await saveJiraEvent({
+        eventId,
+        issueKey: issue.key,
+        issueId: issue.id,
+        projectKey: projKey,
+        summary: issue.fields?.summary || cardSnapshot.summary,
+        eventType,
+        authorName,
+        authorAvatar,
+        eventTime,
+        diff: diffData,
+        cardData: cardSnapshot,
+      });
+      processedCount++;
+      eventsSaved.push(eventId);
+    }
+  }
+
+  return { processed: processedCount, events: eventsSaved };
+}
+
+/**
+ * Sincroniza eventos retroativos diretamente pela REST API do Jira
+ */
+export async function syncJiraEventsFromRest(daysBack: number = 7): Promise<{ addedCount: number; checkedIssues: number }> {
+  const config = await getJiraConfig();
+  if (!config.projects || config.projects.length === 0 || !config.api_token) {
+    return { addedCount: 0, checkedIssues: 0 };
+  }
+
+  const host = config.domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  const searchUrl = `https://${host}/rest/api/3/search/jql`;
+  const projectsJql = config.projects.map((p) => `"${p}"`).join(', ');
+
+  const industryField = config.custom_fields?.industry || 'customfield_10780';
+  const layoutField = config.custom_fields?.layout || 'customfield_10714';
+  const flaggedField = config.custom_fields?.flagged || 'customfield_10021';
+
+  const fields = [
+    'summary',
+    'duedate',
+    'project',
+    'parent',
+    'status',
+    'priority',
+    'assignee',
+    'created',
+    'updated',
+    'comment',
+    flaggedField,
+    industryField,
+    layoutField,
+  ];
+
+  const jql = `project in (${projectsJql}) AND updated >= "-${daysBack}d" ORDER BY updated DESC`;
+
+  // Buscar issues recentes
+  const issues = await executeJqlSearch(searchUrl, config, jql, fields, 50);
+  let addedCount = 0;
+
+  const cutoffTime = new Date();
+  cutoffTime.setDate(cutoffTime.getDate() - daysBack);
+
+  for (const issue of issues) {
+    const projKey = issue.fields?.project?.key || '';
+    const cardSnapshot = buildCardSnapshot(issue, host, config);
+
+    // 1. Verificar se o card foi criado dentro da janela de dias
+    if (issue.fields?.created) {
+      const createdDate = new Date(issue.fields.created);
+      if (createdDate >= cutoffTime) {
+        const eventId = `iss-${issue.key}-created`;
+        await saveJiraEvent({
+          eventId,
+          issueKey: issue.key,
+          issueId: issue.id,
+          projectKey: projKey,
+          summary: issue.fields?.summary || cardSnapshot.summary,
+          eventType: 'issue_created',
+          authorName: issue.fields?.creator?.displayName || 'Jira',
+          authorAvatar: issue.fields?.creator?.avatarUrls?.['32x32'] || null,
+          eventTime: createdDate.toISOString(),
+          diff: {
+            field: 'created',
+            label: 'Card Criado',
+            issueType: issue.fields?.issuetype?.name || 'Demanda',
+            priority: issue.fields?.priority?.name || 'Média',
+          },
+          cardData: cardSnapshot,
+        });
+        addedCount++;
+      }
+    }
+
+    // 2. Processar histórico de alterações (changelog)
+    let histories: any[] = [];
+    try {
+      const clResponse = await fetch(`https://${host}/rest/api/3/issue/${issue.key}/changelog?maxResults=30`, {
+        headers: {
+          Authorization: getAuthHeader(config),
+          Accept: 'application/json',
+        },
+      });
+      if (clResponse.ok) {
+        const clData = await clResponse.json();
+        histories = clData.values || [];
+      }
+    } catch (err) {
+      console.warn(`[JiraEvents] Falha ao buscar changelog para ${issue.key}:`, err);
+    }
+    for (const history of histories) {
+      const historyTime = history.created ? new Date(history.created) : null;
+      if (!historyTime || historyTime < cutoffTime) continue;
+
+      const authorName = history.author?.displayName || 'Jira';
+      const authorAvatar = history.author?.avatarUrls?.['32x32'] || null;
+
+      for (const item of history.items || []) {
+        const field = (item.field || '').toLowerCase();
+        let eventType: JiraEventType = 'field_updated';
+        let label = `Campo ${item.field}`;
+        let diffData: JiraEventDiff = {
+          field: item.field,
+          label,
+          from: item.fromString,
+          to: item.toString,
+        };
+
+        if (field === 'status') {
+          eventType = 'status_changed';
+          label = 'Mudança de Status';
+          diffData = {
+            field: 'status',
+            label,
+            from: formatDisplayStatus(projKey, item.fromString || ''),
+            to: formatDisplayStatus(projKey, item.toString || ''),
+          };
+        } else if (field.includes('flagged') || field.includes('impediment')) {
+          eventType = 'flagged_changed';
+          const isBlocked = (item.toString || '').toLowerCase().includes('impediment');
+          label = isBlocked ? 'Impedimento Adicionado (Bloqueado)' : 'Impedimento Removido';
+          diffData = {
+            field: 'flagged',
+            label,
+            from: item.fromString,
+            to: item.toString,
+            isBlocked,
+          };
+        } else if (field === 'assignee') {
+          eventType = 'assignee_changed';
+          label = 'Troca de Responsável';
+          diffData = {
+            field: 'assignee',
+            label,
+            from: item.fromString || 'Não atribuído',
+            to: item.toString || 'Não atribuído',
+          };
+        } else if (field === 'duedate') {
+          eventType = 'field_updated';
+          label = 'Data de Entrega Alterada';
+          diffData = {
+            field: 'duedate',
+            label,
+            from: item.fromString || 'Sem prazo',
+            to: item.toString || 'Sem prazo',
+          };
+        }
+
+        const eventId = `chg-${issue.key}-${history.id}-${item.field}`;
+        await saveJiraEvent({
+          eventId,
+          issueKey: issue.key,
+          issueId: issue.id,
+          projectKey: projKey,
+          summary: issue.fields?.summary || cardSnapshot.summary,
+          eventType,
+          authorName,
+          authorAvatar,
+          eventTime: historyTime.toISOString(),
+          diff: diffData,
+          cardData: cardSnapshot,
+        });
+        addedCount++;
+      }
+    }
+
+    // 3. Processar comentários da issue
+    const comments = issue.fields?.comment?.comments || [];
+    for (const comment of comments) {
+      const commentTime = comment.created ? new Date(comment.created) : null;
+      if (!commentTime || commentTime < cutoffTime) continue;
+
+      const eventId = `cmt-${issue.key}-${comment.id}`;
+      await saveJiraEvent({
+        eventId,
+        issueKey: issue.key,
+        issueId: issue.id,
+        projectKey: projKey,
+        summary: issue.fields?.summary || cardSnapshot.summary,
+        eventType: 'comment_added',
+        authorName: comment.author?.displayName || 'Jira',
+        authorAvatar: comment.author?.avatarUrls?.['32x32'] || null,
+        eventTime: commentTime.toISOString(),
+        diff: {
+          field: 'comment',
+          label: 'Novo Comentário',
+          text: typeof comment.body === 'string' ? comment.body : JSON.stringify(comment.body),
+          commentId: comment.id,
+        },
+        cardData: cardSnapshot,
+      });
+      addedCount++;
+    }
+  }
+
+  return { addedCount, checkedIssues: issues.length };
+}
+
+/**
+ * Lista eventos com filtros para o painel de revisões
+ */
+export async function listJiraEvents(params: {
+  status?: 'pending' | 'reviewed' | 'all';
+  project?: string;
+  eventType?: string;
+  search?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<{
+  events: JiraReviewEvent[];
+  totalPending: number;
+  totalReviewed: number;
+  total: number;
+}> {
+  const {
+    status = 'pending',
+    project = 'all',
+    eventType = 'all',
+    search = '',
+    limit = 50,
+    offset = 0,
+  } = params;
+
+  let baseWhere = '1=1';
+  const queryParams: any[] = [];
+
+  if (status === 'pending') {
+    baseWhere += ' AND is_reviewed = FALSE';
+  } else if (status === 'reviewed') {
+    baseWhere += ' AND is_reviewed = TRUE';
+  }
+
+  if (project && project !== 'all') {
+    queryParams.push(project.toUpperCase());
+    baseWhere += ` AND UPPER(project_key) = $${queryParams.length}`;
+  }
+
+  if (eventType && eventType !== 'all') {
+    queryParams.push(eventType);
+    baseWhere += ` AND event_type = $${queryParams.length}`;
+  }
+
+  if (search && search.trim()) {
+    queryParams.push(`%${search.trim().toLowerCase()}%`);
+    const idx = queryParams.length;
+    baseWhere += ` AND (
+      LOWER(issue_key) LIKE $${idx} OR
+      LOWER(summary) LIKE $${idx} OR
+      LOWER(author_name) LIKE $${idx} OR
+      LOWER(diff_data::text) LIKE $${idx}
+    )`;
+  }
+
+  // Contadores globais (independentes do filtro de paginação/status)
+  const pendingCountRes = await pool.query<{ count: string }>(
+    `SELECT COUNT(*) FROM jira_review_events WHERE is_reviewed = FALSE`
+  );
+  const reviewedCountRes = await pool.query<{ count: string }>(
+    `SELECT COUNT(*) FROM jira_review_events WHERE is_reviewed = TRUE`
+  );
+
+  const totalPending = parseInt(pendingCountRes.rows[0].count, 10) || 0;
+  const totalReviewed = parseInt(reviewedCountRes.rows[0].count, 10) || 0;
+
+  // Contagem filtrada
+  const countRes = await pool.query<{ count: string }>(
+    `SELECT COUNT(*) FROM jira_review_events WHERE ${baseWhere}`,
+    queryParams
+  );
+  const total = parseInt(countRes.rows[0].count, 10) || 0;
+
+  // Consulta paginada ordenada pelos mais recentes
+  queryParams.push(limit);
+  const limitIdx = queryParams.length;
+  queryParams.push(offset);
+  const offsetIdx = queryParams.length;
+
+  const listQuery = `
+    SELECT 
+      id,
+      event_id as "eventId",
+      issue_key as "issueKey",
+      issue_id as "issueId",
+      project_key as "projectKey",
+      summary,
+      event_type as "eventType",
+      author_name as "authorName",
+      author_avatar as "authorAvatar",
+      event_time as "eventTime",
+      diff_data as "diff",
+      card_data as "cardData",
+      is_reviewed as "isReviewed",
+      reviewed_at as "reviewedAt",
+      reviewed_by as "reviewedBy",
+      created_at as "createdAt"
+    FROM jira_review_events
+    WHERE ${baseWhere}
+    ORDER BY event_time DESC
+    LIMIT $${limitIdx} OFFSET $${offsetIdx}
+  `;
+
+  const result = await pool.query(listQuery, queryParams);
+
+  return {
+    events: result.rows,
+    totalPending,
+    totalReviewed,
+    total,
+  };
+}
+
+/**
+ * Marca um evento como revisado
+ */
+export async function markEventAsReviewed(id: number, userId?: string): Promise<boolean> {
+  const res = await pool.query(
+    `UPDATE jira_review_events 
+     SET is_reviewed = TRUE, reviewed_at = NOW(), reviewed_by = $2 
+     WHERE id = $1`,
+    [id, userId || null]
+  );
+  return (res.rowCount || 0) > 0;
+}
+
+/**
+ * Reverte a revisão de um evento (move de volta para pendente)
+ */
+export async function unmarkEventAsReviewed(id: number): Promise<boolean> {
+  const res = await pool.query(
+    `UPDATE jira_review_events 
+     SET is_reviewed = FALSE, reviewed_at = NULL, reviewed_by = NULL 
+     WHERE id = $1`,
+    [id]
+  );
+  return (res.rowCount || 0) > 0;
+}
+
+/**
+ * Marca todos os eventos pendentes como revisados
+ */
+export async function markAllEventsAsReviewed(projectKey?: string, userId?: string): Promise<number> {
+  let query = `UPDATE jira_review_events SET is_reviewed = TRUE, reviewed_at = NOW(), reviewed_by = $1 WHERE is_reviewed = FALSE`;
+  const params: any[] = [userId || null];
+
+  if (projectKey && projectKey !== 'all') {
+    params.push(projectKey.toUpperCase());
+    query += ` AND UPPER(project_key) = $${params.length}`;
+  }
+
+  const res = await pool.query(query, params);
+  return res.rowCount || 0;
+}
+
+/**
+ * Retorna contagem de eventos pendentes de revisão
+ */
+export async function getPendingEventsCount(): Promise<number> {
+  const res = await pool.query<{ count: string }>(
+    `SELECT COUNT(*) FROM jira_review_events WHERE is_reviewed = FALSE`
+  );
+  return parseInt(res.rows[0].count, 10) || 0;
+}
