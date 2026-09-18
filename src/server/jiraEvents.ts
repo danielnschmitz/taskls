@@ -281,7 +281,7 @@ export async function saveJiraEvent(event: {
   eventTime: string;
   diff: JiraEventDiff;
   cardData: JiraDemand;
-}): Promise<void> {
+}): Promise<{ isNew: boolean }> {
   const query = `
     INSERT INTO jira_review_events (
       event_id, issue_key, issue_id, project_key, summary,
@@ -296,6 +296,7 @@ export async function saveJiraEvent(event: {
       summary = EXCLUDED.summary,
       card_data = EXCLUDED.card_data
     WHERE jira_review_events.is_reviewed = FALSE
+    RETURNING (xmax = 0) AS is_new_insert
   `;
 
   const values = [
@@ -312,7 +313,9 @@ export async function saveJiraEvent(event: {
     JSON.stringify(event.cardData),
   ];
 
-  await pool.query(query, values);
+  const res = await pool.query(query, values);
+  const isNew = res.rows.length > 0 && res.rows[0].is_new_insert === true;
+  return { isNew };
 }
 
 /**
@@ -355,7 +358,7 @@ export async function processWebhookPayload(payload: any): Promise<{ processed: 
   // 1. Criação de Issue
   if (webhookEvent === 'jira:issue_created') {
     const eventId = `iss-${issue.key}-created`;
-    await saveJiraEvent({
+    const saveRes = await saveJiraEvent({
       eventId,
       issueKey: issue.key,
       issueId: issue.id,
@@ -373,8 +376,10 @@ export async function processWebhookPayload(payload: any): Promise<{ processed: 
       },
       cardData: cardSnapshot,
     });
-    processedCount++;
-    eventsSaved.push(eventId);
+    if (saveRes.isNew) {
+      processedCount++;
+      eventsSaved.push(eventId);
+    }
   }
 
   // 2. Novo Comentário
@@ -386,7 +391,7 @@ export async function processWebhookPayload(payload: any): Promise<{ processed: 
       const commentTime = comment.created ? new Date(comment.created).toISOString() : eventTime;
       const eventId = `cmt-${issue.key}-${comment.id}`;
 
-      await saveJiraEvent({
+      const saveRes = await saveJiraEvent({
         eventId,
         issueKey: issue.key,
         issueId: issue.id,
@@ -404,8 +409,10 @@ export async function processWebhookPayload(payload: any): Promise<{ processed: 
         },
         cardData: cardSnapshot,
       });
-      processedCount++;
-      eventsSaved.push(eventId);
+      if (saveRes.isNew) {
+        processedCount++;
+        eventsSaved.push(eventId);
+      }
     }
   }
 
@@ -464,7 +471,7 @@ export async function processWebhookPayload(payload: any): Promise<{ processed: 
       }
 
       const eventId = `chg-${issue.key}-${changelog.id}-${item.field}`;
-      await saveJiraEvent({
+      const saveRes = await saveJiraEvent({
         eventId,
         issueKey: issue.key,
         issueId: issue.id,
@@ -477,8 +484,38 @@ export async function processWebhookPayload(payload: any): Promise<{ processed: 
         diff: diffData,
         cardData: cardSnapshot,
       });
-      processedCount++;
-      eventsSaved.push(eventId);
+      if (saveRes.isNew) {
+        processedCount++;
+        eventsSaved.push(eventId);
+      }
+    }
+  }
+
+  // Se novos eventos foram inseridos, notifica os usuários com o total pendente
+  if (processedCount > 0) {
+    try {
+      const pendingCount = await getPendingEventsCount();
+      if (pendingCount > 0) {
+        const usersRes = await pool.query<{ id: string }>(
+          `SELECT id FROM users WHERE can_access_jira = TRUE OR is_admin = TRUE`
+        );
+        const notifMessage = pendingCount === 1
+          ? `Existe 1 evolução pendente para revisão no Jira.`
+          : `Existem ${pendingCount} evoluções pendentes para revisão no Jira.`;
+
+        for (const u of usersRes.rows) {
+          await pool.query(
+            `INSERT INTO notification_queue (title, message, user_id) VALUES ($1, $2, $3)`,
+            [
+              'Revisões Jira',
+              notifMessage,
+              u.id,
+            ]
+          );
+        }
+      }
+    } catch (notifErr) {
+      console.warn('[Jira Webhook] Falha ao enfileirar notificação:', notifErr);
     }
   }
 
@@ -488,10 +525,23 @@ export async function processWebhookPayload(payload: any): Promise<{ processed: 
 /**
  * Sincroniza eventos retroativos diretamente pela REST API do Jira
  */
-export async function syncJiraEventsFromRest(daysBack: number = 7): Promise<{ addedCount: number; checkedIssues: number }> {
+export async function syncJiraEventsFromRest(daysBack: number = 7): Promise<{
+  newCount: number;
+  addedCount: number;
+  pendingCount: number;
+  totalPending: number;
+  checkedIssues: number;
+}> {
   const config = await getJiraConfig();
   if (!config.projects || config.projects.length === 0 || !config.api_token) {
-    return { addedCount: 0, checkedIssues: 0 };
+    const currentPending = await getPendingEventsCount();
+    return {
+      newCount: 0,
+      addedCount: 0,
+      pendingCount: currentPending,
+      totalPending: currentPending,
+      checkedIssues: 0,
+    };
   }
 
   const host = config.domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
@@ -522,7 +572,7 @@ export async function syncJiraEventsFromRest(daysBack: number = 7): Promise<{ ad
 
   // Buscar issues recentes
   const issues = await executeJqlSearch(searchUrl, config, jql, fields, 50);
-  let addedCount = 0;
+  let newCount = 0;
 
   const cutoffTime = new Date();
   cutoffTime.setDate(cutoffTime.getDate() - daysBack);
@@ -536,7 +586,7 @@ export async function syncJiraEventsFromRest(daysBack: number = 7): Promise<{ ad
       const createdDate = new Date(issue.fields.created);
       if (createdDate >= cutoffTime) {
         const eventId = `iss-${issue.key}-created`;
-        await saveJiraEvent({
+        const saveRes = await saveJiraEvent({
           eventId,
           issueKey: issue.key,
           issueId: issue.id,
@@ -554,7 +604,9 @@ export async function syncJiraEventsFromRest(daysBack: number = 7): Promise<{ ad
           },
           cardData: cardSnapshot,
         });
-        addedCount++;
+        if (saveRes.isNew) {
+          newCount++;
+        }
       }
     }
 
@@ -633,7 +685,7 @@ export async function syncJiraEventsFromRest(daysBack: number = 7): Promise<{ ad
         }
 
         const eventId = `chg-${issue.key}-${history.id}-${item.field}`;
-        await saveJiraEvent({
+        const saveRes = await saveJiraEvent({
           eventId,
           issueKey: issue.key,
           issueId: issue.id,
@@ -646,7 +698,9 @@ export async function syncJiraEventsFromRest(daysBack: number = 7): Promise<{ ad
           diff: diffData,
           cardData: cardSnapshot,
         });
-        addedCount++;
+        if (saveRes.isNew) {
+          newCount++;
+        }
       }
     }
 
@@ -657,7 +711,7 @@ export async function syncJiraEventsFromRest(daysBack: number = 7): Promise<{ ad
       if (!commentTime || commentTime < cutoffTime) continue;
 
       const eventId = `cmt-${issue.key}-${comment.id}`;
-      await saveJiraEvent({
+      const saveRes = await saveJiraEvent({
         eventId,
         issueKey: issue.key,
         issueId: issue.id,
@@ -675,11 +729,21 @@ export async function syncJiraEventsFromRest(daysBack: number = 7): Promise<{ ad
         },
         cardData: cardSnapshot,
       });
-      addedCount++;
+      if (saveRes.isNew) {
+        newCount++;
+      }
     }
   }
 
-  return { addedCount, checkedIssues: issues.length };
+  const pendingCount = await getPendingEventsCount();
+
+  return {
+    newCount,
+    addedCount: newCount,
+    pendingCount,
+    totalPending: pendingCount,
+    checkedIssues: issues.length,
+  };
 }
 
 /**
@@ -896,4 +960,92 @@ export async function migrateAdfEventsInDb(): Promise<void> {
     console.warn('[JiraEvents] Falha ao migrar eventos ADF:', err);
   }
 }
+
+let jiraSyncInterval: NodeJS.Timeout | null = null;
+let isJiraSyncRunning = false;
+
+/**
+ * Executa a sincronização periódica de evoluções do Jira (API REST)
+ */
+export async function runPeriodicJiraSync(): Promise<void> {
+  if (isJiraSyncRunning) return;
+  isJiraSyncRunning = true;
+
+  try {
+    const config = await getJiraConfig();
+    if (!config.api_token || !config.domain || !config.projects || config.projects.length === 0) {
+      // Jira não configurado, ignora silenciosamente
+      return;
+    }
+
+    console.log('[JiraSync] Executando sincronização automática periódica de evoluções (a cada 5 min)...');
+    const result = await syncJiraEventsFromRest(7);
+    const pendingCount = result.pendingCount;
+
+    if (result.newCount > 0 && pendingCount > 0) {
+      console.log(`[JiraSync] Sincronização automática concluída! ${result.newCount} nova(s) evolução(ões) inserida(s). Total pendente para revisão: ${pendingCount}.`);
+
+      // Notificar usuários que têm permissão de acesso ao Jira exibindo APENAS O QUE ESTÁ PENDENTE
+      try {
+        const usersRes = await pool.query<{ id: string }>(
+          `SELECT id FROM users WHERE can_access_jira = TRUE OR is_admin = TRUE`
+        );
+        const notifMessage = pendingCount === 1
+          ? `Existe 1 evolução pendente para revisão no Jira.`
+          : `Existem ${pendingCount} evoluções pendentes para revisão no Jira.`;
+
+        for (const u of usersRes.rows) {
+          await pool.query(
+            `INSERT INTO notification_queue (title, message, user_id) VALUES ($1, $2, $3)`,
+            [
+              'Revisões Jira',
+              notifMessage,
+              u.id,
+            ]
+          );
+        }
+      } catch (notifErr) {
+        console.warn('[JiraSync] Falha ao enfileirar notificação de novas evoluções:', notifErr);
+      }
+    } else {
+      console.log(`[JiraSync] Sincronização automática concluída. ${pendingCount} pendência(s) no momento (${result.checkedIssues} issues verificadas).`);
+    }
+  } catch (err: any) {
+    console.error('[JiraSync] Erro na sincronização automática do Jira:', err?.message || err);
+  } finally {
+    isJiraSyncRunning = false;
+  }
+}
+
+/**
+ * Inicia o agendador de sincronização periódica do Jira (padrão: 5 minutos)
+ */
+export function startJiraSyncScheduler(intervalMs: number = 5 * 60 * 1000): void {
+  if (jiraSyncInterval) {
+    clearInterval(jiraSyncInterval);
+  }
+
+  console.log(`[JiraSync] Motor de sincronização automática do Jira iniciado (intervalo: ${intervalMs / 1000 / 60} minutos).`);
+
+  // Executa uma sincronização inicial 5 segundos após a subida do servidor
+  setTimeout(() => {
+    runPeriodicJiraSync().catch(() => {});
+  }, 5000);
+
+  jiraSyncInterval = setInterval(() => {
+    runPeriodicJiraSync().catch(() => {});
+  }, intervalMs);
+}
+
+/**
+ * Para o agendador de sincronização do Jira
+ */
+export function stopJiraSyncScheduler(): void {
+  if (jiraSyncInterval) {
+    clearInterval(jiraSyncInterval);
+    jiraSyncInterval = null;
+    console.log('[JiraSync] Motor de sincronização automática do Jira parado.');
+  }
+}
+
 

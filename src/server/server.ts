@@ -17,7 +17,7 @@ import { userRoutes } from './userRoutes';
 import { cardRouter } from './cardRoutes';
 import { authenticateToken, requireAdmin, requireModule } from './auth';
 import { startScheduler, stopScheduler } from './scheduler';
-import { processWebhookPayload, migrateAdfEventsInDb } from './jiraEvents';
+import { processWebhookPayload, migrateAdfEventsInDb, startJiraSyncScheduler, stopJiraSyncScheduler } from './jiraEvents';
 
 const app = express();
 const PORT = process.env.PORT || 3333;
@@ -85,7 +85,8 @@ async function bootstrap() {
   try {
     await initDatabase();
     await migrateAdfEventsInDb();
-    startScheduler(30000); // Check every 30 seconds
+    startScheduler(30000); // Check notifications every 30 seconds
+    startJiraSyncScheduler(5 * 60 * 1000); // Sync Jira evolutions automatically every 5 minutes
 
     app.listen(PORT, () => {
       console.log(`\n==================================================`);
@@ -103,6 +104,7 @@ async function bootstrap() {
 process.on('SIGINT', async () => {
   console.log('\n[Server] Encerrando TaskLS...');
   stopScheduler();
+  stopJiraSyncScheduler();
   await pool.end();
   process.exit(0);
 });
@@ -110,6 +112,7 @@ process.on('SIGINT', async () => {
 process.on('SIGTERM', async () => {
   console.log('\n[Server] Encerrando TaskLS...');
   stopScheduler();
+  stopJiraSyncScheduler();
   await pool.end();
   process.exit(0);
 });

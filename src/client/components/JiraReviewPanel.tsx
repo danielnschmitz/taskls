@@ -87,6 +87,13 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
 
   useEffect(() => {
     fetchEvents();
+
+    // Auto-refresh silencioso a cada 30 segundos para manter a lista sincronizada com as rotinas de fundo
+    const interval = setInterval(() => {
+      fetchEvents(true);
+    }, 30000);
+
+    return () => clearInterval(interval);
   }, [fetchEvents]);
 
   // Load webhook info
@@ -117,7 +124,15 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
       }
 
       const data = await res.json();
-      onShowToast(`Sincronização concluída! ${data.addedCount || 0} novas evoluções encontradas.`, 'success');
+      const pending = data.pendingCount ?? data.totalPending ?? 0;
+      if (pending === 0) {
+        onShowToast('Sincronização concluída! Nenhuma evolução pendente no momento.', 'success');
+      } else {
+        onShowToast(
+          `Sincronização concluída! ${pending} ${pending === 1 ? 'evolução pendente' : 'evoluções pendentes'} para revisão.`,
+          'success'
+        );
+      }
       fetchEvents(true);
     } catch (err: any) {
       onShowToast(err.message || 'Falha ao sincronizar com Jira', 'error');
@@ -213,10 +228,17 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
             <div className="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shadow-sm shadow-blue-500/10">
               <BellRing className="w-4 h-4" />
             </div>
-            <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
-              Revisões de Evoluções Jira
+            <h2 className="text-lg font-bold text-white tracking-tight flex flex-wrap items-center gap-2">
+              <span>Revisões de Evoluções Jira</span>
               <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
                 {totalPending} {totalPending === 1 ? 'pendente' : 'pendentes'}
+              </span>
+              <span
+                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-semibold"
+                title="Sincronização automática em segundo plano a cada 5 minutos"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                Auto-sync a cada 5 min
               </span>
             </h2>
           </div>
