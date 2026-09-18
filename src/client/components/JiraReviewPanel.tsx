@@ -407,15 +407,15 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
           {events.map((event) => (
             <div
               key={event.id}
-              className={`group relative rounded-xl border p-4 transition-all duration-200 flex flex-col justify-between ${
+              className={`group relative rounded-xl border p-4 transition-all duration-200 flex flex-col justify-between min-w-0 overflow-hidden ${
                 event.cardData?.isBlocked || event.eventType === 'flagged_changed'
                   ? 'bg-red-500/10 border-red-500/30 hover:border-red-500/50'
                   : 'bg-slate-900/90 border-slate-800 hover:border-blue-500/40 hover:bg-slate-850'
               }`}
             >
-              <div>
+              <div className="min-w-0">
                 {/* Event Top Bar: Author, Time ago, Event Type Badge */}
-                <div className="flex items-center justify-between gap-2 mb-2.5 pb-2 border-b border-slate-800/80 text-[11px]">
+                <div className="flex items-center justify-between gap-2 mb-2.5 pb-2 border-b border-slate-800/80 text-[11px] min-w-0">
                   <div className="flex items-center gap-1.5 min-w-0">
                     {event.authorAvatar ? (
                       <img
@@ -440,21 +440,21 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
                 </div>
 
                 {/* Jira Card Header: Key + External Link + Status */}
-                <div className="flex items-center justify-between gap-2 mb-1.5">
+                <div className="flex items-center justify-between gap-2 mb-1.5 min-w-0">
                   <div className="flex items-center gap-1.5 min-w-0">
                     <a
                       href={event.cardData?.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-xs font-black text-blue-400 hover:text-blue-300 hover:underline flex items-center gap-1"
+                      className="text-xs font-black text-blue-400 hover:text-blue-300 hover:underline flex items-center gap-1 min-w-0"
                       title={`Abrir ${event.issueKey} no Jira`}
                     >
-                      {event.issueKey}
-                      <ExternalLink className="w-3 h-3 opacity-60 group-hover:opacity-100" />
+                      <span className="truncate">{event.issueKey}</span>
+                      <ExternalLink className="w-3 h-3 opacity-60 group-hover:opacity-100 flex-shrink-0" />
                     </a>
 
                     {event.cardData?.isBlocked && (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-red-500/25 text-red-200 border border-red-500/40 text-[9px] font-black uppercase tracking-wider">
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-red-500/25 text-red-200 border border-red-500/40 text-[9px] font-black uppercase tracking-wider flex-shrink-0">
                         <AlertOctagon className="w-2.5 h-2.5 text-red-300" />
                         Bloqueado
                       </span>
@@ -467,12 +467,12 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
                 </div>
 
                 {/* Card Title / Summary */}
-                <h4 className="text-xs font-semibold text-slate-100 line-clamp-2 mb-3 leading-snug">
+                <h4 className="text-xs font-semibold text-slate-100 line-clamp-2 mb-3 leading-snug break-words">
                   {event.summary}
                 </h4>
 
                 {/* Delta Box: O QUE MUDOU NO EVENTO */}
-                <div className="mb-3.5">
+                <div className="mb-3.5 min-w-0">
                   <EventDeltaBox event={event} />
                 </div>
               </div>
@@ -615,6 +615,201 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
 };
 
 /**
+ * Extrai texto legível de um documento ADF (Atlassian Document Format) ou string JSON
+ */
+function extractAdfText(node: any): string {
+  if (!node) return '';
+
+  if (typeof node === 'string') {
+    const trimmed = node.trim();
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (parsed && (parsed.type === 'doc' || parsed.content || Array.isArray(parsed))) {
+          return extractAdfText(parsed);
+        }
+      } catch {}
+    }
+    return node;
+  }
+
+  if (Array.isArray(node)) {
+    return node.map(extractAdfText).join('');
+  }
+
+  if (typeof node !== 'object') {
+    return String(node);
+  }
+
+  switch (node.type) {
+    case 'text': {
+      const text = node.text || '';
+      const linkMark = node.marks?.find((m: any) => m.type === 'link');
+      if (linkMark && linkMark.attrs?.href && linkMark.attrs.href !== text) {
+        return `${text} (${linkMark.attrs.href})`;
+      }
+      return text;
+    }
+
+    case 'mention':
+      return node.attrs?.text || (node.attrs?.displayName ? `@${node.attrs.displayName}` : '@usuário');
+
+    case 'emoji':
+      return node.attrs?.text || node.attrs?.shortName || '';
+
+    case 'hardBreak':
+      return '\n';
+
+    case 'paragraph': {
+      const inner = node.content ? node.content.map(extractAdfText).join('') : '';
+      return inner ? `${inner}\n` : '\n';
+    }
+
+    case 'heading': {
+      const inner = node.content ? node.content.map(extractAdfText).join('') : '';
+      return inner ? `${inner}\n` : '\n';
+    }
+
+    case 'bulletList':
+    case 'orderedList': {
+      const items = node.content ? node.content.map(extractAdfText).join('') : '';
+      return items ? `\n${items}` : '';
+    }
+
+    case 'listItem': {
+      const inner = node.content ? node.content.map(extractAdfText).join('').trim() : '';
+      return inner ? `• ${inner}\n` : '';
+    }
+
+    case 'blockquote': {
+      const inner = node.content ? node.content.map(extractAdfText).join('').trim() : '';
+      return inner ? `> ${inner}\n` : '';
+    }
+
+    case 'codeBlock': {
+      const inner = node.content ? node.content.map(extractAdfText).join('') : '';
+      return `\n\`\`\`\n${inner}\n\`\`\`\n`;
+    }
+
+    case 'panel': {
+      const inner = node.content ? node.content.map(extractAdfText).join('').trim() : '';
+      return inner ? `[${inner}]\n` : '';
+    }
+
+    case 'inlineCard':
+    case 'blockCard':
+      return node.attrs?.url ? `${node.attrs.url} ` : '';
+
+    case 'media':
+    case 'mediaSingle':
+    case 'mediaGroup':
+      return '[Anexo/Imagem]';
+
+    case 'table': {
+      const inner = node.content ? node.content.map(extractAdfText).join('') : '';
+      return `\n${inner}\n`;
+    }
+
+    case 'tableRow': {
+      const cells = node.content ? node.content.map((c: any) => extractAdfText(c).trim()).filter(Boolean) : [];
+      return cells.length > 0 ? `${cells.join(' | ')}\n` : '';
+    }
+
+    case 'tableHeader':
+    case 'tableCell': {
+      return node.content ? node.content.map(extractAdfText).join('').trim() : '';
+    }
+
+    case 'rule':
+      return '\n---\n';
+
+    case 'doc':
+    default: {
+      if (node.content && Array.isArray(node.content)) {
+        return node.content.map(extractAdfText).join('');
+      }
+      return '';
+    }
+  }
+}
+
+/**
+ * Limpa marcações brutas do Jira ({panel}, {color}, URLs longas com tokens) e converte ADF em texto
+ */
+function cleanJiraMarkup(input: any): string {
+  if (!input) return '';
+  const rawText = typeof input === 'object' ? extractAdfText(input) : extractAdfText(String(input));
+  return rawText
+    .replace(/\{panel:[^}]*\}/gi, '')
+    .replace(/\{panel\}/gi, '')
+    .replace(/\{color:[^}]*\}/gi, '')
+    .replace(/\{color\}/gi, '')
+    .replace(/\{noformat\}/gi, '')
+    .replace(/\{code:[^}]*\}/gi, '')
+    .replace(/\{code\}/gi, '')
+    .replace(/\{quote\}/gi, '')
+    .replace(/!https?:\/\/[^!\n]+!/gi, '[Imagem Anexada]')
+    .replace(/!\[\^[^\]]+\]!/gi, '[Anexo]')
+    .replace(/\r\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/**
+ * Renderiza o texto do comentário com destaque para links e menções @usuario
+ */
+function renderFormattedComment(text: string): React.ReactNode {
+  if (!text) return null;
+
+  // Separa URLs no texto para torná-las links clicáveis
+  const urlRegex = /(https?:\/\/[^\s<>"'()]+)/g;
+  const parts = text.split(urlRegex);
+
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (part.match(urlRegex)) {
+          return (
+            <a
+              key={i}
+              href={part}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-400 hover:text-blue-300 underline font-semibold break-all inline-block hover:brightness-110 transition-all"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {part}
+            </a>
+          );
+        }
+
+        // Separa menções como @Lucas Kauling ou @Usuario
+        const mentionRegex = /(@[A-Za-zÀ-ÿ0-9._-]+(?:\s+[A-Za-zÀ-ÿ0-9._-]+)?)/g;
+        const subParts = part.split(mentionRegex);
+
+        if (subParts.length > 1) {
+          return subParts.map((sub, j) => {
+            if (sub.startsWith('@') && sub.length > 2) {
+              return (
+                <span
+                  key={`${i}-${j}`}
+                  className="inline-flex items-center px-1.5 py-0.5 mx-0.5 rounded-md bg-blue-500/20 text-blue-300 font-semibold text-[11px] border border-blue-500/40 select-text"
+                >
+                  {sub}
+                </span>
+              );
+            }
+            return sub;
+          });
+        }
+
+        return part;
+      })}
+    </>
+  );
+}
+
+/**
  * Renderiza a caixa com os dados exatos do que mudou no evento
  */
 const EventDeltaBox: React.FC<{ event: JiraReviewEvent }> = ({ event }) => {
@@ -623,16 +818,16 @@ const EventDeltaBox: React.FC<{ event: JiraReviewEvent }> = ({ event }) => {
   switch (eventType) {
     case 'status_changed':
       return (
-        <div className="p-2.5 rounded-lg bg-blue-950/40 border border-blue-500/30 text-xs">
-          <div className="text-[10px] font-bold text-blue-300 mb-1 flex items-center gap-1">
+        <div className="p-2.5 rounded-lg bg-blue-950/40 border border-blue-500/30 text-xs min-w-0 overflow-hidden">
+          <div className="text-[10px] font-bold text-blue-300 mb-1.5 flex items-center gap-1">
             <span>🔄 Status alterado:</span>
           </div>
-          <div className="flex items-center gap-2 font-bold">
-            <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-[10px]">
+          <div className="flex flex-wrap items-center gap-2 font-bold min-w-0">
+            <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-[10px] break-words">
               {diff.from || 'Sem status'}
             </span>
             <ArrowRight className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
-            <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-200 border border-blue-500/40 text-[10px]">
+            <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-200 border border-blue-500/40 text-[10px] break-words">
               {diff.to || 'Desconhecido'}
             </span>
           </div>
@@ -641,48 +836,50 @@ const EventDeltaBox: React.FC<{ event: JiraReviewEvent }> = ({ event }) => {
 
     case 'flagged_changed':
       return (
-        <div className={`p-2.5 rounded-lg border text-xs ${
+        <div className={`p-2.5 rounded-lg border text-xs min-w-0 overflow-hidden ${
           diff.isBlocked
             ? 'bg-red-500/20 border-red-500/50 text-red-200'
             : 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
         }`}>
-          <div className="flex items-center gap-1.5 font-bold">
+          <div className="flex items-center gap-1.5 font-bold min-w-0 break-words">
             {diff.isBlocked ? (
               <>
                 <AlertOctagon className="w-4 h-4 text-red-400 flex-shrink-0" />
-                <span>🚨 Marcado como Impedimento (Card Bloqueado)</span>
+                <span className="break-words">🚨 Marcado como Impedimento (Card Bloqueado)</span>
               </>
             ) : (
               <>
                 <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                <span>✅ Impedimento Removido (Card Desbloqueado)</span>
+                <span className="break-words">✅ Impedimento Removido (Card Desbloqueado)</span>
               </>
             )}
           </div>
         </div>
       );
 
-    case 'comment_added':
+    case 'comment_added': {
+      const cleanText = cleanJiraMarkup(diff.text || 'Sem texto no comentário');
       return (
-        <div className="p-2.5 rounded-lg bg-purple-950/30 border border-purple-500/30 text-xs">
-          <div className="text-[10px] font-bold text-purple-300 mb-1 flex items-center gap-1">
-            <MessageSquare className="w-3 h-3 text-purple-400" />
+        <div className="p-2.5 rounded-lg bg-purple-950/30 border border-purple-500/30 text-xs min-w-0 overflow-hidden">
+          <div className="text-[10px] font-bold text-purple-300 mb-1.5 flex items-center gap-1">
+            <MessageSquare className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
             <span>Novo comentário registrado:</span>
           </div>
-          <p className="text-slate-200 text-xs italic line-clamp-3 bg-purple-950/40 p-2 rounded border border-purple-500/20">
-            "{diff.text || 'Sem texto no comentário'}"
-          </p>
+          <div className="text-slate-200 text-xs max-h-36 overflow-y-auto break-words break-all whitespace-pre-wrap bg-purple-950/40 p-2.5 rounded-lg border border-purple-500/20 leading-relaxed font-sans">
+            {renderFormattedComment(cleanText)}
+          </div>
         </div>
       );
+    }
 
     case 'issue_created':
       return (
-        <div className="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-xs">
+        <div className="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-xs min-w-0 overflow-hidden">
           <div className="text-[10px] font-bold text-emerald-300 mb-1 flex items-center gap-1">
-            <Sparkles className="w-3 h-3 text-emerald-400" />
+            <Sparkles className="w-3 h-3 text-emerald-400 flex-shrink-0" />
             <span>Novo card incluído no Jira:</span>
           </div>
-          <div className="flex items-center gap-2 text-[11px] text-emerald-200 font-semibold">
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-emerald-200 font-semibold min-w-0">
             <span>Tipo: {diff.issueType || 'Demanda'}</span>
             {diff.priority && <span>· Prioridade: {diff.priority}</span>}
           </div>
@@ -691,32 +888,74 @@ const EventDeltaBox: React.FC<{ event: JiraReviewEvent }> = ({ event }) => {
 
     case 'assignee_changed':
       return (
-        <div className="p-2.5 rounded-lg bg-amber-950/30 border border-amber-500/30 text-xs">
+        <div className="p-2.5 rounded-lg bg-amber-950/30 border border-amber-500/30 text-xs min-w-0 overflow-hidden">
           <div className="text-[10px] font-bold text-amber-300 mb-1 flex items-center gap-1">
-            <User className="w-3 h-3 text-amber-400" />
+            <User className="w-3 h-3 text-amber-400 flex-shrink-0" />
             <span>Responsável alterado:</span>
           </div>
-          <div className="flex items-center gap-2 font-bold text-[11px]">
-            <span className="text-slate-400 line-through">{diff.from}</span>
-            <ArrowRight className="w-3 h-3 text-amber-400" />
-            <span className="text-amber-200">{diff.to}</span>
+          <div className="flex flex-wrap items-center gap-2 font-bold text-[11px] min-w-0">
+            <span className="text-slate-400 line-through break-words">{diff.from}</span>
+            <ArrowRight className="w-3 h-3 text-amber-400 flex-shrink-0" />
+            <span className="text-amber-200 break-words">{diff.to}</span>
           </div>
         </div>
       );
 
-    default:
+    default: {
+      const fromText = cleanJiraMarkup(diff.from || '');
+      const toText = cleanJiraMarkup(diff.to || '');
+      const isLong =
+        diff.field?.toLowerCase() === 'description' ||
+        fromText.length > 50 ||
+        toText.length > 50 ||
+        fromText.includes('\n') ||
+        toText.includes('\n');
+
+      if (isLong) {
+        return (
+          <div className="p-2.5 rounded-lg bg-slate-800/60 border border-slate-700/60 text-xs min-w-0 overflow-hidden">
+            <div className="text-[10px] font-bold text-slate-300 mb-1.5 flex items-center justify-between">
+              <span className="truncate">{diff.label || `Campo alterado: ${diff.field}`}</span>
+            </div>
+
+            <div className="space-y-1.5 min-w-0">
+              {fromText && (
+                <div className="min-w-0">
+                  <span className="text-[9px] font-semibold text-slate-500 uppercase tracking-wider block mb-0.5">
+                    Anterior:
+                  </span>
+                  <div className="p-2 rounded bg-slate-950/60 border border-slate-800 text-[11px] text-slate-400 line-through max-h-24 overflow-y-auto break-words break-all whitespace-pre-wrap">
+                    {fromText}
+                  </div>
+                </div>
+              )}
+
+              <div className="min-w-0">
+                <span className="text-[9px] font-semibold text-blue-400 uppercase tracking-wider block mb-0.5">
+                  Novo:
+                </span>
+                <div className="p-2 rounded bg-slate-950/80 border border-blue-500/30 text-[11px] text-slate-100 font-medium max-h-32 overflow-y-auto break-words break-all whitespace-pre-wrap">
+                  {toText || 'vazio'}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
       return (
-        <div className="p-2.5 rounded-lg bg-slate-800/60 border border-slate-700/60 text-xs">
-          <div className="text-[10px] font-bold text-slate-400 mb-1">
+        <div className="p-2.5 rounded-lg bg-slate-800/60 border border-slate-700/60 text-xs min-w-0 overflow-hidden">
+          <div className="text-[10px] font-bold text-slate-400 mb-1 truncate">
             {diff.label || `Campo alterado: ${diff.field}`}
           </div>
-          <div className="flex items-center gap-2 font-medium text-[11px] text-slate-300">
-            <span className="line-through text-slate-500">{diff.from || 'vazio'}</span>
-            <ArrowRight className="w-3 h-3 text-slate-400" />
-            <span className="text-white font-bold">{diff.to || 'vazio'}</span>
+          <div className="flex flex-wrap items-center gap-1.5 font-medium text-[11px] text-slate-300 min-w-0">
+            <span className="line-through text-slate-500 break-words break-all">{fromText || 'vazio'}</span>
+            <ArrowRight className="w-3 h-3 text-slate-400 flex-shrink-0" />
+            <span className="text-white font-bold break-words break-all">{toText || 'vazio'}</span>
           </div>
         </div>
       );
+    }
   }
 };
 

@@ -17,7 +17,7 @@ import { userRoutes } from './userRoutes';
 import { cardRouter } from './cardRoutes';
 import { authenticateToken, requireAdmin, requireModule } from './auth';
 import { startScheduler, stopScheduler } from './scheduler';
-import { processWebhookPayload } from './jiraEvents';
+import { processWebhookPayload, migrateAdfEventsInDb } from './jiraEvents';
 
 const app = express();
 const PORT = process.env.PORT || 3333;
@@ -84,6 +84,7 @@ if (fs.existsSync(clientDistPath)) {
 async function bootstrap() {
   try {
     await initDatabase();
+    await migrateAdfEventsInDb();
     startScheduler(30000); // Check every 30 seconds
 
     app.listen(PORT, () => {

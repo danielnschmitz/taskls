@@ -39,6 +39,147 @@ export interface JiraReviewEvent {
 }
 
 /**
+ * Extrai texto legível de um documento ADF (Atlassian Document Format) ou string JSON
+ */
+export function extractAdfText(node: any): string {
+  if (!node) return '';
+
+  if (typeof node === 'string') {
+    const trimmed = node.trim();
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (parsed && (parsed.type === 'doc' || parsed.content || Array.isArray(parsed))) {
+          return extractAdfText(parsed);
+        }
+      } catch {}
+    }
+    return node;
+  }
+
+  if (Array.isArray(node)) {
+    return node.map(extractAdfText).join('');
+  }
+
+  if (typeof node !== 'object') {
+    return String(node);
+  }
+
+  switch (node.type) {
+    case 'text': {
+      const text = node.text || '';
+      const linkMark = node.marks?.find((m: any) => m.type === 'link');
+      if (linkMark && linkMark.attrs?.href && linkMark.attrs.href !== text) {
+        return `${text} (${linkMark.attrs.href})`;
+      }
+      return text;
+    }
+
+    case 'mention':
+      return node.attrs?.text || (node.attrs?.displayName ? `@${node.attrs.displayName}` : '@usuário');
+
+    case 'emoji':
+      return node.attrs?.text || node.attrs?.shortName || '';
+
+    case 'hardBreak':
+      return '\n';
+
+    case 'paragraph': {
+      const inner = node.content ? node.content.map(extractAdfText).join('') : '';
+      return inner ? `${inner}\n` : '\n';
+    }
+
+    case 'heading': {
+      const inner = node.content ? node.content.map(extractAdfText).join('') : '';
+      return inner ? `${inner}\n` : '\n';
+    }
+
+    case 'bulletList':
+    case 'orderedList': {
+      const items = node.content ? node.content.map(extractAdfText).join('') : '';
+      return items ? `\n${items}` : '';
+    }
+
+    case 'listItem': {
+      const inner = node.content ? node.content.map(extractAdfText).join('').trim() : '';
+      return inner ? `• ${inner}\n` : '';
+    }
+
+    case 'blockquote': {
+      const inner = node.content ? node.content.map(extractAdfText).join('').trim() : '';
+      return inner ? `> ${inner}\n` : '';
+    }
+
+    case 'codeBlock': {
+      const inner = node.content ? node.content.map(extractAdfText).join('') : '';
+      return `\n\`\`\`\n${inner}\n\`\`\`\n`;
+    }
+
+    case 'panel': {
+      const inner = node.content ? node.content.map(extractAdfText).join('').trim() : '';
+      return inner ? `[${inner}]\n` : '';
+    }
+
+    case 'inlineCard':
+    case 'blockCard':
+      return node.attrs?.url ? `${node.attrs.url} ` : '';
+
+    case 'media':
+    case 'mediaSingle':
+    case 'mediaGroup':
+      return '[Anexo/Imagem]';
+
+    case 'table': {
+      const inner = node.content ? node.content.map(extractAdfText).join('') : '';
+      return `\n${inner}\n`;
+    }
+
+    case 'tableRow': {
+      const cells = node.content ? node.content.map((c: any) => extractAdfText(c).trim()).filter(Boolean) : [];
+      return cells.length > 0 ? `${cells.join(' | ')}\n` : '';
+    }
+
+    case 'tableHeader':
+    case 'tableCell': {
+      return node.content ? node.content.map(extractAdfText).join('').trim() : '';
+    }
+
+    case 'rule':
+      return '\n---\n';
+
+    case 'doc':
+    default: {
+      if (node.content && Array.isArray(node.content)) {
+        return node.content.map(extractAdfText).join('');
+      }
+      return '';
+    }
+  }
+}
+
+/**
+ * Limpa marcações brutas do Jira e converte ADF em texto limpo e legível
+ */
+export function cleanAndFormatJiraText(input: any): string {
+  if (!input) return '';
+  const rawText = typeof input === 'object' ? extractAdfText(input) : extractAdfText(String(input));
+  return rawText
+    .replace(/\{panel:[^}]*\}/gi, '')
+    .replace(/\{panel\}/gi, '')
+    .replace(/\{color:[^}]*\}/gi, '')
+    .replace(/\{color\}/gi, '')
+    .replace(/\{noformat\}/gi, '')
+    .replace(/\{code:[^}]*\}/gi, '')
+    .replace(/\{code\}/gi, '')
+    .replace(/\{quote\}/gi, '')
+    .replace(/!https?:\/\/[^!\n]+!/gi, '[Imagem Anexada]')
+    .replace(/!\[\^[^\]]+\]!/gi, '[Anexo]')
+    .replace(/\r\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/**
  * Cria snapshot de JiraDemand a partir do payload de uma issue
  */
 export function buildCardSnapshot(issue: any, host: string, config: JiraConfig): JiraDemand {
@@ -258,7 +399,7 @@ export async function processWebhookPayload(payload: any): Promise<{ processed: 
         diff: {
           field: 'comment',
           label: 'Novo Comentário',
-          text: typeof comment.body === 'string' ? comment.body : JSON.stringify(comment.body),
+          text: cleanAndFormatJiraText(comment.body),
           commentId: comment.id,
         },
         cardData: cardSnapshot,
@@ -278,8 +419,8 @@ export async function processWebhookPayload(payload: any): Promise<{ processed: 
       let diffData: JiraEventDiff = {
         field: item.field,
         label,
-        from: item.fromString,
-        to: item.toString,
+        from: cleanAndFormatJiraText(item.fromString),
+        to: cleanAndFormatJiraText(item.toString),
       };
 
       if (field === 'status') {
@@ -447,8 +588,8 @@ export async function syncJiraEventsFromRest(daysBack: number = 7): Promise<{ ad
         let diffData: JiraEventDiff = {
           field: item.field,
           label,
-          from: item.fromString,
-          to: item.toString,
+          from: cleanAndFormatJiraText(item.fromString),
+          to: cleanAndFormatJiraText(item.toString),
         };
 
         if (field === 'status') {
@@ -529,7 +670,7 @@ export async function syncJiraEventsFromRest(daysBack: number = 7): Promise<{ ad
         diff: {
           field: 'comment',
           label: 'Novo Comentário',
-          text: typeof comment.body === 'string' ? comment.body : JSON.stringify(comment.body),
+          text: cleanAndFormatJiraText(comment.body),
           commentId: comment.id,
         },
         cardData: cardSnapshot,
@@ -705,3 +846,54 @@ export async function getPendingEventsCount(): Promise<number> {
   );
   return parseInt(res.rows[0].count, 10) || 0;
 }
+
+/**
+ * Migra eventos ADF que foram salvos anteriormente no banco como JSON bruto
+ */
+export async function migrateAdfEventsInDb(): Promise<void> {
+  try {
+    const res = await pool.query(`
+      SELECT id, diff_data
+      FROM jira_review_events
+      WHERE (diff_data->>'text' LIKE '%"type":"doc"%')
+         OR (diff_data->>'from' LIKE '%"type":"doc"%')
+         OR (diff_data->>'to' LIKE '%"type":"doc"%')
+    `);
+
+    if (res.rows.length === 0) return;
+
+    console.log(`[JiraEvents] Higienizando ${res.rows.length} eventos ADF salvos no banco de dados...`);
+    let updatedCount = 0;
+
+    for (const row of res.rows) {
+      const diff = row.diff_data;
+      let modified = false;
+
+      if (diff.text && typeof diff.text === 'string' && diff.text.includes('"type":"doc"')) {
+        diff.text = cleanAndFormatJiraText(diff.text);
+        modified = true;
+      }
+      if (diff.from && typeof diff.from === 'string' && diff.from.includes('"type":"doc"')) {
+        diff.from = cleanAndFormatJiraText(diff.from);
+        modified = true;
+      }
+      if (diff.to && typeof diff.to === 'string' && diff.to.includes('"type":"doc"')) {
+        diff.to = cleanAndFormatJiraText(diff.to);
+        modified = true;
+      }
+
+      if (modified) {
+        await pool.query(
+          'UPDATE jira_review_events SET diff_data = $1 WHERE id = $2',
+          [JSON.stringify(diff), row.id]
+        );
+        updatedCount++;
+      }
+    }
+
+    console.log(`[JiraEvents] ${updatedCount} eventos ADF atualizados com sucesso para texto limpo.`);
+  } catch (err) {
+    console.warn('[JiraEvents] Falha ao migrar eventos ADF:', err);
+  }
+}
+
