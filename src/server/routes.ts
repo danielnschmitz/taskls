@@ -1182,8 +1182,8 @@ router.post('/jira/events/sync', async (req: Request, res: Response) => {
       return;
     }
 
-    const daysBack = parseInt(String(req.body?.daysBack || 7), 10);
-    const syncResult = await syncJiraEventsFromRest(isNaN(daysBack) ? 7 : daysBack);
+    const daysBack = parseInt(String(req.body?.daysBack || 1), 10);
+    const syncResult = await syncJiraEventsFromRest(isNaN(daysBack) ? 1 : daysBack);
 
     res.json({ success: true, ...syncResult });
   } catch (err: any) {

@@ -525,7 +525,7 @@ export async function processWebhookPayload(payload: any): Promise<{ processed: 
 /**
  * Sincroniza eventos retroativos diretamente pela REST API do Jira
  */
-export async function syncJiraEventsFromRest(daysBack: number = 7): Promise<{
+export async function syncJiraEventsFromRest(daysBack: number = 1): Promise<{
   newCount: number;
   addedCount: number;
   pendingCount: number;
@@ -978,8 +978,8 @@ export async function runPeriodicJiraSync(): Promise<void> {
       return;
     }
 
-    console.log('[JiraSync] Executando sincronização automática periódica de evoluções (a cada 5 min)...');
-    const result = await syncJiraEventsFromRest(7);
+    console.log('[JiraSync] Executando sincronização automática periódica de evoluções (últimas 24h, a cada 5 min)...');
+    const result = await syncJiraEventsFromRest(1);
     const pendingCount = result.pendingCount;
 
     if (result.newCount > 0 && pendingCount > 0) {

@@ -115,7 +115,7 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
       const res = await fetch('/api/jira/events/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ daysBack: 7 }),
+        body: JSON.stringify({ daysBack: 1 }),
       });
 
       if (!res.ok) {
