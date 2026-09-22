@@ -140,14 +140,17 @@ async function handleTelegramMessage(message: NonNullable<TelegramUpdate['messag
       const welcomeMsg = [
         `👋 Olá, *${linkedUser.username}*!`,
         ``,
-        `Sua conta do TaskLS está vinculada e pronta para registrar suas pesagens.`,
+        `Sua conta do TaskLS está vinculada e pronta para registrar suas pesagens e medidas corporais.`,
         ``,
-        `⚖️ *Como registrar pesagem:*`,
-        `Basta me enviar uma mensagem como:`,
-        `\`Peso: 93,5\``,
+        `📏 *Como registrar:*`,
+        `• Peso: \`Peso: 93,5\``,
+        `• Cintura: \`Cintura: 97,5\``,
+        `• Abdômen: \`Abdmomen: 106,5\` ou \`Abdômen: 106,5\``,
         ``,
-        `📋 *Outros comandos:*`,
+        `📋 *Comandos úteis:*`,
         `• \`/peso\` - Exibe sua última pesagem`,
+        `• \`/cintura\` - Exibe sua última medida de cintura`,
+        `• \`/abdomen\` - Exibe sua última medida de abdômen`,
         `• \`/meta\` - Consulta ou ajusta sua meta (ex: \`/meta 85\`)`,
         `• \`/desvincular\` - Desconecta este chat da sua conta`,
       ].join('\n');
@@ -284,7 +287,107 @@ async function handleTelegramMessage(message: NonNullable<TelegramUpdate['messag
     return;
   }
 
-  // 5. Comando /peso (consulta atual)
+  // 5. Reconhecimento de registro de Cintura: formato "Cintura: 97,5"
+  const cinturaRegex = /^(?:cintura\s*[:=\s]\s*|cintura\s+)(\d{2,3}(?:[.,]\d{1,2})?)(?:\s*cm)?$/i;
+  const cinturaMatch = rawText.match(cinturaRegex);
+
+  if (cinturaMatch) {
+    if (!linkedUser) {
+      await sendTelegramMessage(
+        chatId,
+        `⚠️ Este chat do Telegram ainda não está vinculado a um usuário do TaskLS.\n\nEnvie \`/start\` para ver as instruções de vinculação ou use: \`/vincular SEU_CODIGO\`.`
+      );
+      return;
+    }
+
+    const valueNum = parseFloat(cinturaMatch[1].replace(',', '.'));
+    if (isNaN(valueNum) || valueNum < 20 || valueNum > 300) {
+      await sendTelegramMessage(chatId, `❌ Medida de cintura inválida (${cinturaMatch[1]}). Informe um valor entre 20cm e 300cm.`);
+      return;
+    }
+
+    const logDate = message.date ? new Date(message.date * 1000) : new Date();
+
+    const prevMeasureRes = await pool.query<{ value: string; logged_at: Date }>(
+      `SELECT value, logged_at FROM health_body_measures
+       WHERE user_id = $1 AND measure_type = 'cintura' AND logged_at <= $2
+       ORDER BY logged_at DESC LIMIT 1`,
+      [linkedUser.id, logDate]
+    );
+
+    const logId = crypto.randomUUID();
+    await pool.query(
+      `INSERT INTO health_body_measures (id, user_id, measure_type, value, logged_at, source, notes)
+       VALUES ($1, $2, 'cintura', $3, $4, 'telegram', $5)`,
+      [logId, linkedUser.id, valueNum, logDate, 'Registrado via Telegram Bot']
+    );
+
+    let diffStr: string;
+    if (prevMeasureRes.rows.length > 0) {
+      const prevVal = parseFloat(prevMeasureRes.rows[0].value);
+      const diff = valueNum - prevVal;
+      const diffSign = diff > 0 ? '+' : (diff < 0 ? '-' : '');
+      diffStr = `${diffSign}${Math.abs(diff).toFixed(2)}cm`;
+    } else {
+      diffStr = `0.00cm (Primeira medição registrada!)`;
+    }
+
+    const replyMsg = `Cintura registrada com sucesso. Diferença da última medição: ${diffStr}`;
+    await sendTelegramMessage(chatId, replyMsg, 'Markdown');
+    return;
+  }
+
+  // 6. Reconhecimento de registro de Abdômen: formato "Abdmomen: 106,5" ou "Abdômen: 106,5"
+  const abdomenRegex = /^(?:abd[oô]m[eê]n|abdmomen|abdomen|abdômen|abdome)\s*[:=\s]\s*(\d{2,3}(?:[.,]\d{1,2})?)(?:\s*cm)?$/i;
+  const abdomenMatch = rawText.match(abdomenRegex);
+
+  if (abdomenMatch) {
+    if (!linkedUser) {
+      await sendTelegramMessage(
+        chatId,
+        `⚠️ Este chat do Telegram ainda não está vinculado a um usuário do TaskLS.\n\nEnvie \`/start\` para ver as instruções de vinculação ou use: \`/vincular SEU_CODIGO\`.`
+      );
+      return;
+    }
+
+    const valueNum = parseFloat(abdomenMatch[1].replace(',', '.'));
+    if (isNaN(valueNum) || valueNum < 20 || valueNum > 300) {
+      await sendTelegramMessage(chatId, `❌ Medida de abdômen inválida (${abdomenMatch[1]}). Informe um valor entre 20cm e 300cm.`);
+      return;
+    }
+
+    const logDate = message.date ? new Date(message.date * 1000) : new Date();
+
+    const prevMeasureRes = await pool.query<{ value: string; logged_at: Date }>(
+      `SELECT value, logged_at FROM health_body_measures
+       WHERE user_id = $1 AND measure_type = 'abdomen' AND logged_at <= $2
+       ORDER BY logged_at DESC LIMIT 1`,
+      [linkedUser.id, logDate]
+    );
+
+    const logId = crypto.randomUUID();
+    await pool.query(
+      `INSERT INTO health_body_measures (id, user_id, measure_type, value, logged_at, source, notes)
+       VALUES ($1, $2, 'abdomen', $3, $4, 'telegram', $5)`,
+      [logId, linkedUser.id, valueNum, logDate, 'Registrado via Telegram Bot']
+    );
+
+    let diffStr: string;
+    if (prevMeasureRes.rows.length > 0) {
+      const prevVal = parseFloat(prevMeasureRes.rows[0].value);
+      const diff = valueNum - prevVal;
+      const diffSign = diff > 0 ? '+' : (diff < 0 ? '-' : '');
+      diffStr = `${diffSign}${Math.abs(diff).toFixed(2)}cm`;
+    } else {
+      diffStr = `0.00cm (Primeira medição registrada!)`;
+    }
+
+    const replyMsg = `Abdômen registrado com sucesso. Diferença da última medição: ${diffStr}`;
+    await sendTelegramMessage(chatId, replyMsg, 'Markdown');
+    return;
+  }
+
+  // 7. Comando /peso (consulta atual)
   if (rawText.startsWith('/peso')) {
     if (!linkedUser) {
       await sendTelegramMessage(chatId, `⚠️ Chat não vinculado. Envie /start para instruções.`);
@@ -330,7 +433,99 @@ async function handleTelegramMessage(message: NonNullable<TelegramUpdate['messag
     return;
   }
 
-  // 6. Comando /meta
+  // 8. Comando /cintura (consulta atual)
+  if (rawText.startsWith('/cintura')) {
+    if (!linkedUser) {
+      await sendTelegramMessage(chatId, `⚠️ Chat não vinculado. Envie /start para instruções.`);
+      return;
+    }
+
+    const latestQuery = await pool.query<{ value: string; logged_at: Date }>(
+      `SELECT value, logged_at FROM health_body_measures
+       WHERE user_id = $1 AND measure_type = 'cintura'
+       ORDER BY logged_at DESC LIMIT 2`,
+      [linkedUser.id]
+    );
+
+    if (latestQuery.rows.length === 0) {
+      await sendTelegramMessage(chatId, `Você ainda não possui medições de cintura registradas.\nPara registrar, envie no formato: \`Cintura: 97,5\``);
+      return;
+    }
+
+    const current = latestQuery.rows[0];
+    const prev = latestQuery.rows[1];
+    let diffInfo = '';
+    if (prev) {
+      const diff = parseFloat(current.value) - parseFloat(prev.value);
+      const diffSign = diff > 0 ? '+' : (diff < 0 ? '-' : '');
+      diffInfo = `\nVariação da última: *${diffSign}${Math.abs(diff).toFixed(2)}cm*`;
+    }
+
+    const dateFormatted = new Date(current.logged_at).toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    const statusMsg = [
+      `📏 *Última Medição de Cintura:*`,
+      ``,
+      `Cintura: *${parseFloat(current.value).toFixed(2).replace('.', ',')} cm*`,
+      `Data/Hora: ${dateFormatted}${diffInfo}`,
+    ].join('\n');
+    await sendTelegramMessage(chatId, statusMsg);
+    return;
+  }
+
+  // 9. Comando /abdomen ou /abdmomen (consulta atual)
+  if (rawText.startsWith('/abdomen') || rawText.startsWith('/abdmomen')) {
+    if (!linkedUser) {
+      await sendTelegramMessage(chatId, `⚠️ Chat não vinculado. Envie /start para instruções.`);
+      return;
+    }
+
+    const latestQuery = await pool.query<{ value: string; logged_at: Date }>(
+      `SELECT value, logged_at FROM health_body_measures
+       WHERE user_id = $1 AND measure_type = 'abdomen'
+       ORDER BY logged_at DESC LIMIT 2`,
+      [linkedUser.id]
+    );
+
+    if (latestQuery.rows.length === 0) {
+      await sendTelegramMessage(chatId, `Você ainda não possui medições de abdômen registradas.\nPara registrar, envie no formato: \`Abdmomen: 106,5\` ou \`Abdômen: 106,5\``);
+      return;
+    }
+
+    const current = latestQuery.rows[0];
+    const prev = latestQuery.rows[1];
+    let diffInfo = '';
+    if (prev) {
+      const diff = parseFloat(current.value) - parseFloat(prev.value);
+      const diffSign = diff > 0 ? '+' : (diff < 0 ? '-' : '');
+      diffInfo = `\nVariação da última: *${diffSign}${Math.abs(diff).toFixed(2)}cm*`;
+    }
+
+    const dateFormatted = new Date(current.logged_at).toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    const statusMsg = [
+      `📏 *Última Medição de Abdômen:*`,
+      ``,
+      `Abdômen: *${parseFloat(current.value).toFixed(2).replace('.', ',')} cm*`,
+      `Data/Hora: ${dateFormatted}${diffInfo}`,
+    ].join('\n');
+    await sendTelegramMessage(chatId, statusMsg);
+    return;
+  }
+
+  // 10. Comando /meta
   if (rawText.startsWith('/meta')) {
     if (!linkedUser) {
       await sendTelegramMessage(chatId, `⚠️ Chat não vinculado. Envie /start para instruções.`);
@@ -374,7 +569,7 @@ async function handleTelegramMessage(message: NonNullable<TelegramUpdate['messag
   if (linkedUser) {
     await sendTelegramMessage(
       chatId,
-      `❓ Não entendi essa mensagem.\n\nPara registrar sua pesagem, envie no formato:\n\`Peso: 93,5\`\n\nOutros comandos: \`/peso\`, \`/meta\`, \`/ajuda\`.`
+      `❓ Não entendi essa mensagem.\n\nPara registrar, envie no formato:\n• \`Peso: 93,5\`\n• \`Cintura: 97,5\`\n• \`Abdmomen: 106,5\`\n\nOutros comandos: \`/peso\`, \`/cintura\`, \`/abdomen\`, \`/meta\`, \`/ajuda\`.`
     );
   } else {
     await sendTelegramMessage(

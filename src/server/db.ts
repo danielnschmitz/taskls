@@ -220,6 +220,20 @@ export async function initDatabase(): Promise<void> {
       ALTER TABLE users ALTER COLUMN allowed_modules SET DEFAULT ARRAY['tasks', 'cards', 'health']::TEXT[];
       UPDATE users SET allowed_modules = array_append(allowed_modules, 'health')
       WHERE allowed_modules IS NOT NULL AND NOT ('health' = ANY(allowed_modules));
+
+      -- Módulo de Saúde: Histórico de Medidas Corporais (Cintura, Abdômen, etc)
+      CREATE TABLE IF NOT EXISTS health_body_measures (
+        id VARCHAR(36) PRIMARY KEY,
+        user_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,
+        measure_type VARCHAR(20) NOT NULL,
+        value NUMERIC(5,2) NOT NULL,
+        logged_at TIMESTAMPTZ NOT NULL,
+        notes TEXT,
+        source VARCHAR(20) DEFAULT 'web',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_health_measures_user_type_date ON health_body_measures(user_id, measure_type, logged_at DESC);
     `);
 
     // Seed de Usuário Administrador Inicial (se não houver nenhum)

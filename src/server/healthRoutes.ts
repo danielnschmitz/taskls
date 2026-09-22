@@ -450,3 +450,273 @@ healthRouter.post('/telegram/unlink', async (req: Request, res: Response): Promi
     res.status(500).json({ error: 'Erro ao desvincular conta' });
   }
 });
+
+/**
+ * GET /api/health/measures
+ * Lista medições corporais com filtros opcionais por tipo e período
+ */
+healthRouter.get('/measures', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).user?.id;
+    const { type, period } = req.query;
+
+    let typeFilter = '';
+    const params: any[] = [userId];
+
+    if (type === 'cintura' || type === 'abdomen') {
+      params.push(type);
+      typeFilter = `AND measure_type = $${params.length}`;
+    }
+
+    let dateFilter = '';
+    if (period === '7d') {
+      dateFilter = `AND logged_at >= NOW() - INTERVAL '7 days'`;
+    } else if (period === '30d') {
+      dateFilter = `AND logged_at >= NOW() - INTERVAL '30 days'`;
+    } else if (period === '90d') {
+      dateFilter = `AND logged_at >= NOW() - INTERVAL '90 days'`;
+    } else if (period === '6m') {
+      dateFilter = `AND logged_at >= NOW() - INTERVAL '6 months'`;
+    } else if (period === '1y') {
+      dateFilter = `AND logged_at >= NOW() - INTERVAL '1 year'`;
+    }
+
+    const query = `
+      SELECT 
+        id, 
+        measure_type AS "measureType",
+        value::float AS value, 
+        logged_at AS "loggedAt", 
+        notes, 
+        source, 
+        created_at AS "createdAt", 
+        updated_at AS "updatedAt"
+      FROM health_body_measures
+      WHERE user_id = $1 ${typeFilter} ${dateFilter}
+      ORDER BY logged_at DESC
+    `;
+
+    const result = await pool.query(query, params);
+    const rows = result.rows;
+
+    // Calcular diferença em relação à medição anterior do mesmo tipo
+    const enriched = rows.map((row, index) => {
+      const prev = rows.slice(index + 1).find((r) => r.measureType === row.measureType);
+      const diffFromPrevious = prev ? Number((row.value - prev.value).toFixed(2)) : 0;
+      return {
+        ...row,
+        diffFromPrevious,
+      };
+    });
+
+    res.json(enriched);
+  } catch (err: any) {
+    console.error('[Health] Erro ao listar medições:', err);
+    res.status(500).json({ error: 'Erro ao listar medições' });
+  }
+});
+
+/**
+ * GET /api/health/measures/summary
+ * Retorna métricas consolidadas para cintura e abdômen
+ */
+healthRouter.get('/measures/summary', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).user?.id;
+
+    const allMeasuresRes = await pool.query<{
+      measureType: string;
+      value: number;
+      loggedAt: Date;
+    }>(
+      `SELECT 
+         measure_type AS "measureType",
+         value::float AS value, 
+         logged_at AS "loggedAt"
+       FROM health_body_measures
+       WHERE user_id = $1
+       ORDER BY logged_at ASC`,
+      [userId]
+    );
+
+    const rows = allMeasuresRes.rows;
+
+    const computeSummaryForType = (mType: 'cintura' | 'abdomen') => {
+      const items = rows.filter((r) => r.measureType === mType);
+      if (items.length === 0) {
+        return {
+          totalEntries: 0,
+          current: null,
+          currentLoggedAt: null,
+          previous: null,
+          recentDiff: 0,
+          initial: null,
+          totalDiff: 0,
+          min: null,
+          max: null,
+        };
+      }
+
+      const first = items[0];
+      const latest = items[items.length - 1];
+      const secondLatest = items.length > 1 ? items[items.length - 2] : null;
+
+      const current = latest.value;
+      const previous = secondLatest ? secondLatest.value : null;
+      const recentDiff = previous !== null ? Number((current - previous).toFixed(2)) : 0;
+      const initial = first.value;
+      const totalDiff = Number((current - initial).toFixed(2));
+
+      let min = current;
+      let max = current;
+      for (const it of items) {
+        if (it.value < min) min = it.value;
+        if (it.value > max) max = it.value;
+      }
+
+      return {
+        totalEntries: items.length,
+        current,
+        currentLoggedAt: latest.loggedAt,
+        previous,
+        recentDiff,
+        initial,
+        totalDiff,
+        min,
+        max,
+      };
+    };
+
+    res.json({
+      cintura: computeSummaryForType('cintura'),
+      abdomen: computeSummaryForType('abdomen'),
+    });
+  } catch (err: any) {
+    console.error('[Health] Erro ao calcular resumo de medidas:', err);
+    res.status(500).json({ error: 'Erro ao calcular resumo de medidas' });
+  }
+});
+
+/**
+ * POST /api/health/measures
+ * Cadastra uma nova medição corporal
+ */
+healthRouter.post('/measures', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).user?.id;
+    const { measureType, value, loggedAt, notes } = req.body;
+
+    if (!measureType || (measureType !== 'cintura' && measureType !== 'abdomen')) {
+      res.status(400).json({ error: 'O tipo de medida deve ser cintura ou abdomen.' });
+      return;
+    }
+
+    if (value === undefined || value === null || value === '') {
+      res.status(400).json({ error: 'O valor da medida é obrigatório.' });
+      return;
+    }
+
+    const valueNum = typeof value === 'number' ? value : parseFloat(String(value).replace(',', '.'));
+    if (isNaN(valueNum) || valueNum < 20 || valueNum > 300) {
+      res.status(400).json({ error: 'Valor de medida inválido. Deve ser entre 20cm e 300cm.' });
+      return;
+    }
+
+    const logDate = loggedAt ? new Date(loggedAt) : new Date();
+    if (isNaN(logDate.getTime())) {
+      res.status(400).json({ error: 'Data e hora da medição inválidas.' });
+      return;
+    }
+
+    const id = crypto.randomUUID();
+
+    const insertResult = await pool.query(
+      `INSERT INTO health_body_measures (id, user_id, measure_type, value, logged_at, notes, source)
+       VALUES ($1, $2, $3, $4, $5, $6, 'web')
+       RETURNING id, measure_type AS "measureType", value::float AS value, logged_at AS "loggedAt", notes, source, created_at AS "createdAt"`,
+      [id, userId, measureType, valueNum, logDate, notes ? String(notes).trim() : null]
+    );
+
+    res.status(201).json(insertResult.rows[0]);
+  } catch (err: any) {
+    console.error('[Health] Erro ao cadastrar medição:', err);
+    res.status(500).json({ error: 'Erro ao cadastrar medição' });
+  }
+});
+
+/**
+ * PUT /api/health/measures/:id
+ * Edita uma medição existente
+ */
+healthRouter.put('/measures/:id', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).user?.id;
+    const { id } = req.params;
+    const { measureType, value, loggedAt, notes } = req.body;
+
+    const existing = await pool.query(
+      `SELECT id FROM health_body_measures WHERE id = $1 AND user_id = $2`,
+      [id, userId]
+    );
+    if (existing.rows.length === 0) {
+      res.status(404).json({ error: 'Medição não encontrada.' });
+      return;
+    }
+
+    if (measureType && measureType !== 'cintura' && measureType !== 'abdomen') {
+      res.status(400).json({ error: 'Tipo de medida inválido.' });
+      return;
+    }
+
+    const valueNum = typeof value === 'number' ? value : parseFloat(String(value).replace(',', '.'));
+    if (isNaN(valueNum) || valueNum < 20 || valueNum > 300) {
+      res.status(400).json({ error: 'Valor de medida inválido.' });
+      return;
+    }
+
+    const logDate = loggedAt ? new Date(loggedAt) : new Date();
+
+    const updateResult = await pool.query(
+      `UPDATE health_body_measures
+       SET measure_type = COALESCE($1, measure_type),
+           value = $2,
+           logged_at = $3,
+           notes = $4,
+           updated_at = NOW()
+       WHERE id = $5 AND user_id = $6
+       RETURNING id, measure_type AS "measureType", value::float AS value, logged_at AS "loggedAt", notes, source, updated_at AS "updatedAt"`,
+      [measureType || null, valueNum, logDate, notes ? String(notes).trim() : null, id, userId]
+    );
+
+    res.json(updateResult.rows[0]);
+  } catch (err: any) {
+    console.error('[Health] Erro ao editar medição:', err);
+    res.status(500).json({ error: 'Erro ao editar medição' });
+  }
+});
+
+/**
+ * DELETE /api/health/measures/:id
+ * Exclui uma medição
+ */
+healthRouter.delete('/measures/:id', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).user?.id;
+    const { id } = req.params;
+
+    const deleteResult = await pool.query(
+      `DELETE FROM health_body_measures WHERE id = $1 AND user_id = $2 RETURNING id`,
+      [id, userId]
+    );
+
+    if (deleteResult.rows.length === 0) {
+      res.status(404).json({ error: 'Medição não encontrada.' });
+      return;
+    }
+
+    res.json({ success: true, message: 'Medição removida com sucesso.' });
+  } catch (err: any) {
+    console.error('[Health] Erro ao excluir medição:', err);
+    res.status(500).json({ error: 'Erro ao excluir medição' });
+  }
+});

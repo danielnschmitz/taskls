@@ -269,4 +269,36 @@ export interface TelegramConfigStatus {
   chatId: string | null;
 }
 
+export type BodyMeasureType = 'cintura' | 'abdomen';
+
+export interface BodyMeasureLog {
+  id: string;
+  measureType: BodyMeasureType;
+  value: number;
+  loggedAt: string;
+  notes?: string | null;
+  source?: string;
+  diffFromPrevious?: number;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface MeasureTypeSummary {
+  totalEntries: number;
+  current: number | null;
+  currentLoggedAt: string | null;
+  previous: number | null;
+  recentDiff: number;
+  initial: number | null;
+  totalDiff: number;
+  min: number | null;
+  max: number | null;
+}
+
+export interface MeasuresSummary {
+  cintura: MeasureTypeSummary;
+  abdomen: MeasureTypeSummary;
+}
+
+
 
