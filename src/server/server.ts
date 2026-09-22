@@ -15,9 +15,11 @@ import { router } from './routes';
 import { authRouter } from './authRoutes';
 import { userRoutes } from './userRoutes';
 import { cardRouter } from './cardRoutes';
+import { healthRouter } from './healthRoutes';
 import { authenticateToken, requireAdmin, requireModule } from './auth';
 import { startScheduler, stopScheduler } from './scheduler';
 import { processWebhookPayload, migrateAdfEventsInDb, startJiraSyncScheduler, stopJiraSyncScheduler } from './jiraEvents';
+import { startTelegramBotService, stopTelegramBotService } from './telegramBot';
 
 const app = express();
 const PORT = process.env.PORT || 3333;
@@ -50,7 +52,10 @@ app.use('/api/users', authenticateToken, requireAdmin, userRoutes);
 // 4. Rotas do módulo de Escrita de Cards
 app.use('/api/cards', authenticateToken, requireModule('cards'), cardRouter);
 
-// 5. Todas as demais rotas da API são protegidas por autenticação
+// 5. Rotas do módulo de Saúde & Peso
+app.use('/api/health', authenticateToken, requireModule('health'), healthRouter);
+
+// 6. Todas as demais rotas da API são protegidas por autenticação
 app.use('/api', authenticateToken, router);
 
 // Serve static frontend files if built
@@ -87,6 +92,7 @@ async function bootstrap() {
     await migrateAdfEventsInDb();
     startScheduler(30000); // Check notifications every 30 seconds
     startJiraSyncScheduler(5 * 60 * 1000); // Sync Jira evolutions automatically every 5 minutes
+    startTelegramBotService(); // Inicia serviço do Telegram Bot
 
     app.listen(PORT, () => {
       console.log(`\n==================================================`);
@@ -105,6 +111,7 @@ process.on('SIGINT', async () => {
   console.log('\n[Server] Encerrando TaskLS...');
   stopScheduler();
   stopJiraSyncScheduler();
+  stopTelegramBotService();
   await pool.end();
   process.exit(0);
 });
@@ -113,6 +120,7 @@ process.on('SIGTERM', async () => {
   console.log('\n[Server] Encerrando TaskLS...');
   stopScheduler();
   stopJiraSyncScheduler();
+  stopTelegramBotService();
   await pool.end();
   process.exit(0);
 });

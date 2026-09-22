@@ -19,6 +19,7 @@ import {
   Settings,
   Menu,
   Check,
+  Scale,
 } from 'lucide-react';
 import { Priority, Task, DndStatus, CategoryInfo } from '../types';
 import { PomodoroTimer } from './PomodoroTimer';
@@ -50,8 +51,8 @@ interface HeaderProps {
   onOpenJiraSettings?: () => void;
   onOpenUserManagement?: () => void;
   onOpenChangePassword?: () => void;
-  activeModule: 'tasks' | 'cards' | 'settings';
-  onSelectModule: (m: 'tasks' | 'cards' | 'settings') => void;
+  activeModule: 'tasks' | 'cards' | 'health' | 'settings';
+  onSelectModule: (m: 'tasks' | 'cards' | 'health' | 'settings') => void;
   onShowToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
 
@@ -87,9 +88,10 @@ export const Header: React.FC<HeaderProps> = ({
   const [showModuleMenu, setShowModuleMenu] = useState(false);
   const moduleMenuRef = useRef<HTMLDivElement>(null);
 
-  const userModules = user?.allowedModules || ['tasks', 'cards'];
+  const userModules = user?.allowedModules || ['tasks', 'cards', 'health'];
   const canAccessTasks = Boolean(user?.isAdmin || userModules.includes('tasks'));
   const canAccessCards = Boolean(user?.isAdmin || userModules.includes('cards'));
+  const canAccessHealth = Boolean(user?.isAdmin || userModules.includes('health'));
 
   // Fechar menu de módulos ao clicar fora
   useEffect(() => {
@@ -239,6 +241,7 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="hidden sm:inline font-bold">
                 {activeModule === 'tasks' && 'Gestão de Tarefas'}
                 {activeModule === 'cards' && 'Escrita de Cards'}
+                {activeModule === 'health' && 'Saúde & Peso'}
                 {activeModule === 'settings' && 'Configurações'}
               </span>
               <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${showModuleMenu ? 'rotate-180 text-indigo-400' : ''}`} />
@@ -302,6 +305,32 @@ export const Header: React.FC<HeaderProps> = ({
                         </div>
                       </div>
                       {activeModule === 'cards' && <Check className="w-4 h-4 text-purple-400 flex-shrink-0" />}
+                    </button>
+                  )}
+
+                  {canAccessHealth && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSelectModule('health');
+                        setShowModuleMenu(false);
+                      }}
+                      className={`w-full text-left p-2.5 rounded-xl flex items-center justify-between gap-3 transition-all ${
+                        activeModule === 'health'
+                          ? 'bg-emerald-600/20 border border-emerald-500/40 text-white shadow-inner'
+                          : 'hover:bg-slate-800/80 text-slate-300 border border-transparent'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${activeModule === 'health' ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30' : 'bg-slate-800 text-slate-400'}`}>
+                          <Scale className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="block text-xs font-bold leading-tight">Saúde & Peso</span>
+                          <span className="text-[10px] text-slate-400">Evolução, pesagens e bot Telegram</span>
+                        </div>
+                      </div>
+                      {activeModule === 'health' && <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />}
                     </button>
                   )}
 

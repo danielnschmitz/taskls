@@ -183,6 +183,43 @@ export async function initDatabase(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_jira_events_event_time ON jira_review_events(event_time DESC);
       CREATE INDEX IF NOT EXISTS idx_jira_events_proj ON jira_review_events(project_key);
       CREATE INDEX IF NOT EXISTS idx_jira_events_issue_key ON jira_review_events(issue_key);
+
+      -- Módulo de Saúde: Histórico de Pesagens
+      CREATE TABLE IF NOT EXISTS health_weight_logs (
+        id VARCHAR(36) PRIMARY KEY,
+        user_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,
+        weight NUMERIC(5,2) NOT NULL,
+        logged_at TIMESTAMPTZ NOT NULL,
+        notes TEXT,
+        source VARCHAR(20) DEFAULT 'web',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_health_weight_user_date ON health_weight_logs(user_id, logged_at DESC);
+
+      -- Módulo de Saúde: Meta de Peso
+      CREATE TABLE IF NOT EXISTS health_goals (
+        user_id VARCHAR(36) PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        target_weight NUMERIC(5,2) NOT NULL,
+        initial_weight NUMERIC(5,2),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- Módulo de Saúde: Códigos Temporários de Vinculação com o Telegram
+      CREATE TABLE IF NOT EXISTS health_telegram_codes (
+        code VARCHAR(10) PRIMARY KEY,
+        user_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,
+        expires_at TIMESTAMPTZ NOT NULL
+      );
+
+      -- Campo Telegram Chat ID no Usuário
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(50);
+      CREATE INDEX IF NOT EXISTS idx_users_telegram_chat ON users(telegram_chat_id);
+
+      -- Atualizar módulos permitidos para incluir 'health'
+      ALTER TABLE users ALTER COLUMN allowed_modules SET DEFAULT ARRAY['tasks', 'cards', 'health']::TEXT[];
+      UPDATE users SET allowed_modules = array_append(allowed_modules, 'health')
+      WHERE allowed_modules IS NOT NULL AND NOT ('health' = ANY(allowed_modules));
     `);
 
     // Seed de Usuário Administrador Inicial (se não houver nenhum)

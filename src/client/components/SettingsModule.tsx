@@ -594,9 +594,10 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({ onShowToast }) =
                     {users
                       .filter((u) => u.username.toLowerCase().includes(searchUserQuery.toLowerCase()))
                       .map((u) => {
-                        const userModules = u.allowedModules || ['tasks', 'cards'];
+                        const userModules = u.allowedModules || ['tasks', 'cards', 'health'];
                         const hasTasks = userModules.includes('tasks');
                         const hasCards = userModules.includes('cards');
+                        const hasHealth = userModules.includes('health');
 
                         return (
                           <tr key={u.id} className="hover:bg-slate-900/40 transition-colors">
@@ -632,12 +633,17 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({ onShowToast }) =
                                     Cards
                                   </span>
                                 )}
+                                {(hasHealth || u.isAdmin) && (
+                                  <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                                    Saúde & Peso
+                                  </span>
+                                )}
                                 {(u.canAccessJira || u.isAdmin) && (
                                   <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-blue-500/15 text-blue-300 border border-blue-500/30">
                                     Jira
                                   </span>
                                 )}
-                                {!hasTasks && !hasCards && !u.canAccessJira && !u.isAdmin && (
+                                {!hasTasks && !hasCards && !hasHealth && !u.canAccessJira && !u.isAdmin && (
                                   <span className="text-[11px] text-slate-500 italic">Nenhum</span>
                                 )}
                               </div>
@@ -1032,6 +1038,27 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({ onShowToast }) =
                   <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs cursor-pointer hover:bg-slate-900">
                     <input
                       type="checkbox"
+                      checked={newAllowedModules.includes('health')}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setNewAllowedModules([...newAllowedModules, 'health']);
+                        } else {
+                          setNewAllowedModules(newAllowedModules.filter((m) => m !== 'health'));
+                        }
+                      }}
+                      className="rounded bg-slate-950 border-slate-700 text-emerald-600 focus:ring-0"
+                    />
+                    <div>
+                      <span className="font-bold text-white block">⚖️ Saúde & Peso</span>
+                      <span className="text-[11px] text-slate-400 block">
+                        Permite acompanhar evolução de peso e conectar bot Telegram.
+                      </span>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs cursor-pointer hover:bg-slate-900">
+                    <input
+                      type="checkbox"
                       checked={newCanAccessJira}
                       onChange={(e) => setNewCanAccessJira(e.target.checked)}
                       className="rounded bg-slate-950 border-slate-700 text-blue-600 focus:ring-0"
@@ -1170,6 +1197,30 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({ onShowToast }) =
                       <span className="font-bold text-xs block text-slate-200">Escrita de Cards</span>
                       <span className="text-[11px] text-slate-400 block">
                         Permite criar templates com macros, gerar especificações estruturadas e exportar em Markdown.
+                      </span>
+                    </div>
+                  </label>
+
+                  {/* Checkbox Módulo Saúde & Peso */}
+                  <label className={`p-3 rounded-2xl border flex items-start gap-3 cursor-pointer transition-all ${
+                    manageAllowedModules.includes('health')
+                      ? 'bg-emerald-600/10 border-emerald-500/40 text-white'
+                      : 'bg-slate-900/40 border-slate-800 text-slate-400 hover:border-slate-700'
+                  }`}>
+                    <input
+                      type="checkbox"
+                      checked={manageAllowedModules.includes('health')}
+                      onChange={() => {
+                        setManageAllowedModules((prev) =>
+                          prev.includes('health') ? prev.filter((m) => m !== 'health') : [...prev, 'health']
+                        );
+                      }}
+                      className="mt-0.5 rounded border-slate-700 text-emerald-600 focus:ring-emerald-500 w-4 h-4"
+                    />
+                    <div className="flex-1">
+                      <span className="font-bold text-xs block text-slate-200">Saúde & Evolução de Peso</span>
+                      <span className="text-[11px] text-slate-400 block">
+                        Permite registrar pesagens corporais, visualizar gráficos de evolução e integrar com o Bot Telegram.
                       </span>
                     </div>
                   </label>

@@ -153,7 +153,7 @@ export interface JiraConfig {
   allPossibleStatuses?: string[];
 }
 
-export type ModuleType = 'tasks' | 'cards' | 'settings';
+export type ModuleType = 'tasks' | 'cards' | 'health' | 'settings';
 
 export interface CardTemplate {
   id: string;
@@ -228,4 +228,45 @@ export interface JiraEventsResponse {
   totalReviewed: number;
   total: number;
 }
+
+// Módulo de Saúde & Peso
+export interface WeightLog {
+  id: string;
+  weight: number;
+  loggedAt: string;
+  notes?: string | null;
+  source: 'web' | 'telegram';
+  diffFromPrevious?: number;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface HealthGoal {
+  targetWeight: number;
+  initialWeight?: number | null;
+  progressPercentage?: number;
+  remainingKg?: number;
+}
+
+export interface HealthSummary {
+  totalEntries: number;
+  currentWeight: number | null;
+  currentLoggedAt: string | null;
+  previousWeight: number | null;
+  recentDiff: number;
+  initialWeight: number | null;
+  totalDiff: number;
+  minWeight: number | null;
+  maxWeight: number | null;
+  goal: HealthGoal | null;
+}
+
+export interface TelegramConfigStatus {
+  hasToken: boolean;
+  isBotActive: boolean;
+  botUsername: string | null;
+  isLinked: boolean;
+  chatId: string | null;
+}
+
 

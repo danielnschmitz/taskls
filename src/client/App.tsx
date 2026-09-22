@@ -43,6 +43,7 @@ import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { UserManagementModal } from './components/UserManagementModal';
 import { CardWriterModule } from './components/CardWriterModule';
 import { SettingsModule } from './components/SettingsModule';
+import { HealthModule } from './components/HealthModule';
 import { useAuth } from './contexts/AuthContext';
 import {
   triggerBrowserNotification,
@@ -102,13 +103,15 @@ export const App: React.FC = () => {
   const canAccessJira = Boolean(user?.isAdmin || user?.canAccessJira);
 
   // Modular access checks
-  const userModules = user?.allowedModules || ['tasks', 'cards'];
+  const userModules = user?.allowedModules || ['tasks', 'cards', 'health'];
   const canAccessTasks = Boolean(user?.isAdmin || userModules.includes('tasks'));
   const canAccessCards = Boolean(user?.isAdmin || userModules.includes('cards'));
+  const canAccessHealth = Boolean(user?.isAdmin || userModules.includes('health'));
 
   const [activeModule, setActiveModule] = useState<ModuleType>(() => {
     if (canAccessTasks) return 'tasks';
     if (canAccessCards) return 'cards';
+    if (canAccessHealth) return 'health';
     if (user?.isAdmin) return 'settings';
     return 'tasks';
   });
@@ -117,15 +120,22 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (activeModule === 'tasks' && !canAccessTasks) {
       if (canAccessCards) setActiveModule('cards');
+      else if (canAccessHealth) setActiveModule('health');
       else if (user?.isAdmin) setActiveModule('settings');
     } else if (activeModule === 'cards' && !canAccessCards) {
       if (canAccessTasks) setActiveModule('tasks');
+      else if (canAccessHealth) setActiveModule('health');
+      else if (user?.isAdmin) setActiveModule('settings');
+    } else if (activeModule === 'health' && !canAccessHealth) {
+      if (canAccessTasks) setActiveModule('tasks');
+      else if (canAccessCards) setActiveModule('cards');
       else if (user?.isAdmin) setActiveModule('settings');
     } else if (activeModule === 'settings' && !user?.isAdmin) {
       if (canAccessTasks) setActiveModule('tasks');
       else if (canAccessCards) setActiveModule('cards');
+      else if (canAccessHealth) setActiveModule('health');
     }
-  }, [user, activeModule, canAccessTasks, canAccessCards]);
+  }, [user, activeModule, canAccessTasks, canAccessCards, canAccessHealth]);
 
   // Handlers for Jira Week Navigation
   const handleJiraPrevWeek = () => setJiraWeekBaseDate((prev) => subWeeks(prev, 1));
@@ -539,6 +549,11 @@ export const App: React.FC = () => {
         {/* Módulo: Escrita de Cards */}
         {activeModule === 'cards' && canAccessCards && (
           <CardWriterModule onShowToast={showToast} />
+        )}
+
+        {/* Módulo: Saúde & Peso */}
+        {activeModule === 'health' && canAccessHealth && (
+          <HealthModule onShowToast={showToast} />
         )}
 
         {/* Módulo: Configurações (Apenas Administrador) */}

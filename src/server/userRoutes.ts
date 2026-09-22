@@ -74,7 +74,7 @@ userRoutes.post('/', async (req: Request, res: Response): Promise<void> => {
 
     const modules = Array.isArray(allowedModules) && allowedModules.length > 0
       ? allowedModules
-      : ['tasks', 'cards'];
+      : ['tasks', 'cards', 'health'];
 
     const insertResult = await pool.query(
       `INSERT INTO users (id, username, password_hash, salt, is_default_password, is_admin, can_access_jira, allowed_modules)
@@ -111,11 +111,11 @@ userRoutes.put('/:id', async (req: Request, res: Response): Promise<void> => {
     let finalCanAccessJira = Boolean(canAccessJira);
     let finalAllowedModules = Array.isArray(allowedModules)
       ? allowedModules
-      : (targetUser.allowed_modules || ['tasks', 'cards']);
+      : (targetUser.allowed_modules || ['tasks', 'cards', 'health']);
 
     if (targetUser.username.toLowerCase() === 'admin') {
       finalCanAccessJira = true;
-      finalAllowedModules = ['tasks', 'cards'];
+      finalAllowedModules = ['tasks', 'cards', 'health'];
     }
 
     const updateResult = await pool.query(
