@@ -102,6 +102,9 @@ export const App: React.FC = () => {
   // Jira permission check
   const canAccessJira = Boolean(user?.isAdmin || user?.canAccessJira);
 
+  // Storage key para persistir o módulo ativo
+  const ACTIVE_MODULE_STORAGE_KEY = 'taskls_active_module';
+
   // Modular access checks
   const userModules = user?.allowedModules || ['tasks', 'cards', 'health'];
   const canAccessTasks = Boolean(user?.isAdmin || userModules.includes('tasks'));
@@ -109,6 +112,10 @@ export const App: React.FC = () => {
   const canAccessHealth = Boolean(user?.isAdmin || userModules.includes('health'));
 
   const [activeModule, setActiveModule] = useState<ModuleType>(() => {
+    const saved = localStorage.getItem(ACTIVE_MODULE_STORAGE_KEY) as ModuleType | null;
+    if (saved && ['tasks', 'cards', 'health', 'settings'].includes(saved)) {
+      return saved;
+    }
     if (canAccessTasks) return 'tasks';
     if (canAccessCards) return 'cards';
     if (canAccessHealth) return 'health';
@@ -116,26 +123,33 @@ export const App: React.FC = () => {
     return 'tasks';
   });
 
+  const handleSelectModule = useCallback((mod: ModuleType) => {
+    setActiveModule(mod);
+    localStorage.setItem(ACTIVE_MODULE_STORAGE_KEY, mod);
+  }, []);
+
   // Sync active module if user or permissions change
   useEffect(() => {
+    if (!isAuthenticated) return;
+
     if (activeModule === 'tasks' && !canAccessTasks) {
-      if (canAccessCards) setActiveModule('cards');
-      else if (canAccessHealth) setActiveModule('health');
-      else if (user?.isAdmin) setActiveModule('settings');
+      const next = canAccessCards ? 'cards' : canAccessHealth ? 'health' : user?.isAdmin ? 'settings' : 'tasks';
+      setActiveModule(next);
+      localStorage.setItem(ACTIVE_MODULE_STORAGE_KEY, next);
     } else if (activeModule === 'cards' && !canAccessCards) {
-      if (canAccessTasks) setActiveModule('tasks');
-      else if (canAccessHealth) setActiveModule('health');
-      else if (user?.isAdmin) setActiveModule('settings');
+      const next = canAccessTasks ? 'tasks' : canAccessHealth ? 'health' : user?.isAdmin ? 'settings' : 'cards';
+      setActiveModule(next);
+      localStorage.setItem(ACTIVE_MODULE_STORAGE_KEY, next);
     } else if (activeModule === 'health' && !canAccessHealth) {
-      if (canAccessTasks) setActiveModule('tasks');
-      else if (canAccessCards) setActiveModule('cards');
-      else if (user?.isAdmin) setActiveModule('settings');
+      const next = canAccessTasks ? 'tasks' : canAccessCards ? 'cards' : user?.isAdmin ? 'settings' : 'health';
+      setActiveModule(next);
+      localStorage.setItem(ACTIVE_MODULE_STORAGE_KEY, next);
     } else if (activeModule === 'settings' && !user?.isAdmin) {
-      if (canAccessTasks) setActiveModule('tasks');
-      else if (canAccessCards) setActiveModule('cards');
-      else if (canAccessHealth) setActiveModule('health');
+      const next = canAccessTasks ? 'tasks' : canAccessCards ? 'cards' : canAccessHealth ? 'health' : 'settings';
+      setActiveModule(next);
+      localStorage.setItem(ACTIVE_MODULE_STORAGE_KEY, next);
     }
-  }, [user, activeModule, canAccessTasks, canAccessCards, canAccessHealth]);
+  }, [user, activeModule, canAccessTasks, canAccessCards, canAccessHealth, isAuthenticated]);
 
   // Handlers for Jira Week Navigation
   const handleJiraPrevWeek = () => setJiraWeekBaseDate((prev) => subWeeks(prev, 1));
@@ -156,9 +170,9 @@ export const App: React.FC = () => {
     []
   );
 
-  // Fetch dashboard data
+  // Fetch dashboard data (apenas quando o módulo de tarefas estiver ativo)
   const fetchDashboard = useCallback(async () => {
-    if (!isAuthenticated || !canAccessTasks) return;
+    if (isAuthLoading || !isAuthenticated || !canAccessTasks) return;
     try {
       const weekStartStr = format(
         startOfWeek(currentWeekBaseDate, { weekStartsOn: 1 }),
@@ -174,19 +188,20 @@ export const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [currentWeekBaseDate, showToast, isAuthenticated, canAccessTasks]);
+  }, [currentWeekBaseDate, showToast, isAuthLoading, isAuthenticated, canAccessTasks]);
 
   useEffect(() => {
-    if (isAuthenticated && canAccessTasks) {
+    if (isAuthLoading) return;
+    if (isAuthenticated && canAccessTasks && activeModule === 'tasks') {
       fetchDashboard();
     } else {
       setIsLoading(false);
     }
-  }, [fetchDashboard, isAuthenticated, canAccessTasks]);
+  }, [fetchDashboard, isAuthLoading, isAuthenticated, canAccessTasks, activeModule]);
 
   // Polling de Notificações do Navegador (a cada 15 segundos)
   useEffect(() => {
-    if (!isAuthenticated || !canAccessTasks) return;
+    if (isAuthLoading || !isAuthenticated || !canAccessTasks) return;
 
     // Registrar Service Worker para notificações em background
     getServiceWorkerRegistration().catch(() => {});
@@ -219,11 +234,11 @@ export const App: React.FC = () => {
       clearTimeout(initialTimer);
       clearInterval(interval);
     };
-  }, [isAuthenticated, canAccessTasks, showToast]);
+  }, [isAuthLoading, isAuthenticated, canAccessTasks, showToast]);
 
   // Polling de Contagem de Pendências de Revisão do Jira (a cada 30s)
   const fetchJiraPendingCount = useCallback(async () => {
-    if (!isAuthenticated || !canAccessJira) return;
+    if (isAuthLoading || !isAuthenticated || !canAccessJira) return;
     try {
       const res = await fetch('/api/jira/events/count');
       if (res.ok) {
@@ -231,14 +246,14 @@ export const App: React.FC = () => {
         setJiraPendingCount(json.pendingCount || 0);
       }
     } catch {}
-  }, [isAuthenticated, canAccessJira]);
+  }, [isAuthLoading, isAuthenticated, canAccessJira]);
 
   useEffect(() => {
-    if (!isAuthenticated || !canAccessJira) return;
+    if (isAuthLoading || !isAuthenticated || !canAccessJira) return;
     fetchJiraPendingCount();
     const interval = setInterval(fetchJiraPendingCount, 30000);
     return () => clearInterval(interval);
-  }, [fetchJiraPendingCount, isAuthenticated, canAccessJira]);
+  }, [fetchJiraPendingCount, isAuthLoading, isAuthenticated, canAccessJira]);
 
   // Extract list of all tasks
   const allTasksList = dashboardData
@@ -503,7 +518,7 @@ export const App: React.FC = () => {
       {/* Top Header */}
       <Header
         activeModule={activeModule}
-        onSelectModule={setActiveModule}
+        onSelectModule={handleSelectModule}
         onNewTask={handleOpenNewTask}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}

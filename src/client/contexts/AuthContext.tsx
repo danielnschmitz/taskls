@@ -25,6 +25,52 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const TOKEN_STORAGE_KEY = 'taskls_auth_token';
 const USER_STORAGE_KEY = 'taskls_auth_user';
 
+// Interceptor global do fetch para injetar o token Bearer e capturar 401
+// Configurado no escopo do módulo para garantir que esteja ativo antes de qualquer componente React montar
+const originalFetch = window.fetch.bind(window);
+
+window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  let urlStr = '';
+  if (typeof input === 'string') {
+    urlStr = input;
+  } else if (input instanceof URL) {
+    urlStr = input.toString();
+  } else if (input && typeof (input as Request).url === 'string') {
+    urlStr = (input as Request).url;
+  }
+
+  // Se for chamada para /api e não for /api/auth/login
+  if (urlStr.includes('/api/') && !urlStr.includes('/api/auth/login')) {
+    const currentToken = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (currentToken) {
+      if (input instanceof Request) {
+        if (!input.headers.has('Authorization')) {
+          const newHeaders = new Headers(input.headers);
+          newHeaders.set('Authorization', `Bearer ${currentToken}`);
+          input = new Request(input, { headers: newHeaders });
+        }
+      } else {
+        init = init ? { ...init } : {};
+        const headers = new Headers(init.headers || {});
+        if (!headers.has('Authorization')) {
+          headers.set('Authorization', `Bearer ${currentToken}`);
+        }
+        init.headers = headers;
+      }
+    }
+  }
+
+  const response = await originalFetch(input, init);
+
+  // Se retornar 401 em uma rota protegida da API, notifica o AuthProvider
+  if (response.status === 401 && urlStr.includes('/api/') && !urlStr.includes('/api/auth/login')) {
+    console.warn('[Auth] Requisição rejeitada com 401. Disparando evento de não autorizado:', urlStr);
+    window.dispatchEvent(new CustomEvent('taskls:unauthorized'));
+  }
+
+  return response;
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_STORAGE_KEY));
   const [user, setUser] = useState<AuthUser | null>(() => {
@@ -43,43 +89,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_STORAGE_KEY);
     localStorage.removeItem(USER_STORAGE_KEY);
+    localStorage.removeItem('taskls_active_module');
     setToken(null);
     setUser(null);
   }, []);
 
-  // Interceptar globalmente o fetch para injetar o token e capturar 401
+  // Ouvir eventos de não autorizado (401) disparados pelo interceptor
   useEffect(() => {
-    const originalFetch = window.fetch;
-
-    window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-      const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
-
-      // Se for chamada para /api e não for /api/auth/login, anexa o token
-      if (urlStr.includes('/api/') && !urlStr.includes('/api/auth/login')) {
-        const currentToken = localStorage.getItem(TOKEN_STORAGE_KEY);
-        if (currentToken) {
-          init = init || {};
-          const headers = new Headers(init.headers || {});
-          if (!headers.has('Authorization')) {
-            headers.set('Authorization', `Bearer ${currentToken}`);
-          }
-          init.headers = headers;
-        }
-      }
-
-      const response = await originalFetch(input, init);
-
-      // Se retornar 401 em uma rota protegida, desloga
-      if (response.status === 401 && urlStr.includes('/api/') && !urlStr.includes('/api/auth/login')) {
-        console.warn('[Auth] Requisição rejeitada com 401. Realizando logout automático.');
-        logout();
-      }
-
-      return response;
+    const handleUnauthorized = () => {
+      console.warn('[Auth] Sessão expirada ou não autorizada. Executando logout.');
+      logout();
     };
 
+    window.addEventListener('taskls:unauthorized', handleUnauthorized);
     return () => {
-      window.fetch = originalFetch;
+      window.removeEventListener('taskls:unauthorized', handleUnauthorized);
     };
   }, [logout]);
 
@@ -102,7 +126,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(data.user);
           localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(data.user));
           setToken(savedToken);
-        } else {
+        } else if (res.status === 401) {
           logout();
         }
       } catch (err) {
