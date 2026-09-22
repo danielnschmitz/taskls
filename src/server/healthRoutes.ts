@@ -235,7 +235,7 @@ healthRouter.get('/summary', async (req: Request, res: Response): Promise<void> 
     const previousWeight = secondLatest ? secondLatest.weight : null;
     const recentDiff = previousWeight !== null ? Number((currentWeight - previousWeight).toFixed(2)) : 0;
     const initialWeight = goal?.initial_weight || first.weight;
-    const totalDiff = Number((currentWeight - first.weight).toFixed(2));
+    const totalDiff = Number((currentWeight - initialWeight).toFixed(2));
 
     let minWeight = currentWeight;
     let maxWeight = currentWeight;

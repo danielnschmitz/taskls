@@ -552,7 +552,7 @@ export const HealthModule: React.FC<HealthModuleProps> = ({ onShowToast }) => {
           </div>
           <p className="text-[11px] text-slate-400 mt-1">
             {summary && summary.initialWeight !== null
-              ? `Desde o primeiro registro (${summary.initialWeight.toFixed(1).replace('.', ',')} kg)`
+              ? `Desde o peso inicial (${summary.initialWeight.toFixed(1).replace('.', ',')} kg)`
               : 'Primeiro registro'}
           </p>
         </div>
