@@ -1406,23 +1406,23 @@ export const HealthModule: React.FC<HealthModuleProps> = ({ onShowToast }) => {
             </div>
             <p className="text-[11px] text-slate-400 mt-1">
               {measuresSummary?.cintura.currentLoggedAt
-                ? `Última: ${new Date(measuresSummary.cintura.currentLoggedAt).toLocaleDateString('pt-BR')} às ${new Date(measuresSummary.cintura.currentLoggedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+                ? `${measuresSummary.cintura.initial !== null && measuresSummary.cintura.totalEntries > 1 ? `1ª medição: ${measuresSummary.cintura.initial.toFixed(1).replace('.', ',')} cm · ` : ''}Última: ${new Date(measuresSummary.cintura.currentLoggedAt).toLocaleDateString('pt-BR')} às ${new Date(measuresSummary.cintura.currentLoggedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
                 : 'Nenhum registro ainda'}
             </p>
           </div>
 
-          {/* 2. Variação Cintura */}
+          {/* 2. Variação Cintura (Em relação à 1ª Medição) */}
           <div className="bg-[#0c1222]/90 border border-slate-800 p-5 rounded-3xl shadow-xl relative overflow-hidden group hover:border-slate-700 transition-all">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Variação Cintura</span>
               <div className={`w-8 h-8 rounded-xl flex items-center justify-center border ${
-                (measuresSummary?.cintura.recentDiff || 0) < 0
+                (measuresSummary?.cintura.totalDiff || 0) < 0
                   ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                  : (measuresSummary?.cintura.recentDiff || 0) > 0
+                  : (measuresSummary?.cintura.totalDiff || 0) > 0
                   ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                   : 'bg-slate-800 text-slate-400 border-slate-700'
               }`}>
-                {(measuresSummary?.cintura.recentDiff || 0) <= 0 ? (
+                {(measuresSummary?.cintura.totalDiff || 0) <= 0 ? (
                   <TrendingDown className="w-4 h-4" />
                 ) : (
                   <TrendingUp className="w-4 h-4" />
@@ -1431,22 +1431,24 @@ export const HealthModule: React.FC<HealthModuleProps> = ({ onShowToast }) => {
             </div>
             <div className="mt-3 flex items-baseline gap-2">
               <span className={`text-3xl font-black tracking-tight ${
-                (measuresSummary?.cintura.recentDiff || 0) < 0
+                (measuresSummary?.cintura.totalDiff || 0) < 0
                   ? 'text-emerald-400'
-                  : (measuresSummary?.cintura.recentDiff || 0) > 0
+                  : (measuresSummary?.cintura.totalDiff || 0) > 0
                   ? 'text-amber-400'
                   : 'text-slate-300'
               }`}>
-                {measuresSummary && measuresSummary.cintura.previous !== null
-                  ? `${measuresSummary.cintura.recentDiff > 0 ? '+' : ''}${measuresSummary.cintura.recentDiff.toFixed(2).replace('.', ',')}`
+                {measuresSummary && measuresSummary.cintura.totalEntries > 0
+                  ? `${measuresSummary.cintura.totalDiff > 0 ? '+' : ''}${measuresSummary.cintura.totalDiff.toFixed(1).replace('.', ',')}`
                   : '--'}
               </span>
               <span className="text-sm font-bold text-slate-400">cm</span>
             </div>
             <p className="text-[11px] text-slate-400 mt-1">
-              {measuresSummary && measuresSummary.cintura.previous !== null
-                ? `vs. anterior (${measuresSummary.cintura.previous.toFixed(1).replace('.', ',')} cm) | Total: ${measuresSummary.cintura.totalDiff > 0 ? '+' : ''}${measuresSummary.cintura.totalDiff.toFixed(1).replace('.', ',')} cm`
-                : 'Cadastre mais medições para comparar'}
+              {measuresSummary && measuresSummary.cintura.totalEntries > 1 && measuresSummary.cintura.initial !== null
+                ? `Desde a 1ª medição (${measuresSummary.cintura.initial.toFixed(1).replace('.', ',')} cm) · vs. anterior: ${measuresSummary.cintura.recentDiff > 0 ? '+' : ''}${measuresSummary.cintura.recentDiff.toFixed(1).replace('.', ',')} cm`
+                : measuresSummary && measuresSummary.cintura.totalEntries === 1 && measuresSummary.cintura.initial !== null
+                ? `Primeira medição registrada (${measuresSummary.cintura.initial.toFixed(1).replace('.', ',')} cm)`
+                : 'Cadastre medições para comparar'}
             </p>
           </div>
 
@@ -1467,23 +1469,23 @@ export const HealthModule: React.FC<HealthModuleProps> = ({ onShowToast }) => {
             </div>
             <p className="text-[11px] text-slate-400 mt-1">
               {measuresSummary?.abdomen.currentLoggedAt
-                ? `Última: ${new Date(measuresSummary.abdomen.currentLoggedAt).toLocaleDateString('pt-BR')} às ${new Date(measuresSummary.abdomen.currentLoggedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+                ? `${measuresSummary.abdomen.initial !== null && measuresSummary.abdomen.totalEntries > 1 ? `1ª medição: ${measuresSummary.abdomen.initial.toFixed(1).replace('.', ',')} cm · ` : ''}Última: ${new Date(measuresSummary.abdomen.currentLoggedAt).toLocaleDateString('pt-BR')} às ${new Date(measuresSummary.abdomen.currentLoggedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
                 : 'Nenhum registro ainda'}
             </p>
           </div>
 
-          {/* 4. Variação Abdômen */}
+          {/* 4. Variação Abdômen (Em relação à 1ª Medição) */}
           <div className="bg-[#0c1222]/90 border border-slate-800 p-5 rounded-3xl shadow-xl relative overflow-hidden group hover:border-slate-700 transition-all">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Variação Abdômen</span>
               <div className={`w-8 h-8 rounded-xl flex items-center justify-center border ${
-                (measuresSummary?.abdomen.recentDiff || 0) < 0
+                (measuresSummary?.abdomen.totalDiff || 0) < 0
                   ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                  : (measuresSummary?.abdomen.recentDiff || 0) > 0
+                  : (measuresSummary?.abdomen.totalDiff || 0) > 0
                   ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                   : 'bg-slate-800 text-slate-400 border-slate-700'
               }`}>
-                {(measuresSummary?.abdomen.recentDiff || 0) <= 0 ? (
+                {(measuresSummary?.abdomen.totalDiff || 0) <= 0 ? (
                   <TrendingDown className="w-4 h-4" />
                 ) : (
                   <TrendingUp className="w-4 h-4" />
@@ -1492,22 +1494,24 @@ export const HealthModule: React.FC<HealthModuleProps> = ({ onShowToast }) => {
             </div>
             <div className="mt-3 flex items-baseline gap-2">
               <span className={`text-3xl font-black tracking-tight ${
-                (measuresSummary?.abdomen.recentDiff || 0) < 0
+                (measuresSummary?.abdomen.totalDiff || 0) < 0
                   ? 'text-emerald-400'
-                  : (measuresSummary?.abdomen.recentDiff || 0) > 0
+                  : (measuresSummary?.abdomen.totalDiff || 0) > 0
                   ? 'text-amber-400'
                   : 'text-slate-300'
               }`}>
-                {measuresSummary && measuresSummary.abdomen.previous !== null
-                  ? `${measuresSummary.abdomen.recentDiff > 0 ? '+' : ''}${measuresSummary.abdomen.recentDiff.toFixed(2).replace('.', ',')}`
+                {measuresSummary && measuresSummary.abdomen.totalEntries > 0
+                  ? `${measuresSummary.abdomen.totalDiff > 0 ? '+' : ''}${measuresSummary.abdomen.totalDiff.toFixed(1).replace('.', ',')}`
                   : '--'}
               </span>
               <span className="text-sm font-bold text-slate-400">cm</span>
             </div>
             <p className="text-[11px] text-slate-400 mt-1">
-              {measuresSummary && measuresSummary.abdomen.previous !== null
-                ? `vs. anterior (${measuresSummary.abdomen.previous.toFixed(1).replace('.', ',')} cm) | Total: ${measuresSummary.abdomen.totalDiff > 0 ? '+' : ''}${measuresSummary.abdomen.totalDiff.toFixed(1).replace('.', ',')} cm`
-                : 'Cadastre mais medições para comparar'}
+              {measuresSummary && measuresSummary.abdomen.totalEntries > 1 && measuresSummary.abdomen.initial !== null
+                ? `Desde a 1ª medição (${measuresSummary.abdomen.initial.toFixed(1).replace('.', ',')} cm) · vs. anterior: ${measuresSummary.abdomen.recentDiff > 0 ? '+' : ''}${measuresSummary.abdomen.recentDiff.toFixed(1).replace('.', ',')} cm`
+                : measuresSummary && measuresSummary.abdomen.totalEntries === 1 && measuresSummary.abdomen.initial !== null
+                ? `Primeira medição registrada (${measuresSummary.abdomen.initial.toFixed(1).replace('.', ',')} cm)`
+                : 'Cadastre medições para comparar'}
             </p>
           </div>
         </div>

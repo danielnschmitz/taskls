@@ -535,7 +535,7 @@ healthRouter.get('/measures/summary', async (req: Request, res: Response): Promi
          logged_at AS "loggedAt"
        FROM health_body_measures
        WHERE user_id = $1
-       ORDER BY logged_at ASC`,
+       ORDER BY logged_at ASC, created_at ASC, id ASC`,
       [userId]
     );
 
