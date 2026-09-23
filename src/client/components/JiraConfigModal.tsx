@@ -38,6 +38,18 @@ const DEFAULT_POSSIBLE_STATUSES = [
   'Desativado',
 ];
 
+const DEFAULT_IGNORED_FIELDS = [
+  'Classificação',
+  '[BI] Priorizado',
+  'labels',
+  'IssueParentAssociation',
+  'Link',
+  'Attachment',
+  '[BI] Desenvolvedor',
+  '[BI] Desenvolvimento',
+  '[BI] Finalizado',
+];
+
 export const JiraConfigModal: React.FC<JiraConfigModalProps> = ({
   isOpen,
   onClose,
@@ -59,6 +71,8 @@ export const JiraConfigModal: React.FC<JiraConfigModalProps> = ({
   const [newProjectInput, setNewProjectInput] = useState('');
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([...DEFAULT_POSSIBLE_STATUSES]);
   const [allPossibleStatuses, setAllPossibleStatuses] = useState<string[]>([...DEFAULT_POSSIBLE_STATUSES]);
+  const [ignoredFields, setIgnoredFields] = useState<string[]>([...DEFAULT_IGNORED_FIELDS]);
+  const [newIgnoredFieldInput, setNewIgnoredFieldInput] = useState('');
 
   // Load existing settings on modal open
   useEffect(() => {
@@ -74,6 +88,9 @@ export const JiraConfigModal: React.FC<JiraConfigModalProps> = ({
         if (data.hasApiToken) setHasExistingToken(true);
         if (data.allPossibleStatuses && data.allPossibleStatuses.length > 0) {
           setAllPossibleStatuses(data.allPossibleStatuses);
+        }
+        if (data.ignored_fields && Array.isArray(data.ignored_fields)) {
+          setIgnoredFields(data.ignored_fields);
         }
       })
       .catch((err) => {
@@ -100,6 +117,24 @@ export const JiraConfigModal: React.FC<JiraConfigModalProps> = ({
   // Remove project tag
   const handleRemoveProject = (projToRemove: string) => {
     setProjects(projects.filter((p) => p !== projToRemove));
+  };
+
+  // Handlers para campos ignorados nas revisões
+  const handleAddIgnoredField = () => {
+    const raw = newIgnoredFieldInput.trim();
+    if (!raw) return;
+    if (!ignoredFields.some((f) => f.toLowerCase() === raw.toLowerCase())) {
+      setIgnoredFields([...ignoredFields, raw]);
+    }
+    setNewIgnoredFieldInput('');
+  };
+
+  const handleRemoveIgnoredField = (fieldToRemove: string) => {
+    setIgnoredFields(ignoredFields.filter((f) => f !== fieldToRemove));
+  };
+
+  const handleResetIgnoredFields = () => {
+    setIgnoredFields([...DEFAULT_IGNORED_FIELDS]);
   };
 
   // Toggle status selection
@@ -165,6 +200,7 @@ export const JiraConfigModal: React.FC<JiraConfigModalProps> = ({
         email: email.trim(),
         projects,
         statuses: selectedStatuses,
+        ignored_fields: ignoredFields,
       };
 
       if (apiToken.trim()) {
@@ -457,6 +493,77 @@ export const JiraConfigModal: React.FC<JiraConfigModalProps> = ({
                     <span className="line-clamp-1">{testResult.message}</span>
                   </div>
                 )}
+              </div>
+            </div>
+
+            {/* Section 4: Campos Desconsiderados nas Revisões */}
+            <div className="space-y-3 pt-4 border-t border-slate-800/80">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="block text-xs font-bold text-slate-200 uppercase tracking-wider">
+                    4. Campos Desconsiderados nas Revisões
+                  </label>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Alterações nesses campos no Jira não aparecerão no painel de revisões e as pendências existentes deles serão limpas.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleResetIgnoredFields}
+                  className="text-xs text-indigo-400 hover:text-indigo-300 font-medium whitespace-nowrap"
+                  title="Restaurar a lista padrão recomendada"
+                >
+                  Restaurar Padrões
+                </button>
+              </div>
+
+              {/* Badges dos campos ignorados */}
+              <div className="flex flex-wrap items-center gap-2 p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 min-h-[46px]">
+                {ignoredFields.length === 0 ? (
+                  <span className="text-xs text-slate-500 italic">Nenhum campo desconsiderado. Todas as alterações serão notificadas.</span>
+                ) : (
+                  ignoredFields.map((field) => (
+                    <span
+                      key={field}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/90 text-slate-300 border border-slate-700 text-xs font-medium shadow-sm hover:border-slate-600 transition-colors"
+                    >
+                      <span>{field}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveIgnoredField(field)}
+                        className="hover:text-rose-400 text-slate-400 transition-colors"
+                        title={`Remover ${field} da lista de desconsiderados`}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </span>
+                  ))
+                )}
+              </div>
+
+              {/* Input para adicionar novo campo */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  placeholder="Nome do campo no Jira (ex: labels, Classificação, [BI] Priorizado)"
+                  value={newIgnoredFieldInput}
+                  onChange={(e) => setNewIgnoredFieldInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddIgnoredField();
+                    }
+                  }}
+                  className="flex-1 px-3 py-2 text-xs bg-slate-900 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddIgnoredField}
+                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-all border border-slate-700"
+                >
+                  <Plus className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Adicionar</span>
+                </button>
               </div>
             </div>
 

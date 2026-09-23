@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   BellRing,
   RefreshCw,
@@ -25,7 +25,93 @@ import {
   Clock,
   Loader2,
 } from 'lucide-react';
-import { JiraReviewEvent, JiraEventsResponse } from '../types';
+import { JiraReviewEvent, JiraEventsResponse, JiraReviewGroup } from '../types';
+
+/**
+ * Agrupa alterações integradas juntas do mesmo card para revisão
+ * - Apenas eventos com o mesmo status de revisão são agrupados (pendentes com pendentes, revisados com revisados)
+ * - Critério: mesmo card (issueKey) e mesmo changelog (ID em eventId) OU fluxo contíguo (mesmo autor e dentro de 90s)
+ * - ORDENAÇÃO INTERNA: as alterações dentro de cada card são ordenadas estritamente da MAIS ANTIGA para a MAIS RECENTE
+ * - ORDENAÇÃO EXTERNA: os cards no feed são ordenados com as atividades mais recentes primeiro
+ */
+function groupJiraEvents(events: JiraReviewEvent[]): JiraReviewGroup[] {
+  const groups: JiraReviewGroup[] = [];
+
+  for (const event of events) {
+    let matchedGroup: JiraReviewGroup | undefined;
+
+    // Extrai ID do changelog se for evento chg-${issueKey}-${changelogId}-${field}
+    let changelogId: string | null = null;
+    if (event.eventId && event.eventId.startsWith(`chg-${event.issueKey}-`)) {
+      const parts = event.eventId.split('-');
+      if (parts.length >= 4) {
+        changelogId = parts[parts.length - 2];
+      }
+    }
+
+    const eventTimeMs = new Date(event.eventTime).getTime();
+
+    for (const g of groups) {
+      if (g.issueKey !== event.issueKey) continue;
+      if (g.isReviewed !== event.isReviewed) continue;
+
+      // 1. Mesmo changelog do Jira
+      if (changelogId) {
+        const hasMatchingChangelog = g.events.some((existingEv) => {
+          if (existingEv.eventId && existingEv.eventId.startsWith(`chg-${event.issueKey}-`)) {
+            const exParts = existingEv.eventId.split('-');
+            const exChgId = exParts.length >= 4 ? exParts[exParts.length - 2] : null;
+            return exChgId === changelogId;
+          }
+          return false;
+        });
+        if (hasMatchingChangelog) {
+          matchedGroup = g;
+          break;
+        }
+      }
+
+      // 2. Fluxo contíguo no mesmo card (mesmo autor e até 90 segundos de diferença)
+      const sameAuthor = (g.authorName || '').toLowerCase() === (event.authorName || '').toLowerCase();
+      const timeDiff = Math.abs(new Date(g.eventTime).getTime() - eventTimeMs);
+      if (sameAuthor && timeDiff <= 90000) {
+        matchedGroup = g;
+        break;
+      }
+    }
+
+    if (matchedGroup) {
+      matchedGroup.events.push(event);
+      if (eventTimeMs > new Date(matchedGroup.eventTime).getTime()) {
+        matchedGroup.eventTime = event.eventTime;
+      }
+    } else {
+      groups.push({
+        groupId: changelogId ? `grp-${event.issueKey}-${changelogId}` : `grp-${event.issueKey}-${event.id}`,
+        issueKey: event.issueKey,
+        issueId: event.issueId,
+        projectKey: event.projectKey,
+        summary: event.summary,
+        authorName: event.authorName,
+        authorAvatar: event.authorAvatar,
+        eventTime: event.eventTime,
+        cardData: event.cardData,
+        isReviewed: event.isReviewed,
+        events: [event],
+      });
+    }
+  }
+
+  // Ordenação interna: da MAIS ANTIGA para a MAIS RECENTE dentro do card
+  for (const g of groups) {
+    g.events.sort((a, b) => new Date(a.eventTime).getTime() - new Date(b.eventTime).getTime());
+  }
+
+  // Ordenação externa: cards com alterações mais recentes primeiro no feed
+  groups.sort((a, b) => new Date(b.eventTime).getTime() - new Date(a.eventTime).getTime());
+
+  return groups;
+}
 
 interface JiraReviewPanelProps {
   onShowToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
@@ -141,40 +227,51 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
     }
   };
 
-  // Mark single event as reviewed
-  const handleReviewEvent = async (event: JiraReviewEvent) => {
+  // Agrupar alterações integradas juntas de um mesmo card para exibição conjunta
+  const groupedEvents = useMemo(() => groupJiraEvents(events), [events]);
+
+  // Mark group of events as reviewed
+  const handleReviewGroup = async (group: JiraReviewGroup) => {
+    const eventIds = group.events.map((e) => e.id);
+
     // Optimistic UI update
-    setEvents((prev) => prev.filter((e) => e.id !== event.id));
-    setTotalPending((prev) => Math.max(0, prev - 1));
-    setTotalReviewed((prev) => prev + 1);
+    setEvents((prev) => prev.filter((e) => !eventIds.includes(e.id)));
+    setTotalPending((prev) => Math.max(0, prev - eventIds.length));
+    setTotalReviewed((prev) => prev + eventIds.length);
 
     try {
-      const res = await fetch(`/api/jira/events/${event.id}/review`, {
+      const res = await fetch('/api/jira/events/review-batch', {
         method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: eventIds }),
       });
-      if (!res.ok) throw new Error('Falha ao revisar');
-      onShowToast(`Evento de ${event.issueKey} marcado como revisado!`, 'success');
+      if (!res.ok) throw new Error('Falha ao revisar lote');
+      const plural = eventIds.length > 1 ? `${eventIds.length} alterações revisadas` : 'Evolução revisada';
+      onShowToast(`${group.issueKey}: ${plural} com sucesso!`, 'success');
       if (onRefreshCount) onRefreshCount();
     } catch (err) {
-      // Revert if failed
       fetchEvents(true);
-      onShowToast('Erro ao marcar evento como revisado', 'error');
+      onShowToast('Erro ao marcar alterações como revisadas', 'error');
     }
   };
 
-  // Unreview event (move back to pending)
-  const handleUnreviewEvent = async (event: JiraReviewEvent) => {
+  // Unreview group of events (move back to pending)
+  const handleUnreviewGroup = async (group: JiraReviewGroup) => {
+    const eventIds = group.events.map((e) => e.id);
+
     // Optimistic UI update
-    setEvents((prev) => prev.filter((e) => e.id !== event.id));
-    setTotalReviewed((prev) => Math.max(0, prev - 1));
-    setTotalPending((prev) => prev + 1);
+    setEvents((prev) => prev.filter((e) => !eventIds.includes(e.id)));
+    setTotalReviewed((prev) => Math.max(0, prev - eventIds.length));
+    setTotalPending((prev) => prev + eventIds.length);
 
     try {
-      const res = await fetch(`/api/jira/events/${event.id}/unreview`, {
+      const res = await fetch('/api/jira/events/unreview-batch', {
         method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: eventIds }),
       });
-      if (!res.ok) throw new Error('Falha ao reverter');
-      onShowToast(`Evento de ${event.issueKey} retornado para pendentes.`, 'info');
+      if (!res.ok) throw new Error('Falha ao reverter lote');
+      onShowToast(`${group.issueKey}: retornado para pendentes.`, 'info');
       if (onRefreshCount) onRefreshCount();
     } catch (err) {
       fetchEvents(true);
@@ -231,7 +328,18 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
             <h2 className="text-lg font-bold text-white tracking-tight flex flex-wrap items-center gap-2">
               <span>Revisões de Evoluções Jira</span>
               <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                {totalPending} {totalPending === 1 ? 'pendente' : 'pendentes'}
+                {activeTab === 'pending' ? (
+                  <>
+                    {groupedEvents.length} {groupedEvents.length === 1 ? 'card pendente' : 'cards pendentes'}
+                    {totalPending !== groupedEvents.length && (
+                      <span className="opacity-75 font-normal ml-1">({totalPending} alterações)</span>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {totalPending} {totalPending === 1 ? 'pendente' : 'pendentes'}
+                  </>
+                )}
               </span>
               <span
                 className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-semibold"
@@ -303,7 +411,7 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
             <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
               activeTab === 'pending' ? 'bg-white/20 text-white' : 'bg-slate-800 text-slate-400'
             }`}>
-              {totalPending}
+              {activeTab === 'pending' ? groupedEvents.length : totalPending}
             </span>
           </button>
 
@@ -318,7 +426,7 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
             <Check className="w-3 h-3 text-emerald-400" />
             <span>Já Revisados</span>
             <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-800 text-slate-400">
-              {totalReviewed}
+              {activeTab === 'reviewed' ? groupedEvents.length : totalReviewed}
             </span>
           </button>
         </div>
@@ -397,7 +505,7 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
           <Loader2 className="w-7 h-7 animate-spin text-blue-500" />
           <p className="text-xs text-slate-400 font-semibold">Carregando eventos do Jira...</p>
         </div>
-      ) : events.length === 0 ? (
+      ) : groupedEvents.length === 0 ? (
         <div className="py-16 text-center text-slate-400 bg-slate-900/40 rounded-2xl border border-dashed border-slate-800 p-8 flex flex-col items-center justify-center gap-2">
           {activeTab === 'pending' ? (
             <>
@@ -426,115 +534,143 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {events.map((event) => (
-            <div
-              key={event.id}
-              className={`group relative rounded-xl border p-4 transition-all duration-200 flex flex-col justify-between min-w-0 overflow-hidden ${
-                event.cardData?.isBlocked || event.eventType === 'flagged_changed'
-                  ? 'bg-red-500/10 border-red-500/30 hover:border-red-500/50'
-                  : 'bg-slate-900/90 border-slate-800 hover:border-blue-500/40 hover:bg-slate-850'
-              }`}
-            >
-              <div className="min-w-0">
-                {/* Event Top Bar: Author, Time ago, Event Type Badge */}
-                <div className="flex items-center justify-between gap-2 mb-2.5 pb-2 border-b border-slate-800/80 text-[11px] min-w-0">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    {event.authorAvatar ? (
-                      <img
-                        src={event.authorAvatar}
-                        alt=""
-                        className="w-4 h-4 rounded-full object-cover flex-shrink-0"
-                      />
-                    ) : (
-                      <User className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                    )}
-                    <span className="font-semibold text-slate-200 truncate" title={event.authorName}>
-                      {event.authorName}
-                    </span>
-                    <span className="text-slate-500">·</span>
-                    <span className="text-slate-400 text-[10px] whitespace-nowrap">
-                      {formatTimeAgo(event.eventTime)}
-                    </span>
-                  </div>
+          {groupedEvents.map((group) => {
+            const hasBlocked =
+              group.cardData?.isBlocked ||
+              group.events.some((e) => e.eventType === 'flagged_changed' && e.diff.isBlocked);
 
-                  {/* Event Type Badge */}
-                  <EventTypeBadge type={event.eventType} />
-                </div>
-
-                {/* Jira Card Header: Key + External Link + Status */}
-                <div className="flex items-center justify-between gap-2 mb-1.5 min-w-0">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <a
-                      href={event.cardData?.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs font-black text-blue-400 hover:text-blue-300 hover:underline flex items-center gap-1 min-w-0"
-                      title={`Abrir ${event.issueKey} no Jira`}
-                    >
-                      <span className="truncate">{event.issueKey}</span>
-                      <ExternalLink className="w-3 h-3 opacity-60 group-hover:opacity-100 flex-shrink-0" />
-                    </a>
-
-                    {event.cardData?.isBlocked && (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-red-500/25 text-red-200 border border-red-500/40 text-[9px] font-black uppercase tracking-wider flex-shrink-0">
-                        <AlertOctagon className="w-2.5 h-2.5 text-red-300" />
-                        Bloqueado
+            return (
+              <div
+                key={group.groupId}
+                className={`group relative rounded-xl border p-4 transition-all duration-200 flex flex-col justify-between min-w-0 overflow-hidden ${
+                  hasBlocked
+                    ? 'bg-red-500/10 border-red-500/30 hover:border-red-500/50'
+                    : 'bg-slate-900/90 border-slate-800 hover:border-blue-500/40 hover:bg-slate-850'
+                }`}
+              >
+                <div className="min-w-0">
+                  {/* Event Top Bar: Author, Time ago, Event Type / Batch Count Badge */}
+                  <div className="flex items-center justify-between gap-2 mb-2.5 pb-2 border-b border-slate-800/80 text-[11px] min-w-0">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      {group.authorAvatar ? (
+                        <img
+                          src={group.authorAvatar}
+                          alt=""
+                          className="w-4 h-4 rounded-full object-cover flex-shrink-0"
+                        />
+                      ) : (
+                        <User className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                      )}
+                      <span className="font-semibold text-slate-200 truncate" title={group.authorName}>
+                        {group.authorName}
                       </span>
+                      <span className="text-slate-500">·</span>
+                      <span className="text-slate-400 text-[10px] whitespace-nowrap">
+                        {formatTimeAgo(group.eventTime)}
+                      </span>
+                    </div>
+
+                    {/* Batch Badge or Event Type Badge */}
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {group.events.length > 1 ? (
+                        <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/40 text-[10px] font-bold">
+                          {group.events.length} alterações
+                        </span>
+                      ) : (
+                        <EventTypeBadge type={group.events[0]?.eventType || 'field_updated'} />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Jira Card Header: Key + External Link + Status */}
+                  <div className="flex items-center justify-between gap-2 mb-1.5 min-w-0">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <a
+                        href={group.cardData?.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-black text-blue-400 hover:text-blue-300 hover:underline flex items-center gap-1 min-w-0"
+                        title={`Abrir ${group.issueKey} no Jira`}
+                      >
+                        <span className="truncate">{group.issueKey}</span>
+                        <ExternalLink className="w-3 h-3 opacity-60 group-hover:opacity-100 flex-shrink-0" />
+                      </a>
+
+                      {group.cardData?.isBlocked && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-red-500/25 text-red-200 border border-red-500/40 text-[9px] font-black uppercase tracking-wider flex-shrink-0">
+                          <AlertOctagon className="w-2.5 h-2.5 text-red-300" />
+                          Bloqueado
+                        </span>
+                      )}
+                    </div>
+
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700 flex-shrink-0">
+                      {group.cardData?.displayStatus || 'Jira'}
+                    </span>
+                  </div>
+
+                  {/* Card Title / Summary */}
+                  <h4 className="text-xs font-semibold text-slate-100 line-clamp-2 mb-3 leading-snug break-words">
+                    {group.summary}
+                  </h4>
+
+                  {/* Diffs List (strictly ordered from oldest to newest) */}
+                  <div className="space-y-2 mb-3.5 min-w-0">
+                    {group.events.map((ev, idx) => (
+                      <div key={ev.id} className="min-w-0">
+                        {group.events.length > 1 && (
+                          <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1 px-0.5">
+                            <span className="font-semibold text-slate-400">
+                              #{idx + 1} · {ev.diff?.label || ev.diff?.field || ev.eventType}
+                            </span>
+                            <span className="text-[9px] text-slate-500">
+                              {formatTimeAgo(ev.eventTime)}
+                            </span>
+                          </div>
+                        )}
+                        <EventDeltaBox event={ev} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Action Button & Metadata Footer */}
+                <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                    <Tag className="w-2.5 h-2.5" />
+                    <span>{group.projectKey}</span>
+                    {group.cardData?.assignee && (
+                      <>
+                        <span>·</span>
+                        <span className="truncate max-w-[100px]">{group.cardData.assignee.displayName.split(' ')[0]}</span>
+                      </>
                     )}
                   </div>
 
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700 flex-shrink-0">
-                    {event.cardData?.displayStatus || 'Jira'}
-                  </span>
-                </div>
-
-                {/* Card Title / Summary */}
-                <h4 className="text-xs font-semibold text-slate-100 line-clamp-2 mb-3 leading-snug break-words">
-                  {event.summary}
-                </h4>
-
-                {/* Delta Box: O QUE MUDOU NO EVENTO */}
-                <div className="mb-3.5 min-w-0">
-                  <EventDeltaBox event={event} />
-                </div>
-              </div>
-
-              {/* Action Button & Metadata Footer */}
-              <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
-                  <Tag className="w-2.5 h-2.5" />
-                  <span>{event.projectKey}</span>
-                  {event.cardData?.assignee && (
-                    <>
-                      <span>·</span>
-                      <span className="truncate max-w-[100px]">{event.cardData.assignee.displayName.split(' ')[0]}</span>
-                    </>
+                  {/* Mark as Reviewed / Undo Button */}
+                  {activeTab === 'pending' ? (
+                    <button
+                      onClick={() => handleReviewGroup(group)}
+                      className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/40 text-xs font-bold transition-all shadow-sm group-hover:bg-emerald-600 group-hover:text-white"
+                      title="Marcar todas as alterações deste card como revisadas"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      <span>{group.events.length > 1 ? `Revisar (${group.events.length})` : 'Revisar'}</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleUnreviewGroup(group)}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-700 transition-all"
+                      title="Mover alterações deste card de volta para pendentes"
+                    >
+                      <RotateCcw className="w-3 h-3 text-amber-400" />
+                      <span>{group.events.length > 1 ? `Desfazer (${group.events.length})` : 'Desfazer'}</span>
+                    </button>
                   )}
                 </div>
-
-                {/* Mark as Reviewed / Undo Button */}
-                {activeTab === 'pending' ? (
-                  <button
-                    onClick={() => handleReviewEvent(event)}
-                    className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/40 text-xs font-bold transition-all shadow-sm group-hover:bg-emerald-600 group-hover:text-white"
-                    title="Marcar como revisado (concluir tarefa)"
-                  >
-                    <Check className="w-3.5 h-3.5" />
-                    <span>Revisar</span>
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleUnreviewEvent(event)}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-700 transition-all"
-                    title="Mover de volta para pendentes"
-                  >
-                    <RotateCcw className="w-3 h-3 text-amber-400" />
-                    <span>Desfazer</span>
-                  </button>
-                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

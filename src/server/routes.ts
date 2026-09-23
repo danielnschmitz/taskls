@@ -24,12 +24,16 @@ import {
   testJiraConnection,
   getJiraDemandsForWeek,
   ALL_POSSIBLE_STATUSES,
+  DEFAULT_IGNORED_FIELDS,
 } from './jira';
 import {
   listJiraEvents,
   markEventAsReviewed,
   unmarkEventAsReviewed,
+  markBatchEventsAsReviewed,
+  unmarkBatchEventsAsReviewed,
   markAllEventsAsReviewed,
+  cleanupIgnoredJiraEvents,
   syncJiraEventsFromRest,
   getPendingEventsCount,
 } from './jiraEvents';
@@ -937,6 +941,8 @@ router.get('/jira/settings', async (req: Request, res: Response) => {
       projects: config.projects,
       statuses: config.statuses,
       custom_fields: config.custom_fields,
+      ignored_fields: config.ignored_fields || DEFAULT_IGNORED_FIELDS,
+      defaultIgnoredFields: DEFAULT_IGNORED_FIELDS,
       hasApiToken: Boolean(config.api_token),
       allPossibleStatuses: ALL_POSSIBLE_STATUSES,
     });
@@ -958,7 +964,7 @@ router.put('/jira/settings', async (req: Request, res: Response) => {
       return;
     }
 
-    const { domain, email, api_token, projects, statuses, custom_fields } = req.body;
+    const { domain, email, api_token, projects, statuses, custom_fields, ignored_fields } = req.body;
 
     const updated = await saveJiraConfig({
       ...(domain !== undefined && { domain }),
@@ -967,7 +973,13 @@ router.put('/jira/settings', async (req: Request, res: Response) => {
       ...(projects !== undefined && { projects }),
       ...(statuses !== undefined && { statuses }),
       ...(custom_fields !== undefined && { custom_fields }),
+      ...(ignored_fields !== undefined && { ignored_fields }),
     });
+
+    // Se a lista de campos ignorados foi atualizada, limpa pendências existentes desses campos
+    if (ignored_fields !== undefined) {
+      await cleanupIgnoredJiraEvents(updated.ignored_fields).catch(() => {});
+    }
 
     res.json({
       success: true,
@@ -978,6 +990,7 @@ router.put('/jira/settings', async (req: Request, res: Response) => {
         projects: updated.projects,
         statuses: updated.statuses,
         custom_fields: updated.custom_fields,
+        ignored_fields: updated.ignored_fields,
         hasApiToken: Boolean(updated.api_token),
       },
     });
@@ -1145,6 +1158,70 @@ router.put('/jira/events/:id/unreview', async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error('[API] Erro ao reverter revisão:', err);
     res.status(500).json({ error: err.message || 'Erro ao reverter revisão' });
+  }
+});
+
+/**
+ * PUT /api/jira/events/review-batch
+ * Marca múltiplos eventos como revisados
+ */
+router.put('/jira/events/review-batch', async (req: Request, res: Response) => {
+  try {
+    const authUser = (req as any).user;
+    if (!authUser?.isAdmin && !authUser?.canAccessJira) {
+      res.status(403).json({ error: 'Sem permissão.' });
+      return;
+    }
+
+    const { ids } = req.body || {};
+    if (!Array.isArray(ids) || ids.length === 0) {
+      res.status(400).json({ error: 'Lista de IDs inválida.' });
+      return;
+    }
+
+    const validIds = ids.map(Number).filter((n) => !isNaN(n));
+    const affectedCount = await markBatchEventsAsReviewed(validIds, authUser.id);
+
+    res.json({
+      success: true,
+      count: affectedCount,
+      message: `${affectedCount} ${affectedCount === 1 ? 'evento marcado' : 'eventos marcados'} como revisados.`,
+    });
+  } catch (err: any) {
+    console.error('[API] Erro ao revisar eventos em lote:', err);
+    res.status(500).json({ error: err.message || 'Erro ao revisar eventos em lote' });
+  }
+});
+
+/**
+ * PUT /api/jira/events/unreview-batch
+ * Reverte a revisão de múltiplos eventos (move de volta para pendentes)
+ */
+router.put('/jira/events/unreview-batch', async (req: Request, res: Response) => {
+  try {
+    const authUser = (req as any).user;
+    if (!authUser?.isAdmin && !authUser?.canAccessJira) {
+      res.status(403).json({ error: 'Sem permissão.' });
+      return;
+    }
+
+    const { ids } = req.body || {};
+    if (!Array.isArray(ids) || ids.length === 0) {
+      res.status(400).json({ error: 'Lista de IDs inválida.' });
+      return;
+    }
+
+    const validIds = ids.map(Number).filter((n) => !isNaN(n));
+    const affectedCount = await unmarkBatchEventsAsReviewed(validIds);
+
+    res.json({
+      success: true,
+      count: affectedCount,
+      message: `${affectedCount} ${affectedCount === 1 ? 'evento retornado' : 'eventos retornados'} para a lista de pendências.`,
+    });
+  } catch (err: any) {
+    console.error('[API] Erro ao reverter eventos em lote:', err);
+    res.status(500).json({ error: err.message || 'Erro ao reverter eventos em lote' });
   }
 });
 

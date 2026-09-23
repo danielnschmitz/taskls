@@ -11,7 +11,20 @@ export interface JiraConfig {
     layout: string;
     flagged?: string;
   };
+  ignored_fields?: string[];
 }
+
+export const DEFAULT_IGNORED_FIELDS = [
+  'Classificação',
+  '[BI] Priorizado',
+  'labels',
+  'IssueParentAssociation',
+  'Link',
+  'Attachment',
+  '[BI] Desenvolvedor',
+  '[BI] Desenvolvimento',
+  '[BI] Finalizado',
+];
 
 export const ALL_POSSIBLE_STATUSES = [
   'Resolvido',
@@ -40,6 +53,7 @@ export const DEFAULT_JIRA_CONFIG: JiraConfig = {
     layout: 'customfield_10714',
     flagged: 'customfield_10021',
   },
+  ignored_fields: [...DEFAULT_IGNORED_FIELDS],
 };
 
 export interface JiraDemand {
@@ -104,6 +118,7 @@ export async function getJiraConfig(): Promise<JiraConfig> {
     projects: DEFAULT_JIRA_CONFIG.projects,
     statuses: DEFAULT_JIRA_CONFIG.statuses,
     custom_fields: { ...DEFAULT_JIRA_CONFIG.custom_fields },
+    ignored_fields: [...DEFAULT_IGNORED_FIELDS],
   };
 
   const res = await pool.query(`SELECT value FROM app_settings WHERE key = 'jira_config'`);
@@ -129,6 +144,9 @@ export async function getJiraConfig(): Promise<JiraConfig> {
       ...currentDefaults.custom_fields,
       ...(saved.custom_fields || {}),
     },
+    ignored_fields: Array.isArray(saved.ignored_fields)
+      ? saved.ignored_fields
+      : [...DEFAULT_IGNORED_FIELDS],
   };
 }
 
@@ -150,6 +168,9 @@ export async function saveJiraConfig(newConfig: Partial<JiraConfig>): Promise<Ji
       ...current.custom_fields,
       ...(newConfig.custom_fields || {}),
     },
+    ignored_fields: Array.isArray(newConfig.ignored_fields)
+      ? Array.from(new Set(newConfig.ignored_fields.map((f) => f.trim()).filter(Boolean)))
+      : current.ignored_fields || [...DEFAULT_IGNORED_FIELDS],
   };
 
   await pool.query(
@@ -160,6 +181,15 @@ export async function saveJiraConfig(newConfig: Partial<JiraConfig>): Promise<Ji
   );
 
   return merged;
+}
+
+/**
+ * Helper para verificar se um campo do Jira deve ser desconsiderado nas revisões
+ */
+export function isFieldIgnored(field: string, ignoredFields: string[] = []): boolean {
+  if (!field) return false;
+  const norm = field.trim().toLowerCase();
+  return ignoredFields.some((f) => f.trim().toLowerCase() === norm);
 }
 
 /**

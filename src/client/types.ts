@@ -149,6 +149,8 @@ export interface JiraConfig {
     industry: string;
     layout: string;
   };
+  ignored_fields?: string[];
+  defaultIgnoredFields?: string[];
   hasApiToken?: boolean;
   allPossibleStatuses?: string[];
 }
@@ -227,6 +229,20 @@ export interface JiraEventsResponse {
   totalPending: number;
   totalReviewed: number;
   total: number;
+}
+
+export interface JiraReviewGroup {
+  groupId: string;
+  issueKey: string;
+  issueId?: string;
+  projectKey: string;
+  summary: string;
+  authorName: string;
+  authorAvatar?: string | null;
+  eventTime: string;
+  cardData: JiraDemand;
+  isReviewed: boolean;
+  events: JiraReviewEvent[];
 }
 
 // Módulo de Saúde & Peso

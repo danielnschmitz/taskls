@@ -1,5 +1,5 @@
 import { pool } from './db';
-import { getJiraConfig, formatDisplayStatus, getAuthHeader, executeJqlSearch, JiraDemand, JiraConfig } from './jira';
+import { getJiraConfig, formatDisplayStatus, getAuthHeader, executeJqlSearch, JiraDemand, JiraConfig, DEFAULT_IGNORED_FIELDS, isFieldIgnored } from './jira';
 
 export type JiraEventType =
   | 'status_changed'
@@ -419,7 +419,12 @@ export async function processWebhookPayload(payload: any): Promise<{ processed: 
   // 3. Atualizações de Campos (Changelog)
   const changelog = payload.changelog;
   if (changelog && Array.isArray(changelog.items)) {
+    const ignoredList = config.ignored_fields || DEFAULT_IGNORED_FIELDS;
     for (const item of changelog.items) {
+      if (isFieldIgnored(item.field, ignoredList)) {
+        continue;
+      }
+
       const field = (item.field || '').toLowerCase();
       let eventType: JiraEventType = 'field_updated';
       let label = `Campo ${item.field}`;
@@ -632,8 +637,13 @@ export async function syncJiraEventsFromRest(daysBack: number = 1): Promise<{
 
       const authorName = history.author?.displayName || 'Jira';
       const authorAvatar = history.author?.avatarUrls?.['32x32'] || null;
+      const ignoredList = config.ignored_fields || DEFAULT_IGNORED_FIELDS;
 
       for (const item of history.items || []) {
+        if (isFieldIgnored(item.field, ignoredList)) {
+          continue;
+        }
+
         const field = (item.field || '').toLowerCase();
         let eventType: JiraEventType = 'field_updated';
         let label = `Campo ${item.field}`;
@@ -912,9 +922,71 @@ export async function getPendingEventsCount(): Promise<number> {
 }
 
 /**
+ * Marca múltiplos eventos como revisados
+ */
+export async function markBatchEventsAsReviewed(ids: number[], userId?: string): Promise<number> {
+  if (!Array.isArray(ids) || ids.length === 0) return 0;
+  const res = await pool.query(
+    `UPDATE jira_review_events 
+     SET is_reviewed = TRUE, reviewed_at = NOW(), reviewed_by = $2 
+     WHERE id = ANY($1::int[]) AND is_reviewed = FALSE`,
+    [ids, userId || null]
+  );
+  return res.rowCount || 0;
+}
+
+/**
+ * Reverte a revisão de múltiplos eventos (move de volta para pendente)
+ */
+export async function unmarkBatchEventsAsReviewed(ids: number[]): Promise<number> {
+  if (!Array.isArray(ids) || ids.length === 0) return 0;
+  const res = await pool.query(
+    `UPDATE jira_review_events 
+     SET is_reviewed = FALSE, reviewed_at = NULL, reviewed_by = NULL 
+     WHERE id = ANY($1::int[]) AND is_reviewed = TRUE`,
+    [ids]
+  );
+  return res.rowCount || 0;
+}
+
+/**
+ * Remove eventos pendentes de campos que foram configurados para serem desconsiderados
+ */
+export async function cleanupIgnoredJiraEvents(customIgnoredList?: string[]): Promise<number> {
+  try {
+    const config = await getJiraConfig();
+    const ignored = customIgnoredList && customIgnoredList.length > 0
+      ? customIgnoredList
+      : config.ignored_fields || DEFAULT_IGNORED_FIELDS;
+
+    if (!ignored || ignored.length === 0) return 0;
+
+    const normalized = ignored.map((f) => f.trim().toLowerCase());
+    const res = await pool.query(
+      `DELETE FROM jira_review_events 
+       WHERE is_reviewed = FALSE 
+         AND LOWER(diff_data->>'field') = ANY($1::text[])`,
+      [normalized]
+    );
+
+    const deletedCount = res.rowCount || 0;
+    if (deletedCount > 0) {
+      console.log(`[JiraEvents] Higienização concluída: ${deletedCount} evento(s) pendente(s) de campos desconsiderados foram removidos.`);
+    }
+    return deletedCount;
+  } catch (err) {
+    console.warn('[JiraEvents] Falha ao limpar eventos ignorados:', err);
+    return 0;
+  }
+}
+
+/**
  * Migra eventos ADF que foram salvos anteriormente no banco como JSON bruto
  */
 export async function migrateAdfEventsInDb(): Promise<void> {
+  // Limpa pendências antigas de campos desconsiderados
+  await cleanupIgnoredJiraEvents().catch(() => {});
+
   try {
     const res = await pool.query(`
       SELECT id, diff_data
