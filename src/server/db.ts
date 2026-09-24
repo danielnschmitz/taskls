@@ -111,8 +111,9 @@ export async function initDatabase(): Promise<void> {
       -- Migrações incrementais para tabela de usuários
       ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS can_access_jira BOOLEAN DEFAULT FALSE;
-      ALTER TABLE users ADD COLUMN IF NOT EXISTS allowed_modules TEXT[] DEFAULT ARRAY['tasks', 'cards']::TEXT[];
-      UPDATE users SET allowed_modules = ARRAY['tasks', 'cards'] WHERE allowed_modules IS NULL;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS allowed_modules TEXT[] DEFAULT ARRAY['tasks', 'cards', 'health', 'dashboards']::TEXT[];
+      UPDATE users SET allowed_modules = ARRAY['tasks', 'cards', 'health', 'dashboards'] WHERE allowed_modules IS NULL;
+      UPDATE users SET allowed_modules = array_append(allowed_modules, 'dashboards') WHERE NOT ('dashboards' = ANY(allowed_modules));
 
       -- Vincular tarefas ao usuário
       ALTER TABLE tasks ADD COLUMN IF NOT EXISTS user_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE;

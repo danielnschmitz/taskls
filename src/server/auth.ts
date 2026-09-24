@@ -85,7 +85,7 @@ export async function generateToken(
     username: user.username,
     isAdmin: Boolean(user.is_admin),
     canAccessJira: Boolean(user.can_access_jira),
-    allowedModules: user.allowed_modules || ['tasks', 'cards', 'health'],
+    allowedModules: user.allowed_modules || ['tasks', 'cards', 'health', 'dashboards'],
     isDefaultPassword: Boolean(user.is_default_password),
     exp,
   };
@@ -219,7 +219,7 @@ export function requireModule(moduleName: string) {
     if (user.isAdmin) {
       return next();
     }
-    const modules = user.allowedModules || ['tasks', 'cards', 'health'];
+    const modules = user.allowedModules || ['tasks', 'cards', 'health', 'dashboards'];
     if (!modules.includes(moduleName)) {
       res.status(403).json({ error: `Você não tem permissão para acessar o módulo '${moduleName}'. Solicite acesso ao administrador.` });
       return;

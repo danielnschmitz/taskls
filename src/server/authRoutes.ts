@@ -57,7 +57,7 @@ authRouter.post('/login', async (req: Request, res: Response): Promise<void> => 
         username: user.username,
         isAdmin: Boolean(user.is_admin),
         canAccessJira: Boolean(user.can_access_jira),
-        allowedModules: user.allowed_modules || ['tasks', 'cards', 'health'],
+        allowedModules: user.allowed_modules || ['tasks', 'cards', 'health', 'dashboards'],
         isDefaultPassword: Boolean(user.is_default_password),
       },
     });
@@ -92,7 +92,7 @@ authRouter.get('/me', authenticateToken, async (req: Request, res: Response): Pr
         username: user.username,
         isAdmin: Boolean(user.is_admin),
         canAccessJira: Boolean(user.can_access_jira),
-        allowedModules: user.allowed_modules || ['tasks', 'cards', 'health'],
+        allowedModules: user.allowed_modules || ['tasks', 'cards', 'health', 'dashboards'],
         isDefaultPassword: Boolean(user.is_default_password),
         createdAt: user.created_at,
       },
@@ -153,7 +153,7 @@ authRouter.post('/change-password', authenticateToken, async (req: Request, res:
       username: user.username,
       is_admin: user.is_admin,
       can_access_jira: user.can_access_jira,
-      allowed_modules: user.allowed_modules || ['tasks', 'cards', 'health'],
+      allowed_modules: user.allowed_modules || ['tasks', 'cards', 'health', 'dashboards'],
       is_default_password: false,
     });
 
@@ -166,7 +166,7 @@ authRouter.post('/change-password', authenticateToken, async (req: Request, res:
         username: user.username,
         isAdmin: Boolean(user.is_admin),
         canAccessJira: Boolean(user.can_access_jira),
-        allowedModules: user.allowed_modules || ['tasks', 'cards', 'health'],
+        allowedModules: user.allowed_modules || ['tasks', 'cards', 'health', 'dashboards'],
         isDefaultPassword: false,
       },
     });

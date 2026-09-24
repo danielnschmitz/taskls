@@ -87,14 +87,14 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({ onShowToast }) =
   const [isCreateUserOpen, setIsCreateUserOpen] = useState(false);
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [newAllowedModules, setNewAllowedModules] = useState<string[]>(['tasks', 'cards']);
+  const [newAllowedModules, setNewAllowedModules] = useState<string[]>(['tasks', 'cards', 'health', 'dashboards']);
   const [newCanAccessJira, setNewCanAccessJira] = useState(false);
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [createUserError, setCreateUserError] = useState('');
 
   // Modal de Gerenciamento de Usuário (Módulos, Senha e Exclusão)
   const [manageModalUser, setManageModalUser] = useState<ManagedUser | null>(null);
-  const [manageAllowedModules, setManageAllowedModules] = useState<string[]>(['tasks', 'cards']);
+  const [manageAllowedModules, setManageAllowedModules] = useState<string[]>(['tasks', 'cards', 'health', 'dashboards']);
   const [manageCanAccessJira, setManageCanAccessJira] = useState(false);
   const [isSavingModules, setIsSavingModules] = useState(false);
   const [managePasswordInput, setManagePasswordInput] = useState('');
@@ -268,7 +268,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({ onShowToast }) =
       setUsers((prev) => [...prev, data]);
       setNewUsername('');
       setNewPassword('');
-      setNewAllowedModules(['tasks', 'cards']);
+      setNewAllowedModules(['tasks', 'cards', 'health', 'dashboards']);
       setNewCanAccessJira(false);
       setIsCreateUserOpen(false);
       onShowToast(`Usuário ${data.username} criado com sucesso!`, 'success');
@@ -281,7 +281,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({ onShowToast }) =
 
   const handleOpenManageUser = (user: ManagedUser) => {
     setManageModalUser(user);
-    setManageAllowedModules(user.allowedModules || ['tasks', 'cards']);
+    setManageAllowedModules(user.allowedModules || ['tasks', 'cards', 'health', 'dashboards']);
     setManageCanAccessJira(Boolean(user.canAccessJira));
     setManagePasswordInput('');
     setManagePasswordError('');
@@ -632,10 +632,11 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({ onShowToast }) =
                     {users
                       .filter((u) => u.username.toLowerCase().includes(searchUserQuery.toLowerCase()))
                       .map((u) => {
-                        const userModules = u.allowedModules || ['tasks', 'cards', 'health'];
+                        const userModules = u.allowedModules || ['tasks', 'cards', 'health', 'dashboards'];
                         const hasTasks = userModules.includes('tasks');
                         const hasCards = userModules.includes('cards');
                         const hasHealth = userModules.includes('health');
+                        const hasDashboards = userModules.includes('dashboards');
 
                         return (
                           <tr key={u.id} className="hover:bg-slate-900/40 transition-colors">
@@ -676,12 +677,17 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({ onShowToast }) =
                                     Saúde & Peso
                                   </span>
                                 )}
+                                {(hasDashboards || u.isAdmin) && (
+                                  <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                                    Dashboards
+                                  </span>
+                                )}
                                 {(u.canAccessJira || u.isAdmin) && (
                                   <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-blue-500/15 text-blue-300 border border-blue-500/30">
                                     Jira
                                   </span>
                                 )}
-                                {!hasTasks && !hasCards && !hasHealth && !u.canAccessJira && !u.isAdmin && (
+                                {!hasTasks && !hasCards && !hasHealth && !hasDashboards && !u.canAccessJira && !u.isAdmin && (
                                   <span className="text-[11px] text-slate-500 italic">Nenhum</span>
                                 )}
                               </div>
@@ -1165,6 +1171,27 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({ onShowToast }) =
                   <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs cursor-pointer hover:bg-slate-900">
                     <input
                       type="checkbox"
+                      checked={newAllowedModules.includes('dashboards')}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setNewAllowedModules([...newAllowedModules, 'dashboards']);
+                        } else {
+                          setNewAllowedModules(newAllowedModules.filter((m) => m !== 'dashboards'));
+                        }
+                      }}
+                      className="rounded bg-slate-950 border-slate-700 text-cyan-600 focus:ring-0"
+                    />
+                    <div>
+                      <span className="font-bold text-white block">📊 Dashboards Analíticos</span>
+                      <span className="text-[11px] text-slate-400 block">
+                        Permite acessar LeadTime Jira, métricas de ciclo e inteligência analítica.
+                      </span>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs cursor-pointer hover:bg-slate-900">
+                    <input
+                      type="checkbox"
                       checked={newCanAccessJira}
                       onChange={(e) => setNewCanAccessJira(e.target.checked)}
                       className="rounded bg-slate-950 border-slate-700 text-blue-600 focus:ring-0"
@@ -1327,6 +1354,30 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({ onShowToast }) =
                       <span className="font-bold text-xs block text-slate-200">Saúde & Evolução de Peso</span>
                       <span className="text-[11px] text-slate-400 block">
                         Permite registrar pesagens corporais, visualizar gráficos de evolução e integrar com o Bot Telegram.
+                      </span>
+                    </div>
+                  </label>
+
+                  {/* Checkbox Módulo Dashboards Analíticos */}
+                  <label className={`p-3 rounded-2xl border flex items-start gap-3 cursor-pointer transition-all ${
+                    manageAllowedModules.includes('dashboards')
+                      ? 'bg-cyan-600/10 border-cyan-500/40 text-white'
+                      : 'bg-slate-900/40 border-slate-800 text-slate-400 hover:border-slate-700'
+                  }`}>
+                    <input
+                      type="checkbox"
+                      checked={manageAllowedModules.includes('dashboards')}
+                      onChange={() => {
+                        setManageAllowedModules((prev) =>
+                          prev.includes('dashboards') ? prev.filter((m) => m !== 'dashboards') : [...prev, 'dashboards']
+                        );
+                      }}
+                      className="mt-0.5 rounded border-slate-700 text-cyan-600 focus:ring-cyan-500 w-4 h-4"
+                    />
+                    <div className="flex-1">
+                      <span className="font-bold text-xs block text-slate-200">Dashboards Analíticos</span>
+                      <span className="text-[11px] text-slate-400 block">
+                        Permite acessar métricas de Lead Time, tempos de etapa e eficiência no Jira.
                       </span>
                     </div>
                   </label>

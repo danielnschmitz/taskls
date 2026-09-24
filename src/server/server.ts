@@ -16,6 +16,7 @@ import { authRouter } from './authRoutes';
 import { userRoutes } from './userRoutes';
 import { cardRouter } from './cardRoutes';
 import { healthRouter } from './healthRoutes';
+import { dashboardRoutes } from './dashboardRoutes';
 import { authenticateToken, requireAdmin, requireModule } from './auth';
 import { startScheduler, stopScheduler } from './scheduler';
 import { processWebhookPayload, migrateAdfEventsInDb, startJiraSyncScheduler, stopJiraSyncScheduler } from './jiraEvents';
@@ -55,7 +56,10 @@ app.use('/api/cards', authenticateToken, requireModule('cards'), cardRouter);
 // 5. Rotas do módulo de Saúde & Peso
 app.use('/api/health', authenticateToken, requireModule('health'), healthRouter);
 
-// 6. Todas as demais rotas da API são protegidas por autenticação
+// 6. Rotas do módulo de Dashboards Analíticos
+app.use('/api/dashboards', authenticateToken, requireModule('dashboards'), dashboardRoutes);
+
+// 7. Todas as demais rotas da API são protegidas por autenticação
 app.use('/api', authenticateToken, router);
 
 // Serve static frontend files if built

@@ -155,7 +155,7 @@ export interface JiraConfig {
   allPossibleStatuses?: string[];
 }
 
-export type ModuleType = 'tasks' | 'cards' | 'health' | 'settings';
+export type ModuleType = 'tasks' | 'cards' | 'health' | 'dashboards' | 'settings';
 
 export interface CardTemplate {
   id: string;
@@ -315,6 +315,96 @@ export interface MeasuresSummary {
   cintura: MeasureTypeSummary;
   abdomen: MeasureTypeSummary;
 }
+
+// ==========================================
+// Módulo de Dashboards Analíticos
+// ==========================================
+export type DashboardId = 'lead-time-jira' | 'ativacoes-neo';
+
+export interface DashboardMetaItem {
+  id: DashboardId;
+  title: string;
+  description: string;
+  category: string;
+  icon: string;
+}
+
+export interface JiraLeadTimeIssue {
+  key: string;
+  summary: string;
+  status: string;
+  issuetype: string;
+  canal: string | null;
+  isDone: boolean;
+  created: string;
+  dt_priorizado: string | null;
+  dt_dev: string | null;
+  dt_deploy_hml: string | null;
+  dt_validacao: string | null;
+  dt_deploy_prd: string | null;
+  dt_finalizado: string | null;
+  dias_bloqueado: number;
+  dias_triagem: number | null;
+  dias_pronto: number | null;
+  dias_dev: number | null;
+  dias_uat: number | null;
+  dias_deploy: number | null;
+  lead_time_bruto: number | null;
+  lead_time_liquido: number | null;
+  cycle_time_tecnico: number | null;
+  cycle_time_liquido: number | null;
+  url: string;
+}
+
+export interface JiraLeadTimeResponse {
+  project: string;
+  availableProjects: string[];
+  availableIssueTypes: string[];
+  selectedIssueType: string;
+  hasCanal?: boolean;
+  totalIssues: number;
+  lastUpdated: string;
+  issues: JiraLeadTimeIssue[];
+}
+
+export interface JiraNeoActivationIssue {
+  key: string;
+  summary: string;
+  status: string;
+  issuetype: string;
+  quantidade_ativacoes: number;
+  erp: string;
+  industria: string;
+  canal: string | null;
+  tipo_integracao: string | null;
+  tipo_ativacao: string | null;
+  layout: string | null;
+  setor: string | null;
+  analista_responsavel: string | null;
+  isEmProducao: boolean;
+  dt_deploy_prd: string | null;
+  dt_finalizado: string | null;
+  dt_producao: string | null;
+  mes_ano_producao: string | null;
+  created: string;
+  url: string;
+}
+
+export interface JiraNeoActivationsResponse {
+  project: string;
+  totalCards: number;
+  totalAtivacoes: number;
+  totalEmProducaoAtivacoes: number;
+  totalEmProducaoCards: number;
+  lastUpdated: string;
+  issues: JiraNeoActivationIssue[];
+  availableErps: string[];
+  availableIndustrias: string[];
+  availableStatuses: string[];
+  availableCanais: string[];
+  availableTiposIntegracao: string[];
+}
+
 
 
 

@@ -20,8 +20,9 @@ import {
   Menu,
   Check,
   Scale,
+  BarChart3,
 } from 'lucide-react';
-import { Priority, Task, DndStatus, CategoryInfo } from '../types';
+import { Priority, Task, DndStatus, CategoryInfo, ModuleType } from '../types';
 import { PomodoroTimer } from './PomodoroTimer';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -51,8 +52,8 @@ interface HeaderProps {
   onOpenJiraSettings?: () => void;
   onOpenUserManagement?: () => void;
   onOpenChangePassword?: () => void;
-  activeModule: 'tasks' | 'cards' | 'health' | 'settings';
-  onSelectModule: (m: 'tasks' | 'cards' | 'health' | 'settings') => void;
+  activeModule: ModuleType;
+  onSelectModule: (m: ModuleType) => void;
   onShowToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
 
@@ -88,10 +89,11 @@ export const Header: React.FC<HeaderProps> = ({
   const [showModuleMenu, setShowModuleMenu] = useState(false);
   const moduleMenuRef = useRef<HTMLDivElement>(null);
 
-  const userModules = user?.allowedModules || ['tasks', 'cards', 'health'];
+  const userModules = user?.allowedModules || ['tasks', 'cards', 'health', 'dashboards'];
   const canAccessTasks = Boolean(user?.isAdmin || userModules.includes('tasks'));
   const canAccessCards = Boolean(user?.isAdmin || userModules.includes('cards'));
   const canAccessHealth = Boolean(user?.isAdmin || userModules.includes('health'));
+  const canAccessDashboards = Boolean(user?.isAdmin || userModules.includes('dashboards'));
 
   // Fechar menu de módulos ao clicar fora
   useEffect(() => {
@@ -242,6 +244,7 @@ export const Header: React.FC<HeaderProps> = ({
                 {activeModule === 'tasks' && 'Gestão de Tarefas'}
                 {activeModule === 'cards' && 'Escrita de Cards'}
                 {activeModule === 'health' && 'Saúde & Peso'}
+                {activeModule === 'dashboards' && 'Dashboards'}
                 {activeModule === 'settings' && 'Configurações'}
               </span>
               <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${showModuleMenu ? 'rotate-180 text-indigo-400' : ''}`} />
@@ -331,6 +334,32 @@ export const Header: React.FC<HeaderProps> = ({
                         </div>
                       </div>
                       {activeModule === 'health' && <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />}
+                    </button>
+                  )}
+
+                  {canAccessDashboards && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSelectModule('dashboards');
+                        setShowModuleMenu(false);
+                      }}
+                      className={`w-full text-left p-2.5 rounded-xl flex items-center justify-between gap-3 transition-all ${
+                        activeModule === 'dashboards'
+                          ? 'bg-cyan-600/20 border border-cyan-500/40 text-white shadow-inner'
+                          : 'hover:bg-slate-800/80 text-slate-300 border border-transparent'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${activeModule === 'dashboards' ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/30' : 'bg-slate-800 text-slate-400'}`}>
+                          <BarChart3 className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="block text-xs font-bold leading-tight">Dashboards Analíticos</span>
+                          <span className="text-[10px] text-slate-400">LeadTime Jira, gargalos e métricas</span>
+                        </div>
+                      </div>
+                      {activeModule === 'dashboards' && <Check className="w-4 h-4 text-cyan-400 flex-shrink-0" />}
                     </button>
                   )}
 
