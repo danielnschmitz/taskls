@@ -65,22 +65,22 @@ export const BacklogPanel: React.FC<BacklogPanelProps> = ({
   });
 
   return (
-    <div className="bg-[#0b101d] border border-slate-800/80 rounded-2xl p-4 lg:p-6 shadow-xl shadow-black/20 flex flex-col h-full">
+    <div className="bg-white dark:bg-[#0b101d] border border-slate-200 dark:border-slate-800/80 rounded-2xl p-4 lg:p-6 shadow-xl shadow-slate-200/50 dark:shadow-black/20 flex flex-col h-full transition-colors">
       {/* Panel Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-5 border-b border-slate-800/80">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-5 border-b border-slate-200 dark:border-slate-800/80">
         <div>
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
               <Inbox className="w-4 h-4" />
             </div>
-            <h2 className="text-lg font-bold text-white tracking-tight">
+            <h2 className="text-lg font-bold text-slate-800 dark:text-white tracking-tight">
               Tarefas Sem Data (Backlog)
             </h2>
-            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
               {filteredTasks.length} {filteredTasks.length === 1 ? 'tarefa' : 'tarefas'}
             </span>
           </div>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
             Espaço para anotações, ideias e pendências gerais sem prazo fixo.
           </p>
         </div>
@@ -90,8 +90,8 @@ export const BacklogPanel: React.FC<BacklogPanelProps> = ({
           onClick={() => setHideCompleted(!hideCompleted)}
           className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-all ${
             hideCompleted
-              ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500/30'
-              : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+              ? 'bg-indigo-600/20 text-indigo-700 dark:text-indigo-300 border-indigo-500/30'
+              : 'bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
           }`}
         >
           {hideCompleted ? 'Exibindo apenas pendentes' : 'Ocultar concluídas'}
@@ -102,18 +102,18 @@ export const BacklogPanel: React.FC<BacklogPanelProps> = ({
       <div className="mt-5 space-y-2.5 flex-1 overflow-y-auto max-h-[620px] pr-1">
         {filteredTasks.length === 0 ? (
           <div className="py-12 text-center flex flex-col items-center justify-center">
-            <div className="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-600 mb-3">
+            <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-600 mb-3">
               <Inbox className="w-6 h-6" />
             </div>
-            <p className="text-sm text-slate-400 font-medium">
+            <p className="text-sm text-slate-600 dark:text-slate-400 font-medium">
               Nenhuma tarefa sem data no momento.
             </p>
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
               Guarde ideias e afazeres que não precisam de uma data específica agora.
             </p>
             <button
               onClick={onNewTask}
-              className="mt-4 px-3.5 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition-all"
+              className="mt-4 px-3.5 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition-all"
             >
               + Adicionar ao Backlog
             </button>
@@ -137,7 +137,7 @@ export const BacklogPanel: React.FC<BacklogPanelProps> = ({
                 <div className="absolute right-12 bottom-3 opacity-0 group-hover/card:opacity-100 transition-opacity">
                   <button
                     onClick={() => onScheduleForToday(task)}
-                    className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-950/60 border border-indigo-500/30 text-[10px] font-semibold text-indigo-300 hover:bg-indigo-900/80 transition-all"
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-500/30 text-[10px] font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/80 transition-all"
                     title="Definir data para hoje"
                   >
                     <Calendar className="w-3 h-3" />

@@ -228,25 +228,25 @@ export const JiraConfigModal: React.FC<JiraConfigModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-2xl max-h-[90vh] flex flex-col bg-[#0d1424] border border-slate-700/80 rounded-2xl shadow-2xl shadow-black/80 overflow-hidden">
+      <div className="relative w-full max-w-2xl max-h-[90vh] flex flex-col bg-white dark:bg-[#0d1424] border border-slate-200 dark:border-slate-700/80 rounded-2xl shadow-2xl shadow-slate-900/20 dark:shadow-black/80 overflow-hidden transition-colors">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/60">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400">
+            <div className="w-9 h-9 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
               <Settings2 className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white tracking-tight">
+              <h3 className="text-base font-bold text-slate-800 dark:text-white tracking-tight">
                 Configurações da Integração Jira
               </h3>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 Gerencie projetos, credenciais de acesso e status visíveis no painel
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -262,28 +262,28 @@ export const JiraConfigModal: React.FC<JiraConfigModalProps> = ({
           <form onSubmit={handleSave} className="p-6 overflow-y-auto space-y-6 custom-scrollbar flex-1">
             {/* Section 1: Projetos Considerados */}
             <div className="space-y-3">
-              <label className="block text-xs font-bold text-slate-200 uppercase tracking-wider">
-                1. Chaves dos Projetos Jira <span className="text-rose-400">*</span>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">
+                1. Chaves dos Projetos Jira <span className="text-rose-500 dark:text-rose-400">*</span>
               </label>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 Apenas as demandas com data de entrega associadas a estes projetos serão exibidas no painel (ex: NEO, ESM).
               </p>
 
               {/* Badges of current projects */}
-              <div className="flex flex-wrap items-center gap-2 p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 min-h-[46px]">
+              <div className="flex flex-wrap items-center gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 min-h-[46px]">
                 {projects.length === 0 ? (
-                  <span className="text-xs text-slate-500 italic">Nenhum projeto adicionado. Adicione abaixo.</span>
+                  <span className="text-xs text-slate-400 dark:text-slate-500 italic">Nenhum projeto adicionado. Adicione abaixo.</span>
                 ) : (
                   projects.map((proj) => (
                     <span
                       key={proj}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-xs font-bold shadow-sm"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/40 text-xs font-bold shadow-sm"
                     >
                       {proj}
                       <button
                         type="button"
                         onClick={() => handleRemoveProject(proj)}
-                        className="hover:text-rose-400 transition-colors"
+                        className="hover:text-rose-500 dark:hover:text-rose-400 transition-colors"
                         title={`Remover projeto ${proj}`}
                       >
                         <X className="w-3.5 h-3.5" />
@@ -306,7 +306,7 @@ export const JiraConfigModal: React.FC<JiraConfigModalProps> = ({
                       handleAddProject();
                     }
                   }}
-                  className="flex-1 px-3 py-2 text-xs bg-slate-900 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  className="flex-1 px-3 py-2 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                 />
                 <button
                   type="button"
@@ -320,13 +320,13 @@ export const JiraConfigModal: React.FC<JiraConfigModalProps> = ({
             </div>
 
             {/* Section 2: Filtro de Status Visíveis */}
-            <div className="space-y-3 pt-4 border-t border-slate-800/80">
+            <div className="space-y-3 pt-4 border-t border-slate-200 dark:border-slate-800/80">
               <div className="flex items-center justify-between">
                 <div>
-                  <label className="block text-xs font-bold text-slate-200 uppercase tracking-wider">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">
                     2. Status Exibidos no Painel
                   </label>
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                     Selecione quais status devem ser incluídos no quadro semanal. Demandas desmarcadas não aparecerão.
                   </p>
                 </div>
@@ -334,15 +334,15 @@ export const JiraConfigModal: React.FC<JiraConfigModalProps> = ({
                   <button
                     type="button"
                     onClick={handleSelectAllStatuses}
-                    className="text-indigo-400 hover:text-indigo-300 font-medium"
+                    className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 font-medium"
                   >
                     Marcar Todos
                   </button>
-                  <span className="text-slate-600">&bull;</span>
+                  <span className="text-slate-400 dark:text-slate-600">&bull;</span>
                   <button
                     type="button"
                     onClick={handleDeselectAllStatuses}
-                    className="text-slate-400 hover:text-slate-300 font-medium"
+                    className="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 font-medium"
                   >
                     Desmarcar Todos
                   </button>
@@ -350,7 +350,7 @@ export const JiraConfigModal: React.FC<JiraConfigModalProps> = ({
               </div>
 
               {/* Status checkboxes grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 rounded-xl bg-slate-950/60 border border-slate-800 max-h-56 overflow-y-auto custom-scrollbar">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 max-h-56 overflow-y-auto custom-scrollbar">
                 {allPossibleStatuses.map((st) => {
                   const isChecked = selectedStatuses.includes(st);
                   const isSpecialNeoDeploy = st === 'Deploy HML';
@@ -362,28 +362,28 @@ export const JiraConfigModal: React.FC<JiraConfigModalProps> = ({
                       onClick={() => handleToggleStatus(st)}
                       className={`flex items-start gap-2.5 p-2 rounded-lg border text-xs cursor-pointer transition-all ${
                         isChecked
-                          ? 'bg-slate-900/90 border-indigo-500/40 text-slate-200 shadow-sm'
-                          : 'bg-slate-950/40 border-slate-800/60 text-slate-500 hover:text-slate-400'
+                          ? 'bg-white dark:bg-slate-900/90 border-indigo-400 dark:border-indigo-500/40 text-slate-800 dark:text-slate-200 shadow-sm'
+                          : 'bg-slate-100/50 dark:bg-slate-950/40 border-slate-200 dark:border-slate-800/60 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-400'
                       }`}
                     >
-                      <div className="mt-0.5 flex-shrink-0 text-indigo-400">
+                      <div className="mt-0.5 flex-shrink-0 text-indigo-600 dark:text-indigo-400">
                         {isChecked ? (
-                          <CheckSquare className="w-4 h-4 text-indigo-400" />
+                          <CheckSquare className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                         ) : (
-                          <Square className="w-4 h-4 text-slate-600" />
+                          <Square className="w-4 h-4 text-slate-400 dark:text-slate-600" />
                         )}
                       </div>
                       <div className="min-w-0">
-                        <span className={`font-semibold ${isChecked ? 'text-slate-200' : 'text-slate-500'}`}>
+                        <span className={`font-semibold ${isChecked ? 'text-slate-800 dark:text-slate-200' : 'text-slate-500'}`}>
                           {st}
                         </span>
                         {isSpecialNeoDeploy && (
-                          <span className="block text-[10px] text-amber-400/90 font-medium">
+                          <span className="block text-[10px] text-amber-600 dark:text-amber-400/90 font-medium">
                             ↳ No projeto NEO: "Validação Diária"
                           </span>
                         )}
                         {isSpecialNeoTeste && (
-                          <span className="block text-[10px] text-purple-400/90 font-medium">
+                          <span className="block text-[10px] text-purple-600 dark:text-purple-400/90 font-medium">
                             ↳ No projeto NEO: "Validação Histórica"
                           </span>
                         )}
@@ -398,15 +398,15 @@ export const JiraConfigModal: React.FC<JiraConfigModalProps> = ({
             </div>
 
             {/* Section 3: Credenciais de Acesso */}
-            <div className="space-y-3 pt-4 border-t border-slate-800/80">
-              <label className="block text-xs font-bold text-slate-200 uppercase tracking-wider">
+            <div className="space-y-3 pt-4 border-t border-slate-200 dark:border-slate-800/80">
+              <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
                 3. Acesso à API do Jira Cloud
               </label>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* Domínio */}
                 <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
                     Domínio Atlassian
                   </label>
                   <input
@@ -414,14 +414,14 @@ export const JiraConfigModal: React.FC<JiraConfigModalProps> = ({
                     value={domain}
                     onChange={(e) => setDomain(e.target.value)}
                     placeholder="sysmiddle.atlassian.net"
-                    className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-700 rounded-xl text-slate-200 focus:outline-none focus:border-indigo-500"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                     required
                   />
                 </div>
 
                 {/* Email */}
                 <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
                     E-mail da Conta
                   </label>
                   <input
@@ -429,7 +429,7 @@ export const JiraConfigModal: React.FC<JiraConfigModalProps> = ({
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="daniel.schmitz@sysmiddle.com.br"
-                    className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-700 rounded-xl text-slate-200 focus:outline-none focus:border-indigo-500"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                     required
                   />
                 </div>
@@ -438,11 +438,11 @@ export const JiraConfigModal: React.FC<JiraConfigModalProps> = ({
               {/* API Token */}
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-medium text-slate-400">
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
                     Token de API Atlassian
                   </label>
                   {hasExistingToken && (
-                    <span className="text-[11px] text-emerald-400 font-medium flex items-center gap-1">
+                    <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
                       <ShieldCheck className="w-3.5 h-3.5" />
                       Token já configurado no servidor
                     </span>
@@ -457,7 +457,7 @@ export const JiraConfigModal: React.FC<JiraConfigModalProps> = ({
                       ? '•••••••••••••••••••••••••••••••• (Deixe em branco para manter atual)'
                       : 'Cole seu token de API gerado na Atlassian'
                   }
-                  className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-700 rounded-xl text-slate-200 focus:outline-none focus:border-indigo-500 font-mono"
+                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-mono"
                 />
               </div>
 
@@ -467,12 +467,12 @@ export const JiraConfigModal: React.FC<JiraConfigModalProps> = ({
                   type="button"
                   onClick={handleTestConnection}
                   disabled={isTesting}
-                  className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 text-xs font-semibold flex items-center gap-2 transition-all"
+                  className="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white border border-slate-300 dark:border-slate-700 text-xs font-semibold flex items-center gap-2 transition-all"
                 >
                   {isTesting ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" />
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500 dark:text-blue-400" />
                   ) : (
-                    <RotateCw className="w-3.5 h-3.5 text-blue-400" />
+                    <RotateCw className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400" />
                   )}
                   <span>Testar Conexão com Jira</span>
                 </button>
@@ -481,14 +481,14 @@ export const JiraConfigModal: React.FC<JiraConfigModalProps> = ({
                   <div
                     className={`text-xs font-semibold flex items-center gap-1.5 px-3 py-1 rounded-lg border ${
                       testResult.success
-                        ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'
-                        : 'bg-rose-950/60 border-rose-500/40 text-rose-300'
+                        ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-500/40 text-emerald-700 dark:text-emerald-300'
+                        : 'bg-rose-50 dark:bg-rose-950/60 border-rose-300 dark:border-rose-500/40 text-rose-700 dark:text-rose-300'
                     }`}
                   >
                     {testResult.success ? (
-                      <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0 text-emerald-400" />
+                      <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0 text-emerald-500 dark:text-emerald-400" />
                     ) : (
-                      <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 text-rose-400" />
+                      <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 text-rose-500 dark:text-rose-400" />
                     )}
                     <span className="line-clamp-1">{testResult.message}</span>
                   </div>
@@ -497,20 +497,20 @@ export const JiraConfigModal: React.FC<JiraConfigModalProps> = ({
             </div>
 
             {/* Section 4: Campos Desconsiderados nas Revisões */}
-            <div className="space-y-3 pt-4 border-t border-slate-800/80">
+            <div className="space-y-3 pt-4 border-t border-slate-200 dark:border-slate-800/80">
               <div className="flex items-center justify-between">
                 <div>
-                  <label className="block text-xs font-bold text-slate-200 uppercase tracking-wider">
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
                     4. Campos Desconsiderados nas Revisões
                   </label>
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                     Alterações nesses campos no Jira não aparecerão no painel de revisões e as pendências existentes deles serão limpas.
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={handleResetIgnoredFields}
-                  className="text-xs text-indigo-400 hover:text-indigo-300 font-medium whitespace-nowrap"
+                  className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 font-medium whitespace-nowrap"
                   title="Restaurar a lista padrão recomendada"
                 >
                   Restaurar Padrões
@@ -518,20 +518,20 @@ export const JiraConfigModal: React.FC<JiraConfigModalProps> = ({
               </div>
 
               {/* Badges dos campos ignorados */}
-              <div className="flex flex-wrap items-center gap-2 p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 min-h-[46px]">
+              <div className="flex flex-wrap items-center gap-2 p-2.5 rounded-xl bg-slate-100/70 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 min-h-[46px]">
                 {ignoredFields.length === 0 ? (
-                  <span className="text-xs text-slate-500 italic">Nenhum campo desconsiderado. Todas as alterações serão notificadas.</span>
+                  <span className="text-xs text-slate-400 dark:text-slate-500 italic">Nenhum campo desconsiderado. Todas as alterações serão notificadas.</span>
                 ) : (
                   ignoredFields.map((field) => (
                     <span
                       key={field}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/90 text-slate-300 border border-slate-700 text-xs font-medium shadow-sm hover:border-slate-600 transition-colors"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800/90 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 text-xs font-medium shadow-sm hover:border-slate-400 dark:hover:border-slate-600 transition-colors"
                     >
                       <span>{field}</span>
                       <button
                         type="button"
                         onClick={() => handleRemoveIgnoredField(field)}
-                        className="hover:text-rose-400 text-slate-400 transition-colors"
+                        className="hover:text-rose-500 text-slate-400 transition-colors"
                         title={`Remover ${field} da lista de desconsiderados`}
                       >
                         <X className="w-3.5 h-3.5" />
@@ -554,25 +554,25 @@ export const JiraConfigModal: React.FC<JiraConfigModalProps> = ({
                       handleAddIgnoredField();
                     }
                   }}
-                  className="flex-1 px-3 py-2 text-xs bg-slate-900 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  className="flex-1 px-3 py-2 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                 />
                 <button
                   type="button"
                   onClick={handleAddIgnoredField}
-                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-all border border-slate-700"
+                  className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-white text-xs font-semibold flex items-center gap-1.5 transition-all border border-slate-300 dark:border-slate-700"
                 >
-                  <Plus className="w-3.5 h-3.5 text-indigo-400" />
+                  <Plus className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
                   <span>Adicionar</span>
                 </button>
               </div>
             </div>
 
             {/* Modal Footer Actions */}
-            <div className="pt-4 border-t border-slate-800 flex items-center justify-end gap-3">
+            <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-3">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-xl transition-all"
+                className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl transition-all"
               >
                 Cancelar
               </button>

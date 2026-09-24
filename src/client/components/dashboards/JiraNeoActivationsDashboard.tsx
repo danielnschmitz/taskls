@@ -23,6 +23,7 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 import { JiraNeoActivationIssue, JiraNeoActivationsResponse } from '../../types';
+import { ExportChartButton } from '../ExportChartButton';
 
 interface JiraNeoActivationsDashboardProps {
   onShowToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
@@ -62,8 +63,8 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
   const [tipoIntegracaoFilter, setTipoIntegracaoFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // Controles do Gráfico de Linhas (Ativações por Mês)
-  const [lineChartMetric, setLineChartMetric] = useState<'total' | 'producao' | 'both'>('both');
+  // Controles do Gráfico de Linhas (Ativações por Mês - Em Produção)
+  const [lineChartMetric, setLineChartMetric] = useState<'ativacoes' | 'cards'>('ativacoes');
   const [hoveredMonthIndex, setHoveredMonthIndex] = useState<number | null>(null);
 
   // Ordenação da Tabela
@@ -238,16 +239,14 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
     // 3. Quantidade de Ativações por Indústria (todos os status ativos)
     const industriaMap = new Map<string, { industria: string; ativacoes: number; cards: number }>();
 
-    // 4. Quantidade de Ativações por Mês (linha do tempo)
+    // 4. Quantidade de Ativações por Mês (Considera estritamente apenas "Em Produção")
     const monthlyMap = new Map<
       string,
       {
         monthKey: string;
         label: string;
-        totalAtivacoes: number;
-        totalCards: number;
-        prodAtivacoes: number;
-        prodCards: number;
+        ativacoes: number;
+        cards: number;
       }
     >();
 
@@ -302,45 +301,28 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
       indCurr.cards++;
       industriaMap.set(indName, indCurr);
 
-      // Agrupamento 4: Por Mês
-      // 4a. Total de Ativações criadas no mês (demanda no fluxo)
-      if (item.created) {
-        const mKey = item.created.substring(0, 7);
-        if (!monthlyMap.has(mKey)) {
-          const [yr, mo] = mKey.split('-');
-          const label = `${monthNames[parseInt(mo, 10) - 1] || mo}/${yr.substring(2)}`;
-          monthlyMap.set(mKey, {
-            monthKey: mKey,
-            label,
-            totalAtivacoes: 0,
-            totalCards: 0,
-            prodAtivacoes: 0,
-            prodCards: 0,
-          });
-        }
-        const mCurr = monthlyMap.get(mKey)!;
-        mCurr.totalAtivacoes += qtd;
-        mCurr.totalCards++;
-      }
+      // Agrupamento 4: Por Mês (Apenas cards que estão "Em Produção")
+      if (item.isEmProducao) {
+        const mKey =
+          item.mes_ano_producao ||
+          (item.dt_producao ? item.dt_producao.substring(0, 7) : null) ||
+          (item.created ? item.created.substring(0, 7) : null);
 
-      // 4b. Ativações que entraram em produção no mês (entregas)
-      if (item.dt_producao) {
-        const mKey = item.dt_producao.substring(0, 7);
-        if (!monthlyMap.has(mKey)) {
-          const [yr, mo] = mKey.split('-');
-          const label = `${monthNames[parseInt(mo, 10) - 1] || mo}/${yr.substring(2)}`;
-          monthlyMap.set(mKey, {
-            monthKey: mKey,
-            label,
-            totalAtivacoes: 0,
-            totalCards: 0,
-            prodAtivacoes: 0,
-            prodCards: 0,
-          });
+        if (mKey) {
+          if (!monthlyMap.has(mKey)) {
+            const [yr, mo] = mKey.split('-');
+            const label = `${monthNames[parseInt(mo, 10) - 1] || mo}/${yr.substring(2)}`;
+            monthlyMap.set(mKey, {
+              monthKey: mKey,
+              label,
+              ativacoes: 0,
+              cards: 0,
+            });
+          }
+          const mCurr = monthlyMap.get(mKey)!;
+          mCurr.ativacoes += qtd;
+          mCurr.cards++;
         }
-        const mCurr = monthlyMap.get(mKey)!;
-        mCurr.prodAtivacoes += qtd;
-        mCurr.prodCards++;
       }
     }
 
@@ -552,42 +534,42 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
   const maxErpQtd = useMemo(() => Math.max(...analytics.byErp.map((e) => e.ativacoes), 1), [analytics.byErp]);
   const maxIndQtd = useMemo(() => Math.max(...analytics.byIndustria.map((i) => i.ativacoes), 1), [analytics.byIndustria]);
 
-  // Estatísticas calculadas para o Gráfico de Linhas (Ativações por Mês)
+  // Estatísticas calculadas para o Gráfico de Linhas (Ativações por Mês - Em Produção)
   const lineChartStats = useMemo(() => {
     const list = analytics.byMonth;
     if (list.length === 0) {
       return {
         peakMonthLabel: '-',
         peakMonthValue: 0,
-        totalCreated: 0,
-        totalProd: 0,
+        totalAtivacoes: 0,
+        totalCards: 0,
         avgMonthly: 0,
       };
     }
 
-    let totalCreated = 0;
-    let totalProd = 0;
+    let totalAtivacoes = 0;
+    let totalCards = 0;
     let peakVal = -1;
     let peakLabel = '-';
 
     for (const m of list) {
-      totalCreated += m.totalAtivacoes;
-      totalProd += m.prodAtivacoes;
-      const compareVal = lineChartMetric === 'producao' ? m.prodAtivacoes : m.totalAtivacoes;
+      totalAtivacoes += m.ativacoes;
+      totalCards += m.cards;
+      const compareVal = lineChartMetric === 'cards' ? m.cards : m.ativacoes;
       if (compareVal > peakVal) {
         peakVal = compareVal;
-        peakLabel = `${m.label} (${compareVal} ativ.)`;
+        peakLabel = `${m.label} (${compareVal} ${lineChartMetric === 'cards' ? 'cards' : 'ativ.'})`;
       }
     }
 
-    const activeTotal = lineChartMetric === 'producao' ? totalProd : totalCreated;
+    const activeTotal = lineChartMetric === 'cards' ? totalCards : totalAtivacoes;
     const avgMonthly = list.length > 0 ? Math.round(activeTotal / list.length) : 0;
 
     return {
       peakMonthLabel: peakLabel,
       peakMonthValue: peakVal,
-      totalCreated,
-      totalProd,
+      totalAtivacoes,
+      totalCards,
       avgMonthly,
     };
   }, [analytics.byMonth, lineChartMetric]);
@@ -595,25 +577,25 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Barra de Filtros e Controles Superiores */}
-      <div className="p-4 sm:p-5 rounded-2xl bg-[#0e1628]/90 border border-slate-800 shadow-xl backdrop-blur-sm space-y-4">
+      <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-[#0e1628]/90 border border-slate-200 dark:border-slate-800 shadow-xl backdrop-blur-sm space-y-4">
         {/* Linha 1: Período, Campo de Data e Botão de Refresh */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800/80 pb-4">
           <div className="flex flex-wrap items-center gap-3">
             {/* Badge Projeto Neogrid */}
-            <div className="flex items-center gap-2 bg-indigo-950/40 border border-indigo-500/30 px-3 py-1.5 rounded-xl text-xs font-bold text-indigo-300">
-              <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+            <div className="flex items-center gap-2 bg-indigo-500/10 dark:bg-indigo-950/40 border border-indigo-500/30 px-3 py-1.5 rounded-xl text-xs font-bold text-indigo-700 dark:text-indigo-300">
+              <Sparkles className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
               <span>Projeto NEO &bull; Neogrid</span>
             </div>
 
             {/* Seletor de Período Preset */}
-            <div className="flex items-center gap-1.5 p-1 bg-slate-950 border border-slate-800 rounded-xl text-xs">
+            <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs">
               <button
                 type="button"
                 onClick={() => setDatePreset('all')}
                 className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
                   datePreset === 'all'
                     ? 'bg-indigo-600 text-white font-bold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
                 Histórico Todo
@@ -624,7 +606,7 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
                 className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
                   datePreset === '30d'
                     ? 'bg-indigo-600 text-white font-bold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
                 30 Dias
@@ -635,7 +617,7 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
                 className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
                   datePreset === '90d'
                     ? 'bg-indigo-600 text-white font-bold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
                 90 Dias
@@ -646,7 +628,7 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
                 className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
                   datePreset === 'ytd'
                     ? 'bg-indigo-600 text-white font-bold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
                 Ano Atual (YTD)
@@ -657,7 +639,7 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
                 className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
                   datePreset === '12m'
                     ? 'bg-indigo-600 text-white font-bold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
                 12 Meses
@@ -668,7 +650,7 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
                 className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
                   datePreset === 'custom'
                     ? 'bg-indigo-600 text-white font-bold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
                 Personalizado
@@ -682,28 +664,28 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
                   type="date"
                   value={customStartDate}
                   onChange={(e) => setCustomStartDate(e.target.value)}
-                  className="px-2.5 py-1 text-xs bg-slate-950 border border-slate-700 rounded-xl text-slate-200 focus:outline-none focus:border-indigo-500"
+                  className="px-2.5 py-1 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
                 />
                 <span className="text-slate-500 text-xs">até</span>
                 <input
                   type="date"
                   value={customEndDate}
                   onChange={(e) => setCustomEndDate(e.target.value)}
-                  className="px-2.5 py-1 text-xs bg-slate-950 border border-slate-700 rounded-xl text-slate-200 focus:outline-none focus:border-indigo-500"
+                  className="px-2.5 py-1 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
                 />
               </div>
             )}
 
             {/* Seletor de Base de Data do Filtro */}
-            <div className="flex items-center gap-1.5 text-xs text-slate-400 bg-slate-950 px-2.5 py-1 rounded-xl border border-slate-800">
+            <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-950 px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-800">
               <span className="text-[11px] font-semibold">Base de Data:</span>
               <button
                 type="button"
                 onClick={() => setDateField('producao')}
                 className={`px-2 py-0.5 rounded-lg font-semibold transition-all ${
                   dateField === 'producao'
-                    ? 'bg-emerald-500/20 text-emerald-300 font-bold'
-                    : 'text-slate-500 hover:text-slate-300'
+                    ? 'bg-emerald-500/15 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-bold'
+                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
                 }`}
                 title="Filtra com base na data em que a demanda entrou em produção"
               >
@@ -714,8 +696,8 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
                 onClick={() => setDateField('created')}
                 className={`px-2 py-0.5 rounded-lg font-semibold transition-all ${
                   dateField === 'created'
-                    ? 'bg-indigo-500/20 text-indigo-300 font-bold'
-                    : 'text-slate-500 hover:text-slate-300'
+                    ? 'bg-indigo-500/15 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 font-bold'
+                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
                 }`}
                 title="Filtra com base na data em que a demanda foi criada no Jira"
               >
@@ -727,7 +709,7 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
           {/* Botão de Atualização em Tempo Real */}
           <div className="flex items-center gap-3">
             {data?.lastUpdated && (
-              <span className="hidden md:inline text-[11px] text-slate-400 font-medium">
+              <span className="hidden md:inline text-[11px] text-slate-500 dark:text-slate-400 font-medium">
                 Última sincronização: {new Date(data.lastUpdated).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
               </span>
             )}
@@ -735,10 +717,10 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
               type="button"
               disabled={isLoading || isRefreshing}
               onClick={() => fetchActivationsData(true)}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-indigo-300 hover:text-white border border-slate-700 hover:border-slate-600 text-xs font-bold transition-all shadow-sm active:scale-95"
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 text-indigo-600 dark:text-indigo-300 hover:text-indigo-700 dark:hover:text-white border border-slate-300 dark:border-slate-700 text-xs font-bold transition-all shadow-sm active:scale-95"
               title="Recarregar ativações atualizadas do Jira"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-indigo-400' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-indigo-500 dark:text-indigo-400' : ''}`} />
               <span>{isRefreshing ? 'Sincronizando...' : 'Atualizar Agora'}</span>
             </button>
           </div>
@@ -748,11 +730,11 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
         <div className="flex flex-wrap items-center gap-3 pt-1">
           {/* Filtro de Status */}
           <div className="flex items-center gap-1.5">
-            <span className="text-xs font-semibold text-slate-400">Status:</span>
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Status:</span>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-2.5 py-1.5 text-xs font-medium bg-slate-950 border border-slate-700 rounded-xl text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-sm"
+              className="px-2.5 py-1.5 text-xs font-medium bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-sm"
             >
               <option value="all">Todos os Status (exceto Cancelado)</option>
               <option value="em_producao_only">Apenas Em Produção</option>
@@ -768,11 +750,11 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
 
           {/* Filtro de ERP */}
           <div className="flex items-center gap-1.5">
-            <span className="text-xs font-semibold text-slate-400">ERP:</span>
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">ERP:</span>
             <select
               value={erpFilter}
               onChange={(e) => setErpFilter(e.target.value)}
-              className="px-2.5 py-1.5 text-xs font-medium bg-slate-950 border border-slate-700 rounded-xl text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-sm max-w-[160px]"
+              className="px-2.5 py-1.5 text-xs font-medium bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-sm max-w-[160px]"
             >
               <option value="all">Todos os ERPs ({data?.availableErps?.length || 0})</option>
               {data?.availableErps?.map((erp) => (
@@ -785,11 +767,11 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
 
           {/* Filtro de Indústria */}
           <div className="flex items-center gap-1.5">
-            <span className="text-xs font-semibold text-slate-400">Indústria:</span>
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Indústria:</span>
             <select
               value={industriaFilter}
               onChange={(e) => setIndustriaFilter(e.target.value)}
-              className="px-2.5 py-1.5 text-xs font-medium bg-slate-950 border border-slate-700 rounded-xl text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-sm max-w-[170px]"
+              className="px-2.5 py-1.5 text-xs font-medium bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-sm max-w-[170px]"
             >
               <option value="all">Todas ({data?.availableIndustrias?.length || 0})</option>
               {data?.availableIndustrias?.map((ind) => (
@@ -802,11 +784,11 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
 
           {/* Filtro de Canal de Distribuição */}
           <div className="flex items-center gap-1.5">
-            <span className="text-xs font-semibold text-slate-400">Canal:</span>
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Canal:</span>
             <select
               value={canalFilter}
               onChange={(e) => setCanalFilter(e.target.value)}
-              className="px-2.5 py-1.5 text-xs font-medium bg-slate-950 border border-slate-700 rounded-xl text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-sm"
+              className="px-2.5 py-1.5 text-xs font-medium bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-sm"
             >
               <option value="all">Todos os Canais</option>
               {data?.availableCanais?.map((c) => (
@@ -819,11 +801,11 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
 
           {/* Filtro de Tipo de Integração */}
           <div className="flex items-center gap-1.5">
-            <span className="text-xs font-semibold text-slate-400">Integração:</span>
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Integração:</span>
             <select
               value={tipoIntegracaoFilter}
               onChange={(e) => setTipoIntegracaoFilter(e.target.value)}
-              className="px-2.5 py-1.5 text-xs font-medium bg-slate-950 border border-slate-700 rounded-xl text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-sm"
+              className="px-2.5 py-1.5 text-xs font-medium bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-sm"
             >
               <option value="all">Todos os Tipos</option>
               {data?.availableTiposIntegracao?.map((t) => (
@@ -853,7 +835,7 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
                 setDatePreset('all');
                 setSearchQuery('');
               }}
-              className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-all border border-slate-700"
+              className="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-all border border-slate-300 dark:border-slate-700"
             >
               Limpar Filtros
             </button>
@@ -863,15 +845,15 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
 
       {/* Erro de Comunicação ou Configuração */}
       {fetchError && (
-        <div className="p-4 rounded-2xl bg-rose-950/40 border border-rose-500/40 text-rose-200 text-xs flex items-center justify-between gap-3 shadow-lg">
+        <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-500/40 text-rose-800 dark:text-rose-200 text-xs flex items-center justify-between gap-3 shadow-lg">
           <div className="flex items-center gap-2.5">
-            <AlertCircle className="w-5 h-5 text-rose-400 flex-shrink-0" />
+            <AlertCircle className="w-5 h-5 text-rose-500 dark:text-rose-400 flex-shrink-0" />
             <span>{fetchError}</span>
           </div>
           <button
             type="button"
             onClick={() => fetchActivationsData(true)}
-            className="px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 font-bold border border-rose-500/40 text-xs transition-all flex-shrink-0"
+            className="px-3 py-1.5 rounded-xl bg-rose-500/10 dark:bg-rose-500/20 hover:bg-rose-500/20 dark:hover:bg-rose-500/30 text-rose-700 dark:text-rose-200 font-bold border border-rose-500/30 text-xs transition-all flex-shrink-0"
           >
             Tentar Novamente
           </button>
@@ -881,116 +863,116 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
       {/* Cards de Métricas e KPIs Principais */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {/* KPI 1: Total de Ativações */}
-        <div className="p-5 rounded-2xl bg-[#0e1628]/90 border border-slate-800 shadow-xl relative overflow-hidden group hover:border-indigo-500/40 transition-all">
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#0e1628]/90 border border-slate-200 dark:border-slate-800 shadow-xl relative overflow-hidden group hover:border-indigo-500/40 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-indigo-400" />
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
               Total de Ativações
             </span>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-500/15 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30">
               Campo Jira
             </span>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-black text-white tracking-tight">
+            <span className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
               {analytics.totalAtivacoes}
             </span>
-            <span className="text-xs font-semibold text-slate-400">ativações</span>
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">ativações</span>
           </div>
-          <p className="text-[11px] text-slate-500 mt-2">
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
             Em {analytics.totalCards} cards do projeto Neogrid
           </p>
         </div>
 
         {/* KPI 2: Ativações Em Produção */}
-        <div className="p-5 rounded-2xl bg-[#0e1628]/90 border border-slate-800 shadow-xl relative overflow-hidden group hover:border-emerald-500/40 transition-all">
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#0e1628]/90 border border-slate-200 dark:border-slate-800 shadow-xl relative overflow-hidden group hover:border-emerald-500/40 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <TrendingUp className="w-4 h-4 text-emerald-400" />
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <TrendingUp className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
               Em Produção
             </span>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/15 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
               Entregues
             </span>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-black text-emerald-400 tracking-tight">
+            <span className="text-3xl font-black text-emerald-600 dark:text-emerald-400 tracking-tight">
               {analytics.emProducaoAtivacoes}
             </span>
-            <span className="text-xs font-semibold text-slate-400">
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
               ({analytics.totalAtivacoes > 0 ? Math.round((analytics.emProducaoAtivacoes / analytics.totalAtivacoes) * 100) : 0}%)
             </span>
           </div>
-          <p className="text-[11px] text-slate-500 mt-2">
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
             {analytics.emProducaoCards} cards finalizados em produção
           </p>
         </div>
 
         {/* KPI 3: Ativações Em Andamento (Dev, HML, Teste, Deploy) */}
-        <div className="p-5 rounded-2xl bg-[#0e1628]/90 border border-slate-800 shadow-xl relative overflow-hidden group hover:border-amber-500/40 transition-all">
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#0e1628]/90 border border-slate-200 dark:border-slate-800 shadow-xl relative overflow-hidden group hover:border-amber-500/40 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <Clock className="w-4 h-4 text-amber-400" />
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Clock className="w-4 h-4 text-amber-500 dark:text-amber-400" />
               Em Andamento
             </span>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/15 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
               Pipeline
             </span>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-black text-amber-400 tracking-tight">
+            <span className="text-3xl font-black text-amber-600 dark:text-amber-400 tracking-tight">
               {analytics.emAndamentoAtivacoes}
             </span>
-            <span className="text-xs font-semibold text-slate-400">ativações</span>
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">ativações</span>
           </div>
-          <p className="text-[11px] text-slate-500 mt-2">
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
             {analytics.emAndamentoCards} cards em Dev, HML, Teste ou Deploy
           </p>
         </div>
 
         {/* KPI 4: Backlog / Triagem */}
-        <div className="p-5 rounded-2xl bg-[#0e1628]/90 border border-slate-800 shadow-xl relative overflow-hidden group hover:border-sky-500/40 transition-all">
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#0e1628]/90 border border-slate-200 dark:border-slate-800 shadow-xl relative overflow-hidden group hover:border-sky-500/40 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <Layers className="w-4 h-4 text-sky-400" />
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Layers className="w-4 h-4 text-sky-500 dark:text-sky-400" />
               Backlog & Triagem
             </span>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-sky-500/20 text-sky-300 border border-sky-500/30">
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-sky-500/15 dark:bg-sky-500/20 text-sky-700 dark:text-sky-300 border border-sky-500/30">
               Aberto / Pronto
             </span>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-black text-sky-400 tracking-tight">
+            <span className="text-3xl font-black text-sky-600 dark:text-sky-400 tracking-tight">
               {analytics.backlogAtivacoes}
             </span>
-            <span className="text-xs font-semibold text-slate-400">ativações</span>
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">ativações</span>
           </div>
-          <p className="text-[11px] text-slate-500 mt-2">
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
             {analytics.backlogCards} cards aguardando início técnico
           </p>
         </div>
 
         {/* KPI 5: ERPs & Indústrias Atendidas */}
-        <div className="p-5 rounded-2xl bg-[#0e1628]/90 border border-slate-800 shadow-xl relative overflow-hidden group hover:border-purple-500/40 transition-all">
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#0e1628]/90 border border-slate-200 dark:border-slate-800 shadow-xl relative overflow-hidden group hover:border-purple-500/40 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <Building2 className="w-4 h-4 text-purple-400" />
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Building2 className="w-4 h-4 text-purple-500 dark:text-purple-400" />
               ERPs & Indústrias
             </span>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-500/15 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/30">
               Ativos
             </span>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-white tracking-tight">
-              {analytics.distinctErpsCount} <span className="text-xs font-normal text-slate-400">ERPs</span>
+            <span className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+              {analytics.distinctErpsCount} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">ERPs</span>
             </span>
-            <span className="text-slate-500 text-xs font-bold">&bull;</span>
-            <span className="text-2xl font-black text-purple-300 tracking-tight">
-              {analytics.distinctIndCount} <span className="text-xs font-normal text-slate-400">Ind.</span>
+            <span className="text-slate-400 dark:text-slate-500 text-xs font-bold">&bull;</span>
+            <span className="text-2xl font-black text-purple-600 dark:text-purple-300 tracking-tight">
+              {analytics.distinctIndCount} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">Ind.</span>
             </span>
           </div>
-          <p className="text-[11px] text-slate-500 mt-2">
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
             Sistemas ERP e indústrias no escopo filtrado
           </p>
         </div>
@@ -999,20 +981,27 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
       {/* Grid com as 4 Seções Analíticas Principais */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* SEÇÃO 1: Quantidade de Ativações por Status */}
-        <div className="p-5 rounded-2xl bg-[#0e1628]/90 border border-slate-800 shadow-xl space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div id="chart-neo-status" className="p-5 rounded-2xl bg-white dark:bg-[#0e1628]/90 border border-slate-200 dark:border-slate-800 shadow-xl space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
             <div>
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <BarChart3 className="w-4 h-4 text-indigo-400" />
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
                 1. Quantidade de Ativações por Status
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 Distribuição das ativações por status no fluxo operacional (exceto Cancelado)
               </p>
             </div>
-            <span className="text-xs font-medium text-slate-400 bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800">
-              {analytics.totalAtivacoes} ativações totais
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-800">
+                {analytics.totalAtivacoes} ativações totais
+              </span>
+              <ExportChartButton
+                targetId="chart-neo-status"
+                fileName="ativacoes-neogrid-por-status"
+                onShowToast={onShowToast}
+              />
+            </div>
           </div>
 
           <div className="space-y-3.5 pt-1">
@@ -1024,7 +1013,7 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
                 return (
                   <div key={item.status} className="space-y-1.5">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-slate-200 flex items-center gap-2">
+                      <span className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
                         <span
                           className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                           style={{ backgroundColor: item.color }}
@@ -1032,14 +1021,14 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
                         {item.status}
                       </span>
                       <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-white text-sm">
-                          {item.ativacoes} <span className="text-slate-400 font-normal text-xs">ativ.</span>
+                        <span className="font-mono font-bold text-slate-900 dark:text-white text-sm">
+                          {item.ativacoes} <span className="text-slate-500 dark:text-slate-400 font-normal text-xs">ativ.</span>
                         </span>
-                        <span className="text-slate-500 text-[11px]">({item.cards} cards &bull; {item.percentage}%)</span>
+                        <span className="text-slate-400 dark:text-slate-500 text-[11px]">({item.cards} cards &bull; {item.percentage}%)</span>
                       </div>
                     </div>
 
-                    <div className="h-2.5 w-full bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-800/80">
+                    <div className="h-2.5 w-full bg-slate-100 dark:bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-200 dark:border-slate-800/80">
                       <div
                         className="h-full rounded-full transition-all duration-700"
                         style={{
@@ -1055,81 +1044,73 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
           </div>
         </div>
 
-        {/* SEÇÃO 4: Evolução Mensal de Ativações (Gráfico de Linhas) */}
-        <div className="p-5 rounded-2xl bg-[#0e1628]/90 border border-slate-800 shadow-xl space-y-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+        {/* SEÇÃO 4: Evolução Mensal de Ativações (Gráfico de Linhas - Apenas Em Produção) */}
+        <div id="chart-neo-monthly" className="p-5 rounded-2xl bg-white dark:bg-[#0e1628]/90 border border-slate-200 dark:border-slate-800 shadow-xl space-y-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
             <div>
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-indigo-400" />
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
                 4. Ativações por Mês
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Evolução temporal &bull; Todos os status &bull; Gráfico de linhas
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Evolução temporal &bull; Apenas status "Em Produção" &bull; Gráfico de linhas
               </p>
             </div>
 
-            {/* Alternador de Métrica do Gráfico de Linhas */}
-            <div className="flex items-center gap-1 p-1 bg-slate-950 border border-slate-800 rounded-xl text-xs">
-              <button
-                type="button"
-                onClick={() => setLineChartMetric('both')}
-                className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
-                  lineChartMetric === 'both'
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-                title="Exibir ambas as linhas (Total Demandado vs Entradas em Produção)"
-              >
-                Comparativo
-              </button>
-              <button
-                type="button"
-                onClick={() => setLineChartMetric('total')}
-                className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
-                  lineChartMetric === 'total'
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-                title="Exibir apenas total de ativações no mês"
-              >
-                Total Criado
-              </button>
-              <button
-                type="button"
-                onClick={() => setLineChartMetric('producao')}
-                className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
-                  lineChartMetric === 'producao'
-                    ? 'bg-emerald-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-                title="Exibir apenas ativações que entraram em produção no mês"
-              >
-                Em Produção
-              </button>
+            <div className="flex items-center gap-2">
+              {/* Alternador de Métrica do Gráfico de Linhas */}
+              <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs">
+                <button
+                  type="button"
+                  onClick={() => setLineChartMetric('ativacoes')}
+                  className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
+                    lineChartMetric === 'ativacoes'
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                  title="Exibir volume total de ativações entregues em produção por mês"
+                >
+                  Volume Ativações
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLineChartMetric('cards')}
+                  className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
+                    lineChartMetric === 'cards'
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                  title="Exibir quantidade de cards/demandas entregues em produção por mês"
+                >
+                  Qtd. Cards
+                </button>
+              </div>
+
+              <ExportChartButton
+                targetId="chart-neo-monthly"
+                fileName="ativacoes-neogrid-por-mes"
+                onShowToast={onShowToast}
+              />
             </div>
           </div>
 
           {/* Badges de Resumo e Legenda do Gráfico de Linhas */}
           <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-xs">
             <div className="flex flex-wrap items-center gap-3">
-              {(lineChartMetric === 'total' || lineChartMetric === 'both') && (
-                <div className="flex items-center gap-1.5 text-indigo-300 font-medium">
-                  <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 shadow-sm shadow-indigo-500/50" />
-                  <span>Total Criado: <strong>{lineChartStats.totalCreated}</strong></span>
-                </div>
-              )}
-              {(lineChartMetric === 'producao' || lineChartMetric === 'both') && (
-                <div className="flex items-center gap-1.5 text-emerald-300 font-medium">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50" />
-                  <span>Em Produção: <strong>{lineChartStats.totalProd}</strong></span>
-                </div>
-              )}
+              <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300 font-medium">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50" />
+                <span>Total Ativações: <strong>{lineChartStats.totalAtivacoes}</strong></span>
+              </div>
+              <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400 font-medium">
+                <span className="w-2.5 h-2.5 rounded-full bg-slate-400 dark:bg-slate-500" />
+                <span>Total Cards: <strong>{lineChartStats.totalCards}</strong></span>
+              </div>
             </div>
 
-            <div className="flex items-center gap-3 text-slate-400 text-[11px]">
-              <span>Média: <strong className="text-slate-200">{lineChartStats.avgMonthly} ativ/mês</strong></span>
+            <div className="flex items-center gap-3 text-slate-500 dark:text-slate-400 text-[11px]">
+              <span>Média: <strong className="text-slate-700 dark:text-slate-200">{lineChartStats.avgMonthly} {lineChartMetric === 'cards' ? 'cards/mês' : 'ativ/mês'}</strong></span>
               <span>&bull;</span>
-              <span>Pico: <strong className="text-indigo-300">{lineChartStats.peakMonthLabel}</strong></span>
+              <span>Pico: <strong className="text-emerald-600 dark:text-emerald-400">{lineChartStats.peakMonthLabel}</strong></span>
             </div>
           </div>
 
@@ -1137,7 +1118,7 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
           <div className="relative pt-2">
             {analytics.byMonth.length === 0 ? (
               <p className="text-xs text-slate-500 italic py-14 text-center">
-                Nenhum dado mensal encontrado para os filtros selecionados.
+                Nenhuma ativação em produção encontrada para os filtros selecionados.
               </p>
             ) : (
               (() => {
@@ -1152,22 +1133,25 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
                 const plotH = svgH - padTop - padBottom;
 
                 // Valor máximo para a escala Y
-                const maxTotal = Math.max(...dataPoints.map((d) => d.totalAtivacoes), 0);
-                const maxProd = Math.max(...dataPoints.map((d) => d.prodAtivacoes), 0);
-                const rawMax = lineChartMetric === 'producao' ? maxProd : Math.max(maxTotal, maxProd, 1);
-                const scaleMax = rawMax <= 5 ? 5 : rawMax <= 10 ? 10 : rawMax <= 20 ? 20 : rawMax <= 30 ? 30 : Math.ceil(rawMax / 10) * 10;
+                const rawMax = Math.max(
+                  ...dataPoints.map((d) => (lineChartMetric === 'cards' ? d.cards : d.ativacoes)),
+                  1
+                );
+                const scaleMax =
+                  rawMax <= 5 ? 5 : rawMax <= 10 ? 10 : rawMax <= 20 ? 20 : rawMax <= 30 ? 30 : Math.ceil(rawMax / 10) * 10;
 
                 // Ticks horizontais (grid)
                 const yTicks = [0, Math.round(scaleMax * 0.25), Math.round(scaleMax * 0.5), Math.round(scaleMax * 0.75), scaleMax];
 
                 // Coordenadas dos pontos
                 const points = dataPoints.map((d, i) => {
-                  const x = dataPoints.length > 1
-                    ? padLeft + (i / (dataPoints.length - 1)) * plotW
-                    : padLeft + plotW / 2;
-                  const yTotal = padTop + plotH - (d.totalAtivacoes / scaleMax) * plotH;
-                  const yProd = padTop + plotH - (d.prodAtivacoes / scaleMax) * plotH;
-                  return { ...d, index: i, x, yTotal, yProd };
+                  const x =
+                    dataPoints.length > 1
+                      ? padLeft + (i / (dataPoints.length - 1)) * plotW
+                      : padLeft + plotW / 2;
+                  const val = lineChartMetric === 'cards' ? d.cards : d.ativacoes;
+                  const y = padTop + plotH - (val / scaleMax) * plotH;
+                  return { ...d, index: i, x, y, val };
                 });
 
                 // Função para curva suave
@@ -1184,18 +1168,12 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
                   return d;
                 };
 
-                const totalSmooth = createSmoothPath(points.map((p) => ({ x: p.x, y: p.yTotal })));
-                const prodSmooth = createSmoothPath(points.map((p) => ({ x: p.x, y: p.yProd })));
+                const prodSmooth = createSmoothPath(points.map((p) => ({ x: p.x, y: p.y })));
+                const prodArea =
+                  points.length > 0
+                    ? `${prodSmooth} L ${points[points.length - 1].x},${padTop + plotH} L ${points[0].x},${padTop + plotH} Z`
+                    : '';
 
-                const totalArea = points.length > 0
-                  ? `${totalSmooth} L ${points[points.length - 1].x},${padTop + plotH} L ${points[0].x},${padTop + plotH} Z`
-                  : '';
-                const prodArea = points.length > 0
-                  ? `${prodSmooth} L ${points[points.length - 1].x},${padTop + plotH} L ${points[0].x},${padTop + plotH} Z`
-                  : '';
-
-                const showTotal = lineChartMetric === 'total' || lineChartMetric === 'both';
-                const showProd = lineChartMetric === 'producao' || lineChartMetric === 'both';
                 const hoveredPoint = hoveredMonthIndex !== null ? points[hoveredMonthIndex] : null;
 
                 return (
@@ -1205,19 +1183,6 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
                       className="w-full h-auto overflow-visible select-none"
                     >
                       <defs>
-                        {/* Gradiente de Área Total (Índigo) */}
-                        <linearGradient id="areaTotalGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#6366f1" stopOpacity="0.4" />
-                          <stop offset="100%" stopColor="#6366f1" stopOpacity="0.0" />
-                        </linearGradient>
-
-                        {/* Gradiente de Linha Total */}
-                        <linearGradient id="lineTotalGrad" x1="0" y1="0" x2="1" y2="0">
-                          <stop offset="0%" stopColor="#818cf8" />
-                          <stop offset="50%" stopColor="#6366f1" />
-                          <stop offset="100%" stopColor="#38bdf8" />
-                        </linearGradient>
-
                         {/* Gradiente de Área Produção (Esmeralda) */}
                         <linearGradient id="areaProdGrad" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="0%" stopColor="#10b981" stopOpacity="0.35" />
@@ -1241,16 +1206,16 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
                               y1={y}
                               x2={padLeft + plotW}
                               y2={y}
-                              stroke="#334155"
+                              className="stroke-slate-200 dark:stroke-slate-700"
                               strokeDasharray="4 4"
                               strokeWidth="1"
-                              opacity="0.6"
+                              opacity="0.8"
                             />
                             <text
                               x={padLeft - 8}
                               y={y + 3.5}
                               textAnchor="end"
-                              fill="#64748b"
+                              className="fill-slate-400 dark:fill-slate-500"
                               fontSize="10"
                               fontFamily="monospace"
                             >
@@ -1266,38 +1231,21 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
                         y1={padTop + plotH}
                         x2={padLeft + plotW}
                         y2={padTop + plotH}
-                        stroke="#475569"
+                        className="stroke-slate-300 dark:stroke-slate-600"
                         strokeWidth="1"
                       />
 
-                      {/* Área Preenchida Total */}
-                      {showTotal && totalArea && (
-                        <path d={totalArea} fill="url(#areaTotalGrad)" />
-                      )}
-
                       {/* Área Preenchida Produção */}
-                      {showProd && prodArea && (
+                      {prodArea && (
                         <path d={prodArea} fill="url(#areaProdGrad)" />
                       )}
 
                       {/* Linha Curva Produção */}
-                      {showProd && prodSmooth && (
+                      {prodSmooth && (
                         <path
                           d={prodSmooth}
                           fill="none"
                           stroke="url(#lineProdGrad)"
-                          strokeWidth="2.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      )}
-
-                      {/* Linha Curva Total */}
-                      {showTotal && totalSmooth && (
-                        <path
-                          d={totalSmooth}
-                          fill="none"
-                          stroke="url(#lineTotalGrad)"
                           strokeWidth="3"
                           strokeLinecap="round"
                           strokeLinejoin="round"
@@ -1311,7 +1259,7 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
                           y1={padTop}
                           x2={hoveredPoint.x}
                           y2={padTop + plotH}
-                          stroke="#818cf8"
+                          stroke="#10b981"
                           strokeDasharray="3 3"
                           strokeWidth="1.5"
                           opacity="0.8"
@@ -1319,74 +1267,44 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
                       )}
 
                       {/* Pontos de Produção */}
-                      {showProd &&
-                        points.map((p) => {
-                          const isHovered = hoveredMonthIndex === p.index;
-                          return (
-                            <g key={`prod-pt-${p.monthKey}`}>
-                              {isHovered && (
-                                <circle
-                                  cx={p.x}
-                                  cy={p.yProd}
-                                  r="8"
-                                  fill="#10b981"
-                                  opacity="0.3"
-                                />
-                              )}
+                      {points.map((p) => {
+                        const isHovered = hoveredMonthIndex === p.index;
+                        return (
+                          <g key={`prod-pt-${p.monthKey}`}>
+                            {isHovered && (
                               <circle
                                 cx={p.x}
-                                cy={p.yProd}
-                                r={isHovered ? 5.5 : 4}
-                                fill="#064e3b"
-                                stroke="#34d399"
-                                strokeWidth="2"
-                                className="transition-all"
+                                cy={p.y}
+                                r="8"
+                                fill="#10b981"
+                                opacity="0.3"
                               />
-                            </g>
-                          );
-                        })}
-
-                      {/* Pontos de Total */}
-                      {showTotal &&
-                        points.map((p) => {
-                          const isHovered = hoveredMonthIndex === p.index;
-                          return (
-                            <g key={`total-pt-${p.monthKey}`}>
-                              {isHovered && (
-                                <circle
-                                  cx={p.x}
-                                  cy={p.yTotal}
-                                  r="9"
-                                  fill="#6366f1"
-                                  opacity="0.35"
-                                />
-                              )}
-                              <circle
-                                cx={p.x}
-                                cy={p.yTotal}
-                                r={isHovered ? 6 : 4.5}
-                                fill="#1e1b4b"
-                                stroke="#818cf8"
-                                strokeWidth="2"
-                                className="transition-all"
-                              />
-                              {/* Valor numérico acima do ponto se total > 0 */}
-                              {p.totalAtivacoes > 0 && (
-                                <text
-                                  x={p.x}
-                                  y={p.yTotal - 8}
-                                  textAnchor="middle"
-                                  fill="#c7d2fe"
-                                  fontSize="10"
-                                  fontWeight="bold"
-                                  fontFamily="monospace"
-                                >
-                                  {p.totalAtivacoes}
-                                </text>
-                              )}
-                            </g>
-                          );
-                        })}
+                            )}
+                            <circle
+                              cx={p.x}
+                              cy={p.y}
+                              r={isHovered ? 5.5 : 4}
+                              fill="#064e3b"
+                              stroke="#34d399"
+                              strokeWidth="2"
+                              className="transition-all"
+                            />
+                            {/* Valor numérico acima do ponto se > 0 */}
+                            {p.val > 0 && (
+                              <text
+                                x={p.x}
+                                y={p.y - 8}
+                                textAnchor="middle"
+                                className="fill-emerald-700 dark:fill-emerald-300 font-bold"
+                                fontSize="10"
+                                fontFamily="monospace"
+                              >
+                                {p.val}
+                              </text>
+                            )}
+                          </g>
+                        );
+                      })}
 
                       {/* Labels do Eixo X (Meses) */}
                       {points.map((p) => {
@@ -1397,10 +1315,11 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
                             x={p.x}
                             y={padTop + plotH + 20}
                             textAnchor="middle"
-                            fill={isHovered ? '#ffffff' : '#94a3b8'}
-                            fontSize="10"
-                            fontWeight={isHovered ? 'bold' : 'normal'}
-                            className="transition-colors cursor-pointer"
+                            className={`transition-colors cursor-pointer text-[10px] ${
+                              isHovered
+                                ? 'fill-slate-900 dark:fill-white font-bold'
+                                : 'fill-slate-500 dark:fill-slate-400 font-normal'
+                            }`}
                           >
                             {p.label}
                           </text>
@@ -1430,41 +1349,41 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
                     {/* Tooltip Card Flutuante quando hovering */}
                     {hoveredPoint && (
                       <div
-                        className="absolute pointer-events-none z-20 px-3 py-2 rounded-xl bg-slate-900/95 border border-indigo-500/40 shadow-2xl backdrop-blur-md text-xs space-y-1 transition-all"
+                        className="absolute pointer-events-none z-20 px-3 py-2 rounded-xl bg-white/95 dark:bg-slate-900/95 border border-emerald-500/40 shadow-2xl backdrop-blur-md text-xs space-y-1 transition-all"
                         style={{
                           left: `${Math.min(Math.max((hoveredPoint.x / svgW) * 100, 15), 85)}%`,
                           top: '10px',
                           transform: 'translateX(-50%)',
                         }}
                       >
-                        <div className="font-bold text-white flex items-center justify-between gap-4 border-b border-slate-800 pb-1">
-                          <span className="flex items-center gap-1.5 text-indigo-300">
+                        <div className="font-bold text-slate-900 dark:text-white flex items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-1">
+                          <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
                             <Calendar className="w-3.5 h-3.5" />
                             {hoveredPoint.label}
                           </span>
-                          <span className="text-[10px] text-slate-400 font-mono">
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
                             {hoveredPoint.monthKey}
                           </span>
                         </div>
 
                         <div className="pt-0.5 space-y-1 text-[11px]">
-                          <div className="flex items-center justify-between gap-3 text-indigo-200">
+                          <div className="flex items-center justify-between gap-3 text-emerald-700 dark:text-emerald-300">
                             <span className="flex items-center gap-1.5">
-                              <span className="w-2 h-2 rounded-full bg-indigo-400" />
-                              Total Demandado:
+                              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                              Ativações em Produção:
                             </span>
-                            <span className="font-bold font-mono text-white">
-                              {hoveredPoint.totalAtivacoes} ativ. ({hoveredPoint.totalCards} cards)
+                            <span className="font-bold font-mono text-slate-900 dark:text-white">
+                              {hoveredPoint.ativacoes} ativ.
                             </span>
                           </div>
 
-                          <div className="flex items-center justify-between gap-3 text-emerald-300">
+                          <div className="flex items-center justify-between gap-3 text-slate-600 dark:text-slate-300">
                             <span className="flex items-center gap-1.5">
-                              <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                              Em Produção:
+                              <span className="w-2 h-2 rounded-full bg-slate-400 dark:bg-slate-500" />
+                              Cards em Produção:
                             </span>
-                            <span className="font-bold font-mono text-white">
-                              {hoveredPoint.prodAtivacoes} ativ. ({hoveredPoint.prodCards} cards)
+                            <span className="font-bold font-mono text-slate-900 dark:text-white">
+                              {hoveredPoint.cards} {hoveredPoint.cards === 1 ? 'card' : 'cards'}
                             </span>
                           </div>
                         </div>
@@ -1478,20 +1397,27 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
         </div>
 
         {/* SEÇÃO 2: Quantidade de Ativações por ERP (Todos os Status Ativos) */}
-        <div className="p-5 rounded-2xl bg-[#0e1628]/90 border border-slate-800 shadow-xl space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div id="chart-neo-erp" className="p-5 rounded-2xl bg-white dark:bg-[#0e1628]/90 border border-slate-200 dark:border-slate-800 shadow-xl space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
             <div>
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Cpu className="w-4 h-4 text-purple-400" />
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Cpu className="w-4 h-4 text-purple-500 dark:text-purple-400" />
                 2. Quantidade de Ativações por ERP
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 ERP extraído do <strong>Epic Name</strong> &bull; Considera todos os status ativos
               </p>
             </div>
-            <span className="text-xs font-semibold text-purple-300 bg-purple-950/40 px-2.5 py-1 rounded-lg border border-purple-500/30">
-              {analytics.byErp.length} ERPs
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-purple-700 dark:text-purple-300 bg-purple-500/10 dark:bg-purple-950/40 px-2.5 py-1 rounded-lg border border-purple-500/30">
+                {analytics.byErp.length} ERPs
+              </span>
+              <ExportChartButton
+                targetId="chart-neo-erp"
+                fileName="ativacoes-neogrid-por-erp"
+                onShowToast={onShowToast}
+              />
+            </div>
           </div>
 
           <div className="space-y-3 pt-1 max-h-[360px] overflow-y-auto pr-1">
@@ -1501,23 +1427,23 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
               analytics.byErp.map((item, idx) => {
                 const barWidth = maxErpQtd > 0 ? (item.ativacoes / maxErpQtd) * 100 : 0;
                 return (
-                  <div key={item.erp} className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-1.5">
+                  <div key={item.erp} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 space-y-1.5">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-slate-200 flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-lg bg-purple-950/80 border border-purple-500/30 text-purple-300 text-[10px] font-black flex items-center justify-center flex-shrink-0">
+                      <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-lg bg-purple-500/10 dark:bg-purple-950/80 border border-purple-500/30 text-purple-700 dark:text-purple-300 text-[10px] font-black flex items-center justify-center flex-shrink-0">
                           {idx + 1}
                         </span>
                         {item.erp}
                       </span>
                       <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-purple-300 text-sm">
-                          {item.ativacoes} <span className="text-slate-400 font-normal text-xs">ativ.</span>
+                        <span className="font-mono font-bold text-purple-600 dark:text-purple-300 text-sm">
+                          {item.ativacoes} <span className="text-slate-500 dark:text-slate-400 font-normal text-xs">ativ.</span>
                         </span>
-                        <span className="text-slate-500 text-[11px]">({item.cards} cards &bull; {item.percentage}%)</span>
+                        <span className="text-slate-400 dark:text-slate-500 text-[11px]">({item.cards} cards &bull; {item.percentage}%)</span>
                       </div>
                     </div>
 
-                    <div className="h-2 w-full bg-slate-900 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                    <div className="h-2 w-full bg-slate-200 dark:bg-slate-900 rounded-full overflow-hidden p-0.5 border border-slate-300 dark:border-slate-800">
                       <div
                         className="h-full rounded-full bg-gradient-to-r from-purple-500 to-indigo-500 transition-all duration-700"
                         style={{ width: `${Math.max(barWidth, 3)}%` }}
@@ -1531,20 +1457,27 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
         </div>
 
         {/* SEÇÃO 3: Quantidade de Ativações por Indústria (Todos os Status Ativos) */}
-        <div className="p-5 rounded-2xl bg-[#0e1628]/90 border border-slate-800 shadow-xl space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div id="chart-neo-industria" className="p-5 rounded-2xl bg-white dark:bg-[#0e1628]/90 border border-slate-200 dark:border-slate-800 shadow-xl space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
             <div>
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Factory className="w-4 h-4 text-cyan-400" />
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Factory className="w-4 h-4 text-cyan-500 dark:text-cyan-400" />
                 3. Quantidade de Ativações por Indústria
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 Campo "Indústria " do Jira &bull; Considera todos os status ativos
               </p>
             </div>
-            <span className="text-xs font-semibold text-cyan-300 bg-cyan-950/40 px-2.5 py-1 rounded-lg border border-cyan-500/30">
-              {analytics.byIndustria.length} Indústrias
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-cyan-700 dark:text-cyan-300 bg-cyan-500/10 dark:bg-cyan-950/40 px-2.5 py-1 rounded-lg border border-cyan-500/30">
+                {analytics.byIndustria.length} Indústrias
+              </span>
+              <ExportChartButton
+                targetId="chart-neo-industria"
+                fileName="ativacoes-neogrid-por-industria"
+                onShowToast={onShowToast}
+              />
+            </div>
           </div>
 
           <div className="space-y-3 pt-1 max-h-[360px] overflow-y-auto pr-1">
@@ -1554,23 +1487,23 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
               analytics.byIndustria.map((item, idx) => {
                 const barWidth = maxIndQtd > 0 ? (item.ativacoes / maxIndQtd) * 100 : 0;
                 return (
-                  <div key={item.industria} className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-1.5">
+                  <div key={item.industria} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 space-y-1.5">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-slate-200 flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-lg bg-cyan-950/80 border border-cyan-500/30 text-cyan-300 text-[10px] font-black flex items-center justify-center flex-shrink-0">
+                      <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-lg bg-cyan-500/10 dark:bg-cyan-950/80 border border-cyan-500/30 text-cyan-700 dark:text-cyan-300 text-[10px] font-black flex items-center justify-center flex-shrink-0">
                           {idx + 1}
                         </span>
                         {item.industria}
                       </span>
                       <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-cyan-300 text-sm">
-                          {item.ativacoes} <span className="text-slate-400 font-normal text-xs">ativ.</span>
+                        <span className="font-mono font-bold text-cyan-600 dark:text-cyan-300 text-sm">
+                          {item.ativacoes} <span className="text-slate-500 dark:text-slate-400 font-normal text-xs">ativ.</span>
                         </span>
-                        <span className="text-slate-500 text-[11px]">({item.cards} cards &bull; {item.percentage}%)</span>
+                        <span className="text-slate-400 dark:text-slate-500 text-[11px]">({item.cards} cards &bull; {item.percentage}%)</span>
                       </div>
                     </div>
 
-                    <div className="h-2 w-full bg-slate-900 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                    <div className="h-2 w-full bg-slate-200 dark:bg-slate-900 rounded-full overflow-hidden p-0.5 border border-slate-300 dark:border-slate-800">
                       <div
                         className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-700"
                         style={{ width: `${Math.max(barWidth, 3)}%` }}
@@ -1585,14 +1518,14 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
       </div>
 
       {/* Tabela Analítica Detalhada com Busca e Exportação */}
-      <div className="p-5 rounded-2xl bg-[#0e1628]/90 border border-slate-800 shadow-xl space-y-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+      <div className="p-5 rounded-2xl bg-white dark:bg-[#0e1628]/90 border border-slate-200 dark:border-slate-800 shadow-xl space-y-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
           <div>
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <Briefcase className="w-4 h-4 text-indigo-400" />
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Briefcase className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
               Detalhamento Analítico dos Cards de Ativação
             </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               Exibindo {sortedIssues.length} cards &bull; Clique nas colunas para ordenar
             </p>
           </div>
@@ -1600,19 +1533,19 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             {/* Campo de Busca Rápida */}
             <div className="relative flex-1 sm:w-64">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
               <input
                 type="text"
                 placeholder="Buscar por key, resumo, ERP..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500"
               />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white text-xs"
                 >
                   ✕
                 </button>
@@ -1633,94 +1566,94 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
         </div>
 
         {/* Tabela Responsiva */}
-        <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/60">
+        <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/60">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="bg-slate-900/90 text-slate-400 border-b border-slate-800 select-none">
+              <tr className="bg-slate-100 dark:bg-slate-900/90 text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 select-none">
                 <th
                   onClick={() => handleSort('key')}
-                  className="p-3 font-bold cursor-pointer hover:text-white transition-colors"
+                  className="p-3 font-bold cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
                 >
                   <div className="flex items-center gap-1">
                     <span>Key</span>
-                    {sortField === 'key' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-400" />)}
+                    {sortField === 'key' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-500 dark:text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />)}
                   </div>
                 </th>
                 <th
                   onClick={() => handleSort('summary')}
-                  className="p-3 font-bold cursor-pointer hover:text-white transition-colors min-w-[220px]"
+                  className="p-3 font-bold cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors min-w-[220px]"
                 >
                   <div className="flex items-center gap-1">
                     <span>Resumo</span>
-                    {sortField === 'summary' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-400" />)}
+                    {sortField === 'summary' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-500 dark:text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />)}
                   </div>
                 </th>
                 <th
                   onClick={() => handleSort('status')}
-                  className="p-3 font-bold cursor-pointer hover:text-white transition-colors"
+                  className="p-3 font-bold cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
                 >
                   <div className="flex items-center gap-1">
                     <span>Status</span>
-                    {sortField === 'status' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-400" />)}
+                    {sortField === 'status' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-500 dark:text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />)}
                   </div>
                 </th>
                 <th
                   onClick={() => handleSort('quantidade_ativacoes')}
-                  className="p-3 font-bold text-center cursor-pointer hover:text-white transition-colors bg-indigo-950/20"
+                  className="p-3 font-bold text-center cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors bg-indigo-50 dark:bg-indigo-950/20"
                 >
                   <div className="flex items-center justify-center gap-1">
-                    <span className="text-indigo-300 font-black">Qtd Ativações</span>
-                    {sortField === 'quantidade_ativacoes' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-400" />)}
+                    <span className="text-indigo-600 dark:text-indigo-300 font-black">Qtd Ativações</span>
+                    {sortField === 'quantidade_ativacoes' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-500 dark:text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />)}
                   </div>
                 </th>
                 <th
                   onClick={() => handleSort('erp')}
-                  className="p-3 font-bold cursor-pointer hover:text-white transition-colors"
+                  className="p-3 font-bold cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
                 >
                   <div className="flex items-center gap-1">
                     <span>ERP (Epic Name)</span>
-                    {sortField === 'erp' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-400" />)}
+                    {sortField === 'erp' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-500 dark:text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />)}
                   </div>
                 </th>
                 <th
                   onClick={() => handleSort('industria')}
-                  className="p-3 font-bold cursor-pointer hover:text-white transition-colors"
+                  className="p-3 font-bold cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
                 >
                   <div className="flex items-center gap-1">
                     <span>Indústria</span>
-                    {sortField === 'industria' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-400" />)}
+                    {sortField === 'industria' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-500 dark:text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />)}
                   </div>
                 </th>
                 <th
                   onClick={() => handleSort('canal')}
-                  className="p-3 font-bold cursor-pointer hover:text-white transition-colors"
+                  className="p-3 font-bold cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
                 >
                   <div className="flex items-center gap-1">
                     <span>Canal</span>
-                    {sortField === 'canal' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-400" />)}
+                    {sortField === 'canal' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-500 dark:text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />)}
                   </div>
                 </th>
                 <th
                   onClick={() => handleSort('tipo_integracao')}
-                  className="p-3 font-bold cursor-pointer hover:text-white transition-colors"
+                  className="p-3 font-bold cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
                 >
                   <div className="flex items-center gap-1">
                     <span>Integração</span>
-                    {sortField === 'tipo_integracao' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-400" />)}
+                    {sortField === 'tipo_integracao' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-500 dark:text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />)}
                   </div>
                 </th>
                 <th
                   onClick={() => handleSort('dt_producao')}
-                  className="p-3 font-bold cursor-pointer hover:text-white transition-colors text-right"
+                  className="p-3 font-bold cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors text-right"
                 >
                   <div className="flex items-center justify-end gap-1">
                     <span>Em Produção Em</span>
-                    {sortField === 'dt_producao' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-400" />)}
+                    {sortField === 'dt_producao' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-500 dark:text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />)}
                   </div>
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60 font-sans">
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60 font-sans">
               {sortedIssues.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="py-8 text-center text-slate-500 italic">
@@ -1729,14 +1662,14 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
                 </tr>
               ) : (
                 sortedIssues.map((iss) => (
-                  <tr key={iss.key} className="hover:bg-slate-900/60 transition-colors">
+                  <tr key={iss.key} className="hover:bg-slate-100/70 dark:hover:bg-slate-900/60 transition-colors">
                     {/* Key */}
                     <td className="p-3 font-mono font-bold whitespace-nowrap">
                       <a
                         href={iss.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-indigo-400 hover:text-indigo-300 flex items-center gap-1 group"
+                        className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-1 group"
                         title="Abrir no Jira"
                       >
                         <span>{iss.key}</span>
@@ -1746,7 +1679,7 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
 
                     {/* Resumo */}
                     <td className="p-3 max-w-[280px]">
-                      <span className="block truncate text-slate-200 font-medium" title={iss.summary}>
+                      <span className="block truncate text-slate-800 dark:text-slate-200 font-medium" title={iss.summary}>
                         {iss.summary}
                       </span>
                     </td>
@@ -1756,8 +1689,8 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
                       <span
                         className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                           iss.isEmProducao
-                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                            : 'bg-slate-900 text-slate-300 border border-slate-800'
+                            ? 'bg-emerald-500/15 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
+                            : 'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800'
                         }`}
                       >
                         {iss.status}
@@ -1765,52 +1698,52 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
                     </td>
 
                     {/* Quantidade de Ativações */}
-                    <td className="p-3 text-center font-mono font-black text-indigo-300 bg-indigo-950/10 text-sm">
+                    <td className="p-3 text-center font-mono font-black text-indigo-700 dark:text-indigo-300 bg-indigo-50/60 dark:bg-indigo-950/10 text-sm">
                       {iss.quantidade_ativacoes}
                     </td>
 
                     {/* ERP (Epic Name) */}
                     <td className="p-3 whitespace-nowrap">
-                      <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-purple-950/40 text-purple-300 border border-purple-500/30">
+                      <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-purple-500/10 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-500/30">
                         {iss.erp}
                       </span>
                     </td>
 
                     {/* Indústria */}
-                    <td className="p-3 whitespace-nowrap text-slate-300 font-medium">
+                    <td className="p-3 whitespace-nowrap text-slate-700 dark:text-slate-300 font-medium">
                       {iss.industria}
                     </td>
 
                     {/* Canal */}
                     <td className="p-3 whitespace-nowrap">
                       {iss.canal ? (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-900 text-slate-300 border border-slate-800">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800">
                           {iss.canal}
                         </span>
                       ) : (
-                        <span className="text-slate-600">-</span>
+                        <span className="text-slate-400 dark:text-slate-600">-</span>
                       )}
                     </td>
 
                     {/* Integração */}
                     <td className="p-3 whitespace-nowrap">
                       {iss.tipo_integracao ? (
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-900 text-slate-400 border border-slate-800">
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800">
                           {iss.tipo_integracao}
                         </span>
                       ) : (
-                        <span className="text-slate-600">-</span>
+                        <span className="text-slate-400 dark:text-slate-600">-</span>
                       )}
                     </td>
 
                     {/* Data Em Produção */}
-                    <td className="p-3 text-right font-mono text-slate-400 whitespace-nowrap">
+                    <td className="p-3 text-right font-mono text-slate-500 dark:text-slate-400 whitespace-nowrap">
                       {iss.dt_producao ? (
-                        <span className="text-emerald-400/90 font-semibold">
+                        <span className="text-emerald-600 dark:text-emerald-400/90 font-semibold">
                           {new Date(iss.dt_producao).toLocaleDateString('pt-BR')}
                         </span>
                       ) : (
-                        <span className="text-slate-600">-</span>
+                        <span className="text-slate-400 dark:text-slate-600">-</span>
                       )}
                     </td>
                   </tr>

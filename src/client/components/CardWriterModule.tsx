@@ -329,19 +329,19 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
   return (
     <div className="space-y-6">
       {/* Module Header Bar */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-5 bg-[#0d1424] border border-slate-800 rounded-3xl shadow-xl">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-5 bg-white dark:bg-[#0d1424] border border-slate-200 dark:border-slate-800 rounded-3xl shadow-xl shadow-slate-200/50 dark:shadow-none">
         <div className="flex items-center gap-3.5">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-blue-500 flex items-center justify-center shadow-lg shadow-indigo-600/30 ring-1 ring-white/20">
             <FileText className="w-6 h-6 text-white" />
           </div>
           <div>
             <div className="flex items-center gap-2.5">
-              <h2 className="text-xl font-extrabold text-white tracking-tight">Escrita de Cards</h2>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-500/10 text-purple-400 border border-purple-500/20">
+              <h2 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">Escrita de Cards</h2>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-500/20">
                 Markdown & Macros
               </span>
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
               Crie templates inteligentes com macros dinâmicas e gere especificações formatadas em Markdown com 1 clique.
             </p>
           </div>
@@ -351,7 +351,7 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
           {activeTemplate && (
             <button
               onClick={() => setActiveTemplate(null)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/60 text-xs font-semibold transition-all"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-900/80 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white border border-slate-300 dark:border-slate-700/60 text-xs font-semibold transition-all"
             >
               <ArrowLeft className="w-4 h-4" />
               <span>Ver Todos Templates</span>
@@ -360,9 +360,9 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
 
           <button
             onClick={() => setIsHistoryModalOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/60 text-xs font-semibold transition-all"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-900/80 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white border border-slate-300 dark:border-slate-700/60 text-xs font-semibold transition-all"
           >
-            <History className="w-4 h-4 text-purple-400" />
+            <History className="w-4 h-4 text-purple-500 dark:text-purple-400" />
             <span>Cards Salvos ({savedCards.length})</span>
           </button>
 
@@ -380,7 +380,7 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
       {!activeTemplate ? (
         <div className="space-y-4">
           {/* Filters & Search */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 bg-slate-900/60 border border-slate-800 rounded-2xl">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 bg-slate-100/70 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl">
             <div className="relative flex-1 w-full sm:max-w-md">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
@@ -388,7 +388,7 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
                 placeholder="Buscar templates por título ou macro..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                className="w-full pl-9 pr-3 py-1.5 text-xs bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500 shadow-sm"
               />
             </div>
 
@@ -398,7 +398,7 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
                   selectedCategory === 'all'
                     ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                    : 'text-slate-400 hover:text-slate-200 bg-slate-800/40'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-transparent'
                 }`}
               >
                 Todas Categorias
@@ -410,7 +410,7 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
                     selectedCategory === cat
                       ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                      : 'text-slate-400 hover:text-slate-200 bg-slate-800/40'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-transparent'
                   }`}
                 >
                   {cat}
@@ -421,13 +421,13 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
 
           {/* Grid de Templates */}
           {isLoading ? (
-            <div className="py-20 text-center text-slate-400 text-xs">
+            <div className="py-20 text-center text-slate-500 dark:text-slate-400 text-xs">
               Carregando templates de cards...
             </div>
           ) : filteredTemplates.length === 0 ? (
-            <div className="p-12 text-center bg-slate-950/40 border border-dashed border-slate-800 rounded-3xl space-y-3">
-              <FileText className="w-10 h-10 text-slate-600 mx-auto" />
-              <h3 className="text-sm font-bold text-slate-300">Nenhum template encontrado</h3>
+            <div className="p-12 text-center bg-slate-50 dark:bg-slate-950/40 border border-dashed border-slate-300 dark:border-slate-800 rounded-3xl space-y-3">
+              <FileText className="w-10 h-10 text-slate-400 dark:text-slate-600 mx-auto" />
+              <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300">Nenhum template encontrado</h3>
               <p className="text-xs text-slate-500 max-w-sm mx-auto">
                 Crie seu primeiro template com macros personalizadas para agilizar a escrita de cards para Jira e GitHub.
               </p>
@@ -449,11 +449,11 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
                   <div
                     key={template.id}
                     onClick={() => handleStartWriting(template)}
-                    className="group relative bg-[#0c1222] hover:bg-[#11192e] border border-slate-800 hover:border-indigo-500/50 rounded-2xl p-5 cursor-pointer transition-all duration-200 hover:shadow-xl hover:shadow-indigo-950/30 flex flex-col justify-between space-y-4"
+                    className="group relative bg-white hover:bg-slate-50/80 dark:bg-[#0c1222] dark:hover:bg-[#11192e] border border-slate-200 hover:border-indigo-400 dark:border-slate-800 dark:hover:border-indigo-500/50 rounded-2xl p-5 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-xl dark:shadow-none dark:hover:shadow-indigo-950/30 flex flex-col justify-between space-y-4"
                   >
                     <div className="space-y-2.5">
                       <div className="flex items-start justify-between gap-2">
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/20">
                           {template.category || 'Geral'}
                         </span>
 
@@ -464,7 +464,7 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
                                 e.stopPropagation();
                                 handleOpenTemplateModal(template);
                               }}
-                              className="p-1 rounded text-slate-400 hover:text-indigo-300 hover:bg-slate-800"
+                              className="p-1 rounded text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                               title="Editar Template"
                             >
                               <Edit3 className="w-3.5 h-3.5" />
@@ -473,7 +473,7 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
                           {(!template.isSystem || user?.isAdmin) && (
                             <button
                               onClick={(e) => handleDeleteTemplate(template.id, e)}
-                              className="p-1 rounded text-slate-400 hover:text-rose-400 hover:bg-slate-800"
+                              className="p-1 rounded text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-slate-100 dark:hover:bg-slate-800"
                               title="Excluir Template"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -482,25 +482,25 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
                         </div>
                       </div>
 
-                      <h3 className="text-base font-bold text-white group-hover:text-indigo-300 transition-colors">
+                      <h3 className="text-base font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors">
                         {template.title}
                       </h3>
 
                       {template.description && (
-                        <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                        <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
                           {template.description}
                         </p>
                       )}
                     </div>
 
-                    <div className="pt-3 border-t border-slate-800/80 space-y-2.5">
-                      <div className="flex items-center justify-between text-[11px] text-slate-400">
-                        <span className="flex items-center gap-1 font-semibold text-purple-300">
-                          <Sparkles className="w-3 h-3 text-purple-400" />
+                    <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 space-y-2.5">
+                      <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                        <span className="flex items-center gap-1 font-semibold text-purple-600 dark:text-purple-300">
+                          <Sparkles className="w-3 h-3 text-purple-500 dark:text-purple-400" />
                           {templateMacros.length} {templateMacros.length === 1 ? 'macro' : 'macros'}
                         </span>
                         {template.isSystem && (
-                          <span className="text-[10px] text-slate-500 font-medium">Padrão do Sistema</span>
+                          <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">Padrão do Sistema</span>
                         )}
                       </div>
 
@@ -509,19 +509,19 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
                         {templateMacros.slice(0, 4).map((m) => (
                           <span
                             key={m}
-                            className="px-1.5 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-800 text-[10px] font-mono"
+                            className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 text-[10px] font-mono"
                           >
                             {`{{${m}}}`}
                           </span>
                         ))}
                         {templateMacros.length > 4 && (
-                          <span className="px-1 py-0.5 text-[10px] text-slate-500 font-mono">
+                          <span className="px-1 py-0.5 text-[10px] text-slate-400 dark:text-slate-500 font-mono">
                             +{templateMacros.length - 4}
                           </span>
                         )}
                       </div>
 
-                      <div className="pt-2 flex items-center justify-between text-xs font-bold text-indigo-400 group-hover:text-indigo-300">
+                      <div className="pt-2 flex items-center justify-between text-xs font-bold text-indigo-600 dark:text-indigo-400 group-hover:text-indigo-700 dark:group-hover:text-indigo-300">
                         <span>Escrever Novo Card</span>
                         <ChevronRight className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" />
                       </div>
@@ -537,13 +537,13 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           
           {/* LADO ESQUERDO: Formulário de Preenchimento das Macros (5 Colunas) */}
-          <div className="lg:col-span-5 bg-[#0c1222] border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-5">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+          <div className="lg:col-span-5 bg-white dark:bg-[#0c1222] border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-xl shadow-slate-200/50 dark:shadow-2xl space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <div>
-                <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider">
+                <span className="text-[10px] uppercase font-bold text-indigo-600 dark:text-indigo-400 tracking-wider">
                   Preenchimento do Template:
                 </span>
-                <h3 className="text-base font-bold text-white">{activeTemplate.title}</h3>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">{activeTemplate.title}</h3>
               </div>
               <button
                 onClick={() => {
@@ -551,7 +551,7 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
                     setMacroValues({});
                   }
                 }}
-                className="flex items-center gap-1 text-[11px] font-semibold text-slate-400 hover:text-amber-400 transition-colors"
+                className="flex items-center gap-1 text-[11px] font-semibold text-slate-500 hover:text-amber-600 dark:text-slate-400 dark:hover:text-amber-400 transition-colors"
                 title="Limpar todos os campos"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
@@ -561,7 +561,7 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
 
             {/* Identificação do Card */}
             <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                 Título / Identificador do Card:
               </label>
               <input
@@ -569,14 +569,14 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
                 placeholder="Ex: [NEO-1234] Implementar login social com Google"
                 value={cardTitle}
                 onChange={(e) => setCardTitle(e.target.value)}
-                className="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-semibold"
+                className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-semibold"
               />
             </div>
 
             {/* Lista Dinâmica de Macros */}
             <div className="space-y-4 max-h-[650px] overflow-y-auto pr-1">
               {activeMacros.length === 0 ? (
-                <div className="p-4 rounded-xl bg-amber-950/20 border border-amber-500/30 text-amber-200 text-xs">
+                <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-500/30 text-amber-800 dark:text-amber-200 text-xs">
                   Este template não possui nenhuma macro no formato <code>{'{{nome}}'}</code>. Você pode editar o texto diretamente no painel à direita.
                 </div>
               ) : (
@@ -586,10 +586,10 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
                     : isDefaultMultiline(macro);
 
                   return (
-                    <div key={macro} className="space-y-1.5 p-3 rounded-2xl bg-slate-900/60 border border-slate-800/80">
+                    <div key={macro} className="space-y-1.5 p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80">
                       <div className="flex items-center justify-between">
-                        <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                          <span className="w-4 h-4 rounded-full bg-indigo-500/20 text-indigo-400 text-[10px] flex items-center justify-center font-bold">
+                        <label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                          <span className="w-4 h-4 rounded-full bg-indigo-50 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-400 text-[10px] flex items-center justify-center font-bold">
                             {idx + 1}
                           </span>
                           <span>{macro}</span>
@@ -602,7 +602,7 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
                               [macro]: !isMulti,
                             }))
                           }
-                          className="text-[10px] text-slate-400 hover:text-indigo-300 font-mono"
+                          className="text-[10px] text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-300 font-mono"
                           title="Alternar entre campo simples ou área de texto multilinhas"
                         >
                           {isMulti ? 'Texto longo' : 'Linha única'} ⚙️
@@ -617,7 +617,7 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
                           onChange={(e) =>
                             setMacroValues((prev) => ({ ...prev, [macro]: e.target.value }))
                           }
-                          className="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-700/80 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 resize-y leading-relaxed"
+                          className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700/80 rounded-xl text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500 resize-y leading-relaxed"
                         />
                       ) : (
                         <input
@@ -627,7 +627,7 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
                           onChange={(e) =>
                             setMacroValues((prev) => ({ ...prev, [macro]: e.target.value }))
                           }
-                          className="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-700/80 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                          className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700/80 rounded-xl text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                         />
                       )}
                     </div>
@@ -638,19 +638,19 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
           </div>
 
           {/* LADO DIREITO: Entrega em Markdown & Pré-visualização (7 Colunas) */}
-          <div className="lg:col-span-7 bg-[#0c1222] border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4">
+          <div className="lg:col-span-7 bg-white dark:bg-[#0c1222] border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-xl shadow-slate-200/50 dark:shadow-2xl space-y-4">
             {/* Header da Pré-visualização com Ações Principais */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
               
               {/* Tabs Rendered vs Raw */}
-              <div className="flex items-center gap-1 p-1 bg-slate-950 rounded-xl border border-slate-800">
+              <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setPreviewTab('rendered')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                     previewTab === 'rendered'
                       ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                      : 'text-slate-400 hover:text-slate-200'
+                      : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
                   }`}
                 >
                   <Eye className="w-3.5 h-3.5" />
@@ -662,7 +662,7 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                     previewTab === 'raw'
                       ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                      : 'text-slate-400 hover:text-slate-200'
+                      : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
                   }`}
                 >
                   <FileCode className="w-3.5 h-3.5" />
@@ -674,7 +674,7 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleDownloadMarkdown}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 text-xs font-semibold transition-all"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white border border-slate-300 dark:border-slate-700 text-xs font-semibold transition-all"
                   title="Baixar arquivo .md"
                 >
                   <Download className="w-3.5 h-3.5" />
@@ -683,10 +683,10 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
 
                 <button
                   onClick={handleSaveCard}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 text-xs font-semibold transition-all"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white border border-slate-300 dark:border-slate-700 text-xs font-semibold transition-all"
                   title="Salvar no histórico"
                 >
-                  <Save className="w-3.5 h-3.5 text-purple-400" />
+                  <Save className="w-3.5 h-3.5 text-purple-500 dark:text-purple-400" />
                   <span className="hidden sm:inline">Salvar</span>
                 </button>
 
@@ -701,22 +701,22 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
             </div>
 
             {/* Conteúdo Renderizado ou Código Bruto */}
-            <div className="min-h-[550px] max-h-[680px] overflow-y-auto bg-slate-950/80 border border-slate-800/80 rounded-2xl p-6">
+            <div className="min-h-[550px] max-h-[680px] overflow-y-auto bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-6">
               {previewTab === 'rendered' ? (
                 <div
-                  className="text-slate-200 text-sm leading-relaxed space-y-3 font-sans selection:bg-indigo-500/30"
+                  className="text-slate-800 dark:text-slate-200 text-sm leading-relaxed space-y-3 font-sans selection:bg-indigo-500/30"
                   dangerouslySetInnerHTML={{ __html: markdownToHtml(generatedMarkdown) }}
                 />
               ) : (
                 <textarea
                   readOnly
                   value={generatedMarkdown}
-                  className="w-full h-full min-h-[520px] bg-transparent outline-none text-slate-200 text-xs font-mono leading-relaxed resize-none selection:bg-indigo-500/30 cursor-text"
+                  className="w-full h-full min-h-[520px] bg-transparent outline-none text-slate-800 dark:text-slate-200 text-xs font-mono leading-relaxed resize-none selection:bg-indigo-500/30 cursor-text"
                 />
               )}
             </div>
 
-            <div className="flex items-center justify-between text-[11px] text-slate-500 px-1">
+            <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 px-1">
               <span>{activeMacros.filter((m) => Boolean(macroValues[m]?.trim())).length} de {activeMacros.length} macros preenchidas</span>
               <span className="font-mono text-[10px]">Pronto para colar no Jira, Azure DevOps ou GitHub</span>
             </div>
@@ -726,21 +726,21 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
 
       {/* MODAL: Criação / Edição de Template de Card */}
       {isTemplateModalOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0b101e] border border-slate-700 rounded-3xl max-w-4xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95">
+        <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#0b101e] border border-slate-200 dark:border-slate-700 rounded-3xl max-w-4xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 text-slate-800 dark:text-slate-200">
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-indigo-600/30 text-indigo-400 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-600/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
                   <FileText className="w-4 h-4" />
                 </div>
-                <h3 className="text-base font-bold text-white">
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
                   {editingTemplate ? 'Editar Template de Card' : 'Novo Template de Card'}
                 </h3>
               </div>
               <button
                 onClick={() => setIsTemplateModalOpen(false)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg"
+                className="text-slate-400 hover:text-slate-700 dark:hover:text-white p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -750,7 +750,7 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
             <form onSubmit={handleSaveTemplateSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                     Título do Template: *
                   </label>
                   <input
@@ -759,12 +759,12 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
                     placeholder="Ex: História de Usuário (User Story)"
                     value={templateFormTitle}
                     onChange={(e) => setTemplateFormTitle(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-semibold"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-semibold"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                     Categoria:
                   </label>
                   <input
@@ -772,13 +772,13 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
                     placeholder="Ex: Ágil, Bugs, Técnico"
                     value={templateFormCategory}
                     onChange={(e) => setTemplateFormCategory(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                   Descrição Curta / Objetivo:
                 </label>
                 <input
@@ -786,16 +786,16 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
                   placeholder="Ex: Estrutura recomendada para histórias ágeis com critérios de aceite."
                   value={templateFormDesc}
                   onChange={(e) => setTemplateFormDesc(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-bold text-slate-300">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
                     Conteúdo do Template com Macros: *
                   </label>
-                  <span className="text-[11px] text-indigo-400 font-mono">
+                  <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-mono">
                     Use o editor Word ou Markdown para incluir formatações e macros
                   </span>
                 </div>
@@ -809,11 +809,11 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
               </div>
 
               {/* Footer Actions */}
-              <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-3">
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setIsTemplateModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-all"
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-all"
                 >
                   Cancelar
                 </button>
@@ -832,24 +832,24 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
 
       {/* MODAL: Histórico de Cards Salvos */}
       {isHistoryModalOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0b101e] border border-slate-700 rounded-3xl max-w-3xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
+        <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#0b101e] border border-slate-200 dark:border-slate-700 rounded-3xl max-w-3xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 text-slate-800 dark:text-slate-200">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-purple-600/30 text-purple-400 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-xl bg-purple-50 dark:bg-purple-600/30 text-purple-600 dark:text-purple-400 flex items-center justify-center">
                   <History className="w-4 h-4" />
                 </div>
-                <h3 className="text-base font-bold text-white">Histórico de Cards Gerados</h3>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">Histórico de Cards Gerados</h3>
               </div>
               <button
                 onClick={() => setIsHistoryModalOpen(false)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg"
+                className="text-slate-400 hover:text-slate-700 dark:hover:text-white p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-4 border-b border-slate-800/80">
+            <div className="p-4 border-b border-slate-100 dark:border-slate-800/80">
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
@@ -857,14 +857,14 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
                   placeholder="Buscar cards no histórico..."
                   value={historySearch}
                   onChange={(e) => setHistorySearch(e.target.value)}
-                  className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-900 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                 />
               </div>
             </div>
 
             <div className="p-6 space-y-3 overflow-y-auto flex-1">
               {savedCards.length === 0 ? (
-                <div className="py-12 text-center text-slate-500 text-xs">
+                <div className="py-12 text-center text-slate-400 dark:text-slate-500 text-xs">
                   Nenhum card foi salvo ainda. Ao preencher um template, clique em "Salvar" para manter um histórico.
                 </div>
               ) : (
@@ -873,14 +873,14 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
                   .map((card) => (
                     <div
                       key={card.id}
-                      className="p-4 rounded-2xl bg-slate-900/70 border border-slate-800 hover:border-slate-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition-all"
+                      className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition-all"
                     >
                       <div className="space-y-1">
-                        <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider block">
+                        <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider block">
                           {card.templateTitle || 'Template Personalizado'}
                         </span>
-                        <h4 className="text-sm font-bold text-white">{card.title}</h4>
-                        <span className="text-[10px] text-slate-500 block">
+                        <h4 className="text-sm font-bold text-slate-900 dark:text-white">{card.title}</h4>
+                        <span className="text-[10px] text-slate-400 dark:text-slate-500 block">
                           Salvo em {new Date(card.createdAt).toLocaleDateString('pt-BR')} às {new Date(card.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
@@ -891,7 +891,7 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
                             await navigator.clipboard.writeText(card.contentMarkdown);
                             onShowToast('Markdown copiado do histórico!', 'success');
                           }}
-                          className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs font-semibold transition-all"
+                          className="p-2 rounded-xl bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white border border-slate-300 dark:border-slate-700 text-xs font-semibold transition-all shadow-sm"
                           title="Copiar Markdown"
                         >
                           <Copy className="w-3.5 h-3.5" />
@@ -899,14 +899,14 @@ export const CardWriterModule: React.FC<CardWriterModuleProps> = ({ onShowToast 
 
                         <button
                           onClick={() => handleLoadSavedCard(card)}
-                          className="px-3 py-1.5 rounded-xl bg-indigo-600/80 hover:bg-indigo-600 text-white text-xs font-bold transition-all"
+                          className="px-3 py-1.5 rounded-xl bg-indigo-600/90 hover:bg-indigo-600 text-white text-xs font-bold transition-all shadow-sm"
                         >
                           Abrir / Editar
                         </button>
 
                         <button
                           onClick={() => handleDeleteSavedCard(card.id)}
-                          className="p-2 rounded-xl bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 border border-slate-700 text-xs transition-all"
+                          className="p-2 rounded-xl bg-white hover:bg-rose-50 dark:bg-slate-800 dark:hover:bg-rose-950/60 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 border border-slate-300 dark:border-slate-700 text-xs transition-all shadow-sm"
                           title="Excluir do Histórico"
                         >
                           <Trash2 className="w-3.5 h-3.5" />

@@ -62,7 +62,7 @@ export function markdownToHtml(md: string): string {
         // Macros {{...}}
         .replace(
           /\{\{([^}]+)\}\}/g,
-          '<span class="macro-badge" data-macro="$1" contenteditable="false" style="display:inline-flex;align-items:center;background:rgba(99,102,241,0.2);color:#a5b4fc;border:1px solid rgba(99,102,241,0.5);border-radius:4px;padding:1px 6px;margin:0 2px;font-family:monospace;font-size:11px;font-weight:600;user-select:all;">{{$1}}</span>'
+          '<span class="macro-badge inline-flex items-center bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-500/50 rounded px-1.5 py-0.5 mx-0.5 font-mono text-xs font-semibold select-all" data-macro="$1" contenteditable="false">{{$1}}</span>'
         )
         // Negrito **text**
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
@@ -71,34 +71,34 @@ export function markdownToHtml(md: string): string {
         // Riscado ~~text~~
         .replace(/~~(.*?)~~/g, '<del>$1</del>')
         // Código inline `code`
-        .replace(/`([^`]+)`/g, '<code style="background:rgba(30,41,59,0.8);padding:1px 4px;border-radius:4px;color:#38bdf8;font-family:monospace;">$1</code>');
+        .replace(/`([^`]+)`/g, '<code class="bg-slate-100 dark:bg-slate-800/80 text-sky-700 dark:text-sky-300 px-1 py-0.5 rounded font-mono text-xs border border-slate-200 dark:border-slate-700">$1</code>');
     };
 
     // Linha horizontal
     if (line.trim() === '---' || line.trim() === '***') {
       closeLists();
-      html += '<hr style="border-color:rgba(51,65,85,0.8);margin:16px 0;" />';
+      html += '<hr class="border-slate-200 dark:border-slate-700 my-4" />';
       continue;
     }
 
     // Título H1
     if (line.startsWith('# ')) {
       closeLists();
-      html += `<h1 style="font-size:1.5rem;font-weight:700;color:#f8fafc;margin:12px 0 8px;">${formatInline(line.slice(2))}</h1>`;
+      html += `<h1 class="text-xl font-bold text-slate-900 dark:text-white my-3">${formatInline(line.slice(2))}</h1>`;
       continue;
     }
 
     // Título H2
     if (line.startsWith('## ')) {
       closeLists();
-      html += `<h2 style="font-size:1.25rem;font-weight:600;color:#e2e8f0;margin:10px 0 6px;">${formatInline(line.slice(3))}</h2>`;
+      html += `<h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 my-2.5">${formatInline(line.slice(3))}</h2>`;
       continue;
     }
 
     // Título H3
     if (line.startsWith('### ')) {
       closeLists();
-      html += `<h3 style="font-size:1.1rem;font-weight:600;color:#cbd5e1;margin:8px 0 4px;">${formatInline(line.slice(4))}</h3>`;
+      html += `<h3 class="text-base font-semibold text-slate-700 dark:text-slate-200 my-2">${formatInline(line.slice(4))}</h3>`;
       continue;
     }
 
@@ -106,10 +106,10 @@ export function markdownToHtml(md: string): string {
     if (line.startsWith('> ')) {
       if (!inBlockquote) {
         closeLists();
-        html += '<blockquote style="border-left:3px solid #6366f1;padding-left:12px;margin:8px 0;color:#94a3b8;font-style:italic;">';
+        html += '<blockquote class="border-l-4 border-indigo-500 pl-3 my-2 text-slate-600 dark:text-slate-400 italic bg-slate-50 dark:bg-slate-900/40 py-1 rounded-r">';
         inBlockquote = true;
       }
-      html += `<p style="margin:2px 0;">${formatInline(line.slice(2))}</p>`;
+      html += `<p class="my-0.5">${formatInline(line.slice(2))}</p>`;
       continue;
     } else if (inBlockquote) {
       html += '</blockquote>';
@@ -121,10 +121,10 @@ export function markdownToHtml(md: string): string {
       const match = line.match(/^(\s*)[-*]\s(.*)/);
       if (!inUl) {
         closeLists();
-        html += '<ul style="list-style-type:disc;padding-left:20px;margin:6px 0;">';
+        html += '<ul class="list-disc pl-5 my-1.5 space-y-1">';
         inUl = true;
       }
-      html += `<li style="margin:2px 0;">${formatInline(match![2])}</li>`;
+      html += `<li class="my-0.5">${formatInline(match![2])}</li>`;
       continue;
     } else if (inUl) {
       html += '</ul>';
@@ -136,10 +136,10 @@ export function markdownToHtml(md: string): string {
       const match = line.match(/^(\s*)\d+\.\s(.*)/);
       if (!inOl) {
         closeLists();
-        html += '<ol style="list-style-type:decimal;padding-left:20px;margin:6px 0;">';
+        html += '<ol class="list-decimal pl-5 my-1.5 space-y-1">';
         inOl = true;
       }
-      html += `<li style="margin:2px 0;">${formatInline(match![2])}</li>`;
+      html += `<li class="my-0.5">${formatInline(match![2])}</li>`;
       continue;
     } else if (inOl) {
       html += '</ol>';
@@ -155,7 +155,7 @@ export function markdownToHtml(md: string): string {
 
     // Parágrafo comum
     closeLists();
-    html += `<p style="margin:4px 0;">${formatInline(line)}</p>`;
+    html += `<p class="my-1 leading-relaxed">${formatInline(line)}</p>`;
   }
 
   closeLists();
@@ -377,19 +377,19 @@ export const DualMarkdownEditor: React.FC<DualMarkdownEditorProps> = ({
   };
 
   return (
-    <div className="flex flex-col border border-slate-700/80 rounded-2xl bg-slate-950/70 overflow-hidden shadow-xl">
+    <div className="flex flex-col border border-slate-300 dark:border-slate-700/80 rounded-2xl bg-white dark:bg-slate-950/70 overflow-hidden shadow-sm dark:shadow-xl">
       {/* Top Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-slate-900/90 border-b border-slate-800">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-900/90 border-b border-slate-200 dark:border-slate-800">
         
         {/* Left: Mode Toggle (Word Visual vs Código Markdown) */}
-        <div className="flex items-center gap-1 p-1 bg-slate-950/80 rounded-xl border border-slate-800">
+        <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-950/80 rounded-xl border border-slate-200 dark:border-slate-800">
           <button
             type="button"
             onClick={() => setMode('visual')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
               mode === 'visual'
                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                : 'text-slate-400 hover:text-slate-200'
+                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
             }`}
           >
             <Eye className="w-3.5 h-3.5" />
@@ -402,7 +402,7 @@ export const DualMarkdownEditor: React.FC<DualMarkdownEditorProps> = ({
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
               mode === 'markdown'
                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                : 'text-slate-400 hover:text-slate-200'
+                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
             }`}
           >
             <FileCode className="w-3.5 h-3.5" />
@@ -415,11 +415,11 @@ export const DualMarkdownEditor: React.FC<DualMarkdownEditorProps> = ({
           {mode === 'visual' ? (
             <>
               {/* Headings */}
-              <div className="flex items-center gap-0.5 bg-slate-950/60 p-0.5 rounded-lg border border-slate-800">
+              <div className="flex items-center gap-0.5 bg-white dark:bg-slate-950/60 p-0.5 rounded-lg border border-slate-200 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => formatBlock('h1')}
-                  className="p-1.5 rounded text-slate-300 hover:text-white hover:bg-slate-800"
+                  className="p-1.5 rounded text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
                   title="Título 1 (H1)"
                 >
                   <Heading1 className="w-3.5 h-3.5" />
@@ -427,7 +427,7 @@ export const DualMarkdownEditor: React.FC<DualMarkdownEditorProps> = ({
                 <button
                   type="button"
                   onClick={() => formatBlock('h2')}
-                  className="p-1.5 rounded text-slate-300 hover:text-white hover:bg-slate-800"
+                  className="p-1.5 rounded text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
                   title="Título 2 (H2)"
                 >
                   <Heading2 className="w-3.5 h-3.5" />
@@ -435,7 +435,7 @@ export const DualMarkdownEditor: React.FC<DualMarkdownEditorProps> = ({
                 <button
                   type="button"
                   onClick={() => formatBlock('h3')}
-                  className="p-1.5 rounded text-slate-300 hover:text-white hover:bg-slate-800"
+                  className="p-1.5 rounded text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
                   title="Título 3 (H3)"
                 >
                   <Heading3 className="w-3.5 h-3.5" />
@@ -443,11 +443,11 @@ export const DualMarkdownEditor: React.FC<DualMarkdownEditorProps> = ({
               </div>
 
               {/* Text Styles */}
-              <div className="flex items-center gap-0.5 bg-slate-950/60 p-0.5 rounded-lg border border-slate-800">
+              <div className="flex items-center gap-0.5 bg-white dark:bg-slate-950/60 p-0.5 rounded-lg border border-slate-200 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => executeCommand('bold')}
-                  className="p-1.5 rounded text-slate-300 hover:text-white hover:bg-slate-800 font-bold"
+                  className="p-1.5 rounded text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 font-bold"
                   title="Negrito (Ctrl+B)"
                 >
                   <Bold className="w-3.5 h-3.5" />
@@ -455,7 +455,7 @@ export const DualMarkdownEditor: React.FC<DualMarkdownEditorProps> = ({
                 <button
                   type="button"
                   onClick={() => executeCommand('italic')}
-                  className="p-1.5 rounded text-slate-300 hover:text-white hover:bg-slate-800"
+                  className="p-1.5 rounded text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
                   title="Itálico (Ctrl+I)"
                 >
                   <Italic className="w-3.5 h-3.5" />
@@ -463,7 +463,7 @@ export const DualMarkdownEditor: React.FC<DualMarkdownEditorProps> = ({
                 <button
                   type="button"
                   onClick={() => executeCommand('strikeThrough')}
-                  className="p-1.5 rounded text-slate-300 hover:text-white hover:bg-slate-800"
+                  className="p-1.5 rounded text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
                   title="Riscado"
                 >
                   <Strikethrough className="w-3.5 h-3.5" />
@@ -471,11 +471,11 @@ export const DualMarkdownEditor: React.FC<DualMarkdownEditorProps> = ({
               </div>
 
               {/* Lists & Blocks */}
-              <div className="flex items-center gap-0.5 bg-slate-950/60 p-0.5 rounded-lg border border-slate-800">
+              <div className="flex items-center gap-0.5 bg-white dark:bg-slate-950/60 p-0.5 rounded-lg border border-slate-200 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => executeCommand('insertUnorderedList')}
-                  className="p-1.5 rounded text-slate-300 hover:text-white hover:bg-slate-800"
+                  className="p-1.5 rounded text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
                   title="Lista com Marcadores"
                 >
                   <List className="w-3.5 h-3.5" />
@@ -483,7 +483,7 @@ export const DualMarkdownEditor: React.FC<DualMarkdownEditorProps> = ({
                 <button
                   type="button"
                   onClick={() => executeCommand('insertOrderedList')}
-                  className="p-1.5 rounded text-slate-300 hover:text-white hover:bg-slate-800"
+                  className="p-1.5 rounded text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
                   title="Lista Numerada"
                 >
                   <ListOrdered className="w-3.5 h-3.5" />
@@ -493,7 +493,7 @@ export const DualMarkdownEditor: React.FC<DualMarkdownEditorProps> = ({
                   onClick={() => {
                     executeCommand('insertHorizontalRule');
                   }}
-                  className="p-1.5 rounded text-slate-300 hover:text-white hover:bg-slate-800"
+                  className="p-1.5 rounded text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
                   title="Linha Divisória (---)"
                 >
                   <Minus className="w-3.5 h-3.5" />
@@ -506,7 +506,7 @@ export const DualMarkdownEditor: React.FC<DualMarkdownEditorProps> = ({
               <button
                 type="button"
                 onClick={() => insertMarkdownSnippet('# ', '', 'Título')}
-                className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[11px] font-mono text-slate-300"
+                className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[11px] font-mono text-slate-700 dark:text-slate-300"
                 title="Inserir H1"
               >
                 # H1
@@ -514,7 +514,7 @@ export const DualMarkdownEditor: React.FC<DualMarkdownEditorProps> = ({
               <button
                 type="button"
                 onClick={() => insertMarkdownSnippet('## ', '', 'Subtítulo')}
-                className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[11px] font-mono text-slate-300"
+                className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[11px] font-mono text-slate-700 dark:text-slate-300"
                 title="Inserir H2"
               >
                 ## H2
@@ -522,7 +522,7 @@ export const DualMarkdownEditor: React.FC<DualMarkdownEditorProps> = ({
               <button
                 type="button"
                 onClick={() => insertMarkdownSnippet('**', '**', 'negrito')}
-                className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[11px] font-bold text-slate-300"
+                className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[11px] font-bold text-slate-700 dark:text-slate-300"
                 title="Inserir Negrito"
               >
                 **B**
@@ -530,7 +530,7 @@ export const DualMarkdownEditor: React.FC<DualMarkdownEditorProps> = ({
               <button
                 type="button"
                 onClick={() => insertMarkdownSnippet('*', '*', 'itálico')}
-                className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[11px] italic text-slate-300"
+                className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[11px] italic text-slate-700 dark:text-slate-300"
                 title="Inserir Itálico"
               >
                 *I*
@@ -538,7 +538,7 @@ export const DualMarkdownEditor: React.FC<DualMarkdownEditorProps> = ({
               <button
                 type="button"
                 onClick={() => insertMarkdownSnippet('- ', '', 'Item da lista')}
-                className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[11px] text-slate-300"
+                className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[11px] text-slate-700 dark:text-slate-300"
                 title="Inserir Item de Lista"
               >
                 - Lista
@@ -546,7 +546,7 @@ export const DualMarkdownEditor: React.FC<DualMarkdownEditorProps> = ({
               <button
                 type="button"
                 onClick={() => insertMarkdownSnippet('\n---\n')}
-                className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[11px] text-slate-300"
+                className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[11px] text-slate-700 dark:text-slate-300"
                 title="Inserir Divisor"
               >
                 ---
@@ -559,7 +559,7 @@ export const DualMarkdownEditor: React.FC<DualMarkdownEditorProps> = ({
             <button
               type="button"
               onClick={() => setMacroInputOpen(!macroInputOpen)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600/80 to-purple-600/80 hover:from-indigo-600 hover:to-purple-600 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 border border-indigo-400/30 transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600/90 to-purple-600/90 hover:from-indigo-600 hover:to-purple-600 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 border border-indigo-400/30 transition-all"
               title="Inserir macro dinâmica que será solicitada ao preencher o card"
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-300" />
@@ -567,16 +567,16 @@ export const DualMarkdownEditor: React.FC<DualMarkdownEditorProps> = ({
             </button>
 
             {macroInputOpen && (
-              <div className="absolute right-0 mt-2 w-72 bg-[#0c1222] border border-indigo-500/40 rounded-2xl shadow-2xl p-3 z-50 animate-in fade-in slide-in-from-top-2">
-                <div className="flex items-center justify-between pb-2 border-b border-slate-800 mb-2.5">
-                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+              <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-[#0c1222] border border-slate-200 dark:border-indigo-500/40 rounded-2xl shadow-2xl p-3 z-50 animate-in fade-in slide-in-from-top-2 text-slate-800 dark:text-slate-200">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800 mb-2.5">
+                  <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
                     Inserir Variável / Macro
                   </span>
                   <button
                     type="button"
                     onClick={() => setMacroInputOpen(false)}
-                    className="text-xs text-slate-400 hover:text-white"
+                    className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-white"
                   >
                     ✕
                   </button>
@@ -584,7 +584,7 @@ export const DualMarkdownEditor: React.FC<DualMarkdownEditorProps> = ({
 
                 <div className="space-y-2.5">
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                    <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                       Nome da Macro:
                     </label>
                     <input
@@ -599,7 +599,7 @@ export const DualMarkdownEditor: React.FC<DualMarkdownEditorProps> = ({
                         }
                       }}
                       autoFocus
-                      className="w-full px-2.5 py-1.5 text-xs bg-slate-900 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-mono"
+                      className="w-full px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-mono"
                     />
                   </div>
 
@@ -613,8 +613,8 @@ export const DualMarkdownEditor: React.FC<DualMarkdownEditorProps> = ({
                   </button>
 
                   {/* Sugestões rápidas */}
-                  <div className="pt-2 border-t border-slate-800">
-                    <span className="block text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-1.5">
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <span className="block text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 tracking-wider mb-1.5">
                       Sugestões comuns:
                     </span>
                     <div className="flex flex-wrap gap-1 max-h-36 overflow-y-auto pr-1">
@@ -623,7 +623,7 @@ export const DualMarkdownEditor: React.FC<DualMarkdownEditorProps> = ({
                           key={macro}
                           type="button"
                           onClick={() => handleInsertMacro(macro)}
-                          className="px-2 py-0.5 rounded-lg bg-slate-800/90 hover:bg-indigo-600/40 text-slate-300 hover:text-indigo-200 border border-slate-700/60 hover:border-indigo-500/40 text-[10px] font-mono transition-all"
+                          className="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-indigo-50 dark:bg-slate-800/90 dark:hover:bg-indigo-600/40 text-slate-700 hover:text-indigo-700 dark:text-slate-300 dark:hover:text-indigo-200 border border-slate-200 hover:border-indigo-300 dark:border-slate-700/60 dark:hover:border-indigo-500/40 text-[10px] font-mono transition-all"
                         >
                           +{macro}
                         </button>
@@ -639,14 +639,14 @@ export const DualMarkdownEditor: React.FC<DualMarkdownEditorProps> = ({
       </div>
 
       {/* Editor Content Area */}
-      <div className="p-4 bg-slate-950/90">
+      <div className="p-4 bg-white dark:bg-slate-950/90">
         {mode === 'visual' ? (
           <div
             ref={editorRef}
             contentEditable
             onInput={handleVisualInput}
             onBlur={handleVisualInput}
-            className="w-full outline-none text-slate-200 text-sm leading-relaxed focus:ring-0 font-sans selection:bg-indigo-500/30"
+            className="w-full outline-none text-slate-800 dark:text-slate-200 text-sm leading-relaxed focus:ring-0 font-sans selection:bg-indigo-500/30"
             style={{ minHeight }}
             data-placeholder={placeholder}
           />
@@ -656,24 +656,24 @@ export const DualMarkdownEditor: React.FC<DualMarkdownEditorProps> = ({
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
-            className="w-full bg-transparent outline-none text-slate-200 text-xs sm:text-sm font-mono leading-relaxed resize-y focus:ring-0 selection:bg-indigo-500/30"
+            className="w-full bg-transparent outline-none text-slate-800 dark:text-slate-200 text-xs sm:text-sm font-mono leading-relaxed resize-y focus:ring-0 selection:bg-indigo-500/30"
             style={{ minHeight }}
           />
         )}
       </div>
 
       {/* Footer / Helper Note */}
-      <div className="px-3 py-1.5 bg-slate-900/60 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+      <div className="px-3 py-1.5 bg-slate-50 dark:bg-slate-900/60 border-t border-slate-200 dark:border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
         <div className="flex items-center gap-1.5">
-          <HelpCircle className="w-3.5 h-3.5 text-indigo-400" />
+          <HelpCircle className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
           <span>
             {mode === 'visual'
               ? 'Modo Visual ativado. Formate o texto com a barra de ferramentas como no Word.'
               : 'Modo Código Markdown ativado. Escreva sintaxe Markdown pura.'}
           </span>
         </div>
-        <span className="text-[10px] text-slate-500 font-mono">
-          Variáveis: <code className="text-indigo-400">{'{{macro}}'}</code>
+        <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">
+          Variáveis: <code className="text-indigo-600 dark:text-indigo-400">{'{{macro}}'}</code>
         </span>
       </div>
     </div>

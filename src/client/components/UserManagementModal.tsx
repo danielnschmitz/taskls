@@ -225,41 +225,41 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-2xl bg-[#0d1424] border border-slate-700/80 rounded-2xl shadow-2xl shadow-black/80 flex flex-col max-h-[90vh] overflow-hidden">
+      <div className="relative w-full max-w-2xl bg-white dark:bg-[#0d1424] border border-slate-200 dark:border-slate-700/80 rounded-2xl shadow-2xl shadow-slate-900/20 dark:shadow-black/80 flex flex-col max-h-[90vh] overflow-hidden transition-colors">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/60">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+            <div className="w-10 h-10 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
               <Users className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
+              <h3 className="text-base font-bold text-slate-800 dark:text-white tracking-tight flex items-center gap-2">
                 Gestão de Usuários
-                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-indigo-500/20 text-indigo-700 dark:text-indigo-400 border border-indigo-500/30">
                   Admin
                 </span>
               </h3>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 Gerencie usuários, permissões de acesso ao Jira e redefinição de senhas
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Abas */}
-        <div className="flex items-center gap-2 px-6 pt-3 border-b border-slate-800/80 bg-slate-950/40">
+        <div className="flex items-center gap-2 px-6 pt-3 border-b border-slate-200 dark:border-slate-800/80 bg-slate-100/70 dark:bg-slate-950/40">
           <button
             onClick={() => setActiveTab('list')}
             className={`flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 transition-all ${
               activeTab === 'list'
-                ? 'border-indigo-500 text-indigo-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                ? 'border-indigo-600 dark:border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
             <Users className="w-3.5 h-3.5" />
@@ -269,8 +269,8 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
             onClick={() => setActiveTab('create')}
             className={`flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 transition-all ${
               activeTab === 'create'
-                ? 'border-indigo-500 text-indigo-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                ? 'border-indigo-600 dark:border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
             <UserPlus className="w-3.5 h-3.5" />
@@ -290,18 +290,18 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                   placeholder="Filtrar por nome de usuário..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 text-xs bg-slate-950/80 border border-slate-800 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  className="w-full pl-9 pr-4 py-2 text-xs bg-slate-50 dark:bg-slate-950/80 border border-slate-300 dark:border-slate-800 rounded-xl text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
               {/* Lista de Usuários */}
               {isLoading ? (
                 <div className="py-12 flex flex-col items-center justify-center gap-3 text-slate-400">
-                  <Loader2 className="w-6 h-6 animate-spin text-indigo-400" />
+                  <Loader2 className="w-6 h-6 animate-spin text-indigo-600 dark:text-indigo-400" />
                   <span className="text-xs">Carregando usuários...</span>
                 </div>
               ) : filteredUsers.length === 0 ? (
-                <div className="py-10 text-center text-xs text-slate-400">
+                <div className="py-10 text-center text-xs text-slate-500 dark:text-slate-400">
                   Nenhum usuário encontrado.
                 </div>
               ) : (
@@ -313,32 +313,32 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                     return (
                       <div
                         key={u.id}
-                        className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80 hover:border-slate-700/80 gap-3 transition-all"
+                        className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700/80 gap-3 transition-all"
                       >
                         {/* Identificação do Usuário */}
                         <div className="flex items-center gap-3">
                           <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs uppercase ${
                             u.isAdmin
-                              ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/30'
-                              : 'bg-slate-800 text-slate-300 border border-slate-700'
+                              ? 'bg-indigo-600/20 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30'
+                              : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700'
                           }`}>
                             {u.username.substring(0, 2)}
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="font-bold text-white text-xs">{u.username}</span>
+                              <span className="font-bold text-slate-800 dark:text-white text-xs">{u.username}</span>
                               {u.isAdmin && (
-                                <span className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+                                <span className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-indigo-500/20 text-indigo-700 dark:text-indigo-400 border border-indigo-500/30">
                                   Admin
                                 </span>
                               )}
                               {isSelf && (
-                                <span className="px-1.5 py-0.5 text-[9px] font-semibold rounded bg-slate-800 text-slate-300 border border-slate-700">
+                                <span className="px-1.5 py-0.5 text-[9px] font-semibold rounded bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700">
                                   Você
                                 </span>
                               )}
                               {u.isDefaultPassword && (
-                                <span className="px-2 py-0.5 text-[9px] font-semibold rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                <span className="px-2 py-0.5 text-[9px] font-semibold rounded-full bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/30">
                                   1º Acesso Pendente
                                 </span>
                               )}
@@ -364,8 +364,8 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                             }
                             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
                               u.canAccessJira
-                                ? 'bg-blue-950/40 text-blue-300 border-blue-500/40 hover:bg-blue-950/60'
-                                : 'bg-slate-950/60 text-slate-500 border-slate-800 hover:text-slate-300'
+                                ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-500/40 hover:bg-blue-100 dark:hover:bg-blue-950/60'
+                                : 'bg-slate-100 dark:bg-slate-950/60 text-slate-500 border-slate-200 dark:border-slate-800 hover:text-slate-800 dark:hover:text-slate-300'
                             } ${isMasterAdmin ? 'cursor-default opacity-80' : ''}`}
                           >
                             <svg className="w-3 h-3 fill-current flex-shrink-0" viewBox="0 0 24 24">
@@ -383,7 +383,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                               setResetPasswordInput('');
                               setResetError('');
                             }}
-                            className="p-1.5 rounded-lg bg-slate-950/60 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800 transition-all"
+                            className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-950/60 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-all"
                             title="Redefinir senha temporária do usuário"
                           >
                             <KeyRound className="w-3.5 h-3.5" />
@@ -393,7 +393,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                           {!isMasterAdmin && !isSelf && (
                             <button
                               onClick={() => handleDeleteUser(u)}
-                              className="p-1.5 rounded-lg bg-slate-950/60 text-rose-400/70 hover:text-rose-400 hover:bg-rose-950/30 border border-slate-800 hover:border-rose-500/30 transition-all"
+                              className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-950/60 text-rose-500 dark:text-rose-400/70 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 border border-slate-200 dark:border-slate-800 hover:border-rose-300 dark:hover:border-rose-500/30 transition-all"
                               title="Excluir usuário"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -410,14 +410,14 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
             /* Formulário de Cadastro de Novo Usuário */
             <form onSubmit={handleCreateUser} className="space-y-4 max-w-md mx-auto">
               {createError && (
-                <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-500/40 text-rose-300 text-xs flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-400" />
+                <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-500/40 text-rose-800 dark:text-rose-300 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-600 dark:text-rose-400" />
                   <span>{createError}</span>
                 </div>
               )}
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   Nome de Usuário (Login)
                 </label>
                 <input
@@ -427,7 +427,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                   placeholder="ex: daniel.silva"
                   value={newUsername}
                   onChange={(e) => setNewUsername(e.target.value.toLowerCase().replace(/\s+/g, ''))}
-                  className="w-full px-3.5 py-2 text-xs bg-slate-950/70 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3.5 py-2 text-xs bg-slate-50 dark:bg-slate-950/70 border border-slate-300 dark:border-slate-800 rounded-xl text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-indigo-500"
                 />
                 <span className="text-[10px] text-slate-500 mt-0.5 block">
                   Somente letras, números e pontos (sem espaços). Mínimo 3 caracteres.
@@ -435,7 +435,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   Senha Inicial Temporária
                 </label>
                 <input
@@ -444,7 +444,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                   placeholder="ex: senha123"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full px-3.5 py-2 text-xs bg-slate-950/70 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500 font-mono"
+                  className="w-full px-3.5 py-2 text-xs bg-slate-50 dark:bg-slate-950/70 border border-slate-300 dark:border-slate-800 rounded-xl text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-indigo-500 font-mono"
                 />
                 <span className="text-[10px] text-slate-500 mt-0.5 block">
                   Mínimo 4 caracteres. O usuário precisará trocá-la no primeiro acesso.
@@ -452,26 +452,26 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
               </div>
 
               {/* Opção de Acesso ao Jira */}
-              <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3 cursor-pointer hover:bg-slate-900/80 transition-colors">
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 flex items-start gap-3 cursor-pointer hover:bg-slate-100/80 dark:hover:bg-slate-900/80 transition-colors">
                 <input
                   type="checkbox"
                   id="chk-jira"
                   checked={canAccessJira}
                   onChange={(e) => setCanAccessJira(e.target.checked)}
-                  className="mt-1 rounded border-slate-700 bg-slate-950 text-indigo-600 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                  className="mt-1 rounded border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-indigo-600 focus:ring-0 focus:ring-offset-0 cursor-pointer"
                 />
                 <label htmlFor="chk-jira" className="cursor-pointer">
-                  <span className="block text-xs font-bold text-slate-200">
+                  <span className="block text-xs font-bold text-slate-800 dark:text-slate-200">
                     Permitir Acesso ao Painel do Jira
                   </span>
-                  <span className="block text-[11px] text-slate-400 mt-0.5">
+                  <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                     Permite ao usuário visualizar as demandas do Jira com entrega na semana. Usuários comuns não têm acesso às configurações e credenciais do Jira.
                   </span>
                 </label>
               </div>
 
-              <div className="p-3 rounded-xl bg-indigo-950/30 border border-indigo-500/20 text-indigo-300 text-xs flex items-center gap-2">
-                <Shield className="w-4 h-4 text-indigo-400 flex-shrink-0" />
+              <div className="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-xs flex items-center gap-2">
+                <Shield className="w-4 h-4 text-indigo-600 dark:text-indigo-400 flex-shrink-0" />
                 <span>
                   O usuário verá apenas as tarefas que ele próprio criar. As tarefas são 100% isoladas.
                 </span>
@@ -481,7 +481,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setActiveTab('list')}
-                  className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-xl transition-all"
+                  className="px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl transition-all"
                 >
                   Voltar
                 </button>
@@ -508,10 +508,10 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
         </div>
 
         {/* Footer do Modal */}
-        <div className="px-6 py-3 border-t border-slate-800 bg-slate-900/40 flex justify-end">
+        <div className="px-6 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/40 flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-1.5 text-xs font-semibold text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl transition-all"
+            className="px-4 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-all border border-slate-300 dark:border-slate-700"
           >
             Fechar
           </button>
@@ -520,26 +520,26 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
         {/* Submodal de Redefinição de Senha */}
         {resetModalUser && (
           <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-            <div className="w-full max-w-sm bg-[#0d1424] border border-slate-700 rounded-2xl shadow-2xl p-5 space-y-4">
+            <div className="w-full max-w-sm bg-white dark:bg-[#0d1424] border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-5 space-y-4">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-white font-bold text-sm">
-                  <KeyRound className="w-4 h-4 text-indigo-400" />
+                <div className="flex items-center gap-2 text-slate-800 dark:text-white font-bold text-sm">
+                  <KeyRound className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                   <span>Redefinir Senha de {resetModalUser.username}</span>
                 </div>
                 <button
                   onClick={() => setResetModalUser(null)}
-                  className="text-slate-400 hover:text-white"
+                  className="text-slate-400 hover:text-slate-700 dark:hover:text-white"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 Digite uma nova senha temporária. O usuário será obrigado a alterá-la no próximo login.
               </p>
 
               {resetError && (
-                <div className="p-2.5 rounded-lg bg-rose-950/60 border border-rose-500/40 text-rose-300 text-xs">
+                <div className="p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-500/40 text-rose-800 dark:text-rose-300 text-xs">
                   {resetError}
                 </div>
               )}
@@ -552,14 +552,14 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                   placeholder="Nova senha temporária"
                   value={resetPasswordInput}
                   onChange={(e) => setResetPasswordInput(e.target.value)}
-                  className="w-full px-3.5 py-2 text-xs bg-slate-950 border border-slate-800 rounded-xl text-white font-mono focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3.5 py-2 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl text-slate-800 dark:text-white font-mono focus:outline-none focus:border-indigo-500"
                 />
 
                 <div className="flex justify-end gap-2 pt-1">
                   <button
                     type="button"
                     onClick={() => setResetModalUser(null)}
-                    className="px-3 py-1.5 text-xs text-slate-400 hover:text-white bg-slate-900 border border-slate-800 rounded-xl"
+                    className="px-3 py-1.5 text-xs text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-xl"
                   >
                     Cancelar
                   </button>

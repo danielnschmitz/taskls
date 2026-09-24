@@ -73,47 +73,47 @@ export const UpcomingPanel: React.FC<UpcomingPanelProps> = ({
     try {
       const targetDate = parseISO(targetDateStr.substring(0, 10));
       if (isToday(targetDate)) {
-        return { label: 'Hoje', isOverdue: false, isUrgent: true, color: 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20' };
+        return { label: 'Hoje', isOverdue: false, isUrgent: true, color: 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 border-indigo-200 dark:border-indigo-500/20' };
       }
       if (isTomorrow(targetDate)) {
-        return { label: 'Amanhã', isOverdue: false, isUrgent: false, color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20' };
+        return { label: 'Amanhã', isOverdue: false, isUrgent: false, color: 'text-cyan-700 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-500/10 border-cyan-200 dark:border-cyan-500/20' };
       }
       if (isPast(targetDate) && !task.is_completed) {
         return {
           label: `Atrasada (${format(targetDate, "dd 'de' MMM", { locale: ptBR })})`,
           isOverdue: true,
           isUrgent: true,
-          color: 'text-rose-400 bg-rose-500/10 border-rose-500/20',
+          color: 'text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/20',
         };
       }
       return {
         label: format(targetDate, "EEEE, dd 'de' MMMM", { locale: ptBR }),
         isOverdue: false,
         isUrgent: false,
-        color: 'text-slate-300 bg-slate-800 border-slate-700',
+        color: 'text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700',
       };
     } catch {
-      return { label: targetDateStr, isOverdue: false, isUrgent: false, color: 'text-slate-400 bg-slate-800 border-slate-700' };
+      return { label: targetDateStr, isOverdue: false, isUrgent: false, color: 'text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700' };
     }
   };
 
   return (
-    <div className="bg-[#0b101d] border border-slate-800/80 rounded-2xl p-4 lg:p-6 shadow-xl shadow-black/20 flex flex-col h-full">
+    <div className="bg-white dark:bg-[#0b101d] border border-slate-200 dark:border-slate-800/80 rounded-2xl p-4 lg:p-6 shadow-xl shadow-slate-200/50 dark:shadow-black/20 flex flex-col h-full transition-colors">
       {/* Panel Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-5 border-b border-slate-800/80">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-5 border-b border-slate-200 dark:border-slate-800/80">
         <div>
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
+            <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-600 dark:text-cyan-400">
               <CalendarDays className="w-4 h-4" />
             </div>
-            <h2 className="text-lg font-bold text-white tracking-tight">
+            <h2 className="text-lg font-bold text-slate-800 dark:text-white tracking-tight">
               Agenda & Recorrentes Mensais
             </h2>
-            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20">
               {filteredTasks.length} {filteredTasks.length === 1 ? 'tarefa' : 'tarefas'}
             </span>
           </div>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
             Tarefas de ocorrência única ou repetição mensal, organizadas cronologicamente pela data de realização.
           </p>
         </div>
@@ -123,8 +123,8 @@ export const UpcomingPanel: React.FC<UpcomingPanelProps> = ({
           onClick={() => setHideCompleted(!hideCompleted)}
           className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-all ${
             hideCompleted
-              ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500/30'
-              : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+              ? 'bg-indigo-600/20 text-indigo-700 dark:text-indigo-300 border-indigo-500/30'
+              : 'bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
           }`}
         >
           {hideCompleted ? 'Exibindo apenas pendentes' : 'Ocultar concluídas'}
@@ -135,18 +135,18 @@ export const UpcomingPanel: React.FC<UpcomingPanelProps> = ({
       <div className="mt-5 space-y-3 flex-1 overflow-y-auto max-h-[620px] pr-1">
         {filteredTasks.length === 0 ? (
           <div className="py-12 text-center flex flex-col items-center justify-center">
-            <div className="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-600 mb-3">
+            <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-600 mb-3">
               <Calendar className="w-6 h-6" />
             </div>
-            <p className="text-sm text-slate-400 font-medium">
+            <p className="text-sm text-slate-600 dark:text-slate-400 font-medium">
               Nenhuma tarefa com data ou repetição mensal encontrada.
             </p>
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
               Crie uma tarefa de ocorrência única ou que se repita em um dia do mês.
             </p>
             <button
               onClick={onNewTask}
-              className="mt-4 px-3.5 py-1.5 rounded-xl bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 text-xs font-semibold transition-all"
+              className="mt-4 px-3.5 py-1.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30 text-xs font-semibold transition-all"
             >
               + Criar Tarefa Agendada
             </button>
@@ -168,7 +168,7 @@ export const UpcomingPanel: React.FC<UpcomingPanelProps> = ({
                       {occurrenceInfo.label}
                     </span>
                     {task.type === 'monthly' && (
-                      <span className="text-[10px] text-purple-400 font-medium flex items-center gap-1">
+                      <span className="text-[10px] text-purple-600 dark:text-purple-400 font-medium flex items-center gap-1">
                         <Repeat className="w-3 h-3" />
                         Repetição mensal
                       </span>

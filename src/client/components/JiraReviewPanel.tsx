@@ -317,17 +317,17 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
   ).sort();
 
   return (
-    <div className="bg-[#0a0f1d] border border-blue-900/40 rounded-2xl p-4 lg:p-6 shadow-xl shadow-black/30 relative space-y-5">
+    <div className="bg-white dark:bg-[#0a0f1d] border border-slate-200 dark:border-blue-900/40 rounded-2xl p-4 lg:p-6 shadow-xl shadow-slate-200/50 dark:shadow-black/30 relative space-y-5">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-5 border-b border-slate-800/80">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-5 border-b border-slate-200 dark:border-slate-800/80">
         <div>
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shadow-sm shadow-blue-500/10">
+            <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-600/20 border border-blue-200 dark:border-blue-500/30 flex items-center justify-center text-blue-600 dark:text-blue-400 shadow-sm shadow-blue-500/10">
               <BellRing className="w-4 h-4" />
             </div>
-            <h2 className="text-lg font-bold text-white tracking-tight flex flex-wrap items-center gap-2">
+            <h2 className="text-lg font-bold text-slate-800 dark:text-white tracking-tight flex flex-wrap items-center gap-2">
               <span>Revisões de Evoluções Jira</span>
-              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-50 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30">
                 {activeTab === 'pending' ? (
                   <>
                     {groupedEvents.length} {groupedEvents.length === 1 ? 'card pendente' : 'cards pendentes'}
@@ -342,15 +342,15 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
                 )}
               </span>
               <span
-                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-semibold"
+                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 text-[10px] font-semibold"
                 title="Sincronização automática em segundo plano a cada 5 minutos"
               >
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse"></span>
                 Auto-sync a cada 5 min
               </span>
             </h2>
           </div>
-          <p className="text-xs text-slate-400 mt-1.5">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
             Revise alterações de status, impedimentos, novos cards e comentários recebidos em tempo real ou sincronizados da API.
           </p>
         </div>
@@ -361,10 +361,10 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
           <button
             onClick={handleSyncRest}
             disabled={isSyncing}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700/80 text-slate-300 hover:text-white text-xs font-semibold hover:bg-slate-800 transition-all shadow-sm"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700/80 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white text-xs font-semibold transition-all shadow-sm"
             title="Buscar alterações recentes na API do Jira"
           >
-            <RefreshCw className={`w-3.5 h-3.5 text-blue-400 ${isSyncing ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 text-blue-500 dark:text-blue-400 ${isSyncing ? 'animate-spin' : ''}`} />
             <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar Jira'}</span>
           </button>
 
@@ -372,7 +372,7 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
           {activeTab === 'pending' && totalPending > 0 && (
             <button
               onClick={handleReviewAll}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-950/50 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-900/50 text-xs font-semibold transition-all shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:hover:bg-emerald-900/50 border border-emerald-300 dark:border-emerald-500/40 text-emerald-700 dark:text-emerald-300 text-xs font-semibold transition-all shadow-sm"
               title="Marcar todas as pendências da lista como revisadas"
             >
               <CheckCheck className="w-3.5 h-3.5" />
@@ -386,10 +386,10 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
               loadWebhookInfo();
               setIsWebhookModalOpen(true);
             }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700/80 text-slate-400 hover:text-white text-xs font-semibold hover:bg-slate-800 transition-all shadow-sm"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700/80 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white text-xs font-semibold transition-all shadow-sm"
             title="Configurar webhook para tempo real no Jira"
           >
-            <Radio className="w-3.5 h-3.5 text-emerald-400" />
+            <Radio className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
             <span>Webhook Jira</span>
           </button>
         </div>
@@ -398,18 +398,18 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
       {/* Tabs: Pendentes vs Já Revisados & Filters */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 pt-1 pb-2">
         {/* Toggle Tabs */}
-        <div className="flex items-center gap-1.5 p-1 bg-slate-900/90 border border-slate-800 rounded-xl">
+        <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-xl">
           <button
             onClick={() => setActiveTab('pending')}
             className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
               activeTab === 'pending'
                 ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
-                : 'text-slate-400 hover:text-slate-200'
+                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
             }`}
           >
             <span>Pendentes de Revisão</span>
             <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-              activeTab === 'pending' ? 'bg-white/20 text-white' : 'bg-slate-800 text-slate-400'
+              activeTab === 'pending' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
             }`}>
               {activeTab === 'pending' ? groupedEvents.length : totalPending}
             </span>
@@ -419,13 +419,13 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
             onClick={() => setActiveTab('reviewed')}
             className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
               activeTab === 'reviewed'
-                ? 'bg-slate-800 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-white'
+                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
             }`}
           >
-            <Check className="w-3 h-3 text-emerald-400" />
+            <Check className="w-3 h-3 text-emerald-500 dark:text-emerald-400" />
             <span>Já Revisados</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-800 text-slate-400">
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
               {activeTab === 'reviewed' ? groupedEvents.length : totalReviewed}
             </span>
           </button>
@@ -441,12 +441,12 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
               placeholder="Buscar evento..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-900/90 border border-slate-700/60 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-all shadow-sm"
+              className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 dark:bg-slate-900/90 border border-slate-300 dark:border-slate-700/60 rounded-xl text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-all shadow-sm"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-200"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
               >
                 ✕
               </button>
@@ -457,7 +457,7 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
           <select
             value={selectedProject}
             onChange={(e) => setSelectedProject(e.target.value)}
-            className="px-2.5 py-1.5 text-xs font-semibold bg-slate-900/90 border border-slate-700/70 rounded-xl text-slate-300 focus:outline-none focus:border-blue-500 cursor-pointer"
+            className="px-2.5 py-1.5 text-xs font-semibold bg-slate-50 dark:bg-slate-900/90 border border-slate-300 dark:border-slate-700/70 rounded-xl text-slate-700 dark:text-slate-300 focus:outline-none focus:border-blue-500 cursor-pointer"
           >
             <option value="all">Todos Projetos</option>
             {availableProjects.map((p) => (
@@ -471,7 +471,7 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
           <select
             value={selectedEventType}
             onChange={(e) => setSelectedEventType(e.target.value)}
-            className="px-2.5 py-1.5 text-xs font-semibold bg-slate-900/90 border border-slate-700/70 rounded-xl text-slate-300 focus:outline-none focus:border-blue-500 cursor-pointer"
+            className="px-2.5 py-1.5 text-xs font-semibold bg-slate-50 dark:bg-slate-900/90 border border-slate-300 dark:border-slate-700/70 rounded-xl text-slate-700 dark:text-slate-300 focus:outline-none focus:border-blue-500 cursor-pointer"
           >
             <option value="all">Todos os Tipos</option>
             <option value="status_changed">🔄 Mudança de Status</option>
@@ -490,7 +490,7 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
                 setSelectedEventType('all');
                 setSearchQuery('');
               }}
-              className="p-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700 transition-all"
+              className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-300 dark:border-slate-700 transition-all"
               title="Limpar filtros"
             >
               <X className="w-3.5 h-3.5" />
@@ -503,23 +503,23 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
       {isLoading ? (
         <div className="py-20 flex flex-col items-center justify-center gap-3">
           <Loader2 className="w-7 h-7 animate-spin text-blue-500" />
-          <p className="text-xs text-slate-400 font-semibold">Carregando eventos do Jira...</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold">Carregando eventos do Jira...</p>
         </div>
       ) : groupedEvents.length === 0 ? (
-        <div className="py-16 text-center text-slate-400 bg-slate-900/40 rounded-2xl border border-dashed border-slate-800 p-8 flex flex-col items-center justify-center gap-2">
+        <div className="py-16 text-center text-slate-500 dark:text-slate-400 bg-slate-50/70 dark:bg-slate-900/40 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 p-8 flex flex-col items-center justify-center gap-2">
           {activeTab === 'pending' ? (
             <>
-              <div className="w-12 h-12 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mb-1">
+              <div className="w-12 h-12 rounded-full bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 mb-1">
                 <CheckCheck className="w-6 h-6" />
               </div>
-              <h3 className="text-base font-bold text-slate-200">Tudo em dia! Nenhuma evolução pendente.</h3>
+              <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">Tudo em dia! Nenhuma evolução pendente.</h3>
               <p className="text-xs text-slate-500 max-w-md">
                 Todas as alterações dos seus projetos Jira já foram revisadas. Novos eventos recebidos via webhook ou sincronização aparecerão aqui.
               </p>
               <button
                 onClick={handleSyncRest}
                 disabled={isSyncing}
-                className="mt-3 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600/20 border border-blue-500/30 text-blue-300 hover:bg-blue-600/30 text-xs font-bold transition-all"
+                className="mt-3 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-600/20 border border-blue-200 dark:border-blue-500/30 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-600/30 text-xs font-bold transition-all"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
                 <span>Verificar Atualizações Agora</span>
@@ -527,8 +527,8 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
             </>
           ) : (
             <>
-              <Clock className="w-8 h-8 text-slate-600 mb-1" />
-              <h3 className="text-sm font-semibold text-slate-300">Nenhuma evolução revisada encontrada com os filtros atuais.</h3>
+              <Clock className="w-8 h-8 text-slate-400 dark:text-slate-600 mb-1" />
+              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Nenhuma evolução revisada encontrada com os filtros atuais.</h3>
             </>
           )}
         </div>
@@ -544,13 +544,13 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
                 key={group.groupId}
                 className={`group relative rounded-xl border p-4 transition-all duration-200 flex flex-col justify-between min-w-0 overflow-hidden ${
                   hasBlocked
-                    ? 'bg-red-500/10 border-red-500/30 hover:border-red-500/50'
-                    : 'bg-slate-900/90 border-slate-800 hover:border-blue-500/40 hover:bg-slate-850'
+                    ? 'bg-red-50/70 border-red-300 hover:border-red-400 dark:bg-red-500/10 dark:border-red-500/30 dark:hover:border-red-500/50 shadow-sm'
+                    : 'bg-white border-slate-200 hover:border-blue-400 hover:bg-slate-50/80 dark:bg-slate-900/90 dark:border-slate-800 dark:hover:border-blue-500/40 dark:hover:bg-slate-850 shadow-sm hover:shadow-md'
                 }`}
               >
                 <div className="min-w-0">
                   {/* Event Top Bar: Author, Time ago, Event Type / Batch Count Badge */}
-                  <div className="flex items-center justify-between gap-2 mb-2.5 pb-2 border-b border-slate-800/80 text-[11px] min-w-0">
+                  <div className="flex items-center justify-between gap-2 mb-2.5 pb-2 border-b border-slate-100 dark:border-slate-800/80 text-[11px] min-w-0">
                     <div className="flex items-center gap-1.5 min-w-0">
                       {group.authorAvatar ? (
                         <img
@@ -561,11 +561,11 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
                       ) : (
                         <User className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
                       )}
-                      <span className="font-semibold text-slate-200 truncate" title={group.authorName}>
+                      <span className="font-semibold text-slate-700 dark:text-slate-200 truncate" title={group.authorName}>
                         {group.authorName}
                       </span>
-                      <span className="text-slate-500">·</span>
-                      <span className="text-slate-400 text-[10px] whitespace-nowrap">
+                      <span className="text-slate-400">·</span>
+                      <span className="text-slate-500 dark:text-slate-400 text-[10px] whitespace-nowrap">
                         {formatTimeAgo(group.eventTime)}
                       </span>
                     </div>
@@ -573,7 +573,7 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
                     {/* Batch Badge or Event Type Badge */}
                     <div className="flex items-center gap-1 flex-shrink-0">
                       {group.events.length > 1 ? (
-                        <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/40 text-[10px] font-bold">
+                        <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/40 text-[10px] font-bold">
                           {group.events.length} alterações
                         </span>
                       ) : (
@@ -589,7 +589,7 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
                         href={group.cardData?.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs font-black text-blue-400 hover:text-blue-300 hover:underline flex items-center gap-1 min-w-0"
+                        className="text-xs font-black text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:underline flex items-center gap-1 min-w-0"
                         title={`Abrir ${group.issueKey} no Jira`}
                       >
                         <span className="truncate">{group.issueKey}</span>
@@ -597,20 +597,20 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
                       </a>
 
                       {group.cardData?.isBlocked && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-red-500/25 text-red-200 border border-red-500/40 text-[9px] font-black uppercase tracking-wider flex-shrink-0">
-                          <AlertOctagon className="w-2.5 h-2.5 text-red-300" />
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-red-100 text-red-700 border border-red-200 dark:bg-red-500/25 dark:text-red-200 dark:border-red-500/40 text-[9px] font-black uppercase tracking-wider flex-shrink-0">
+                          <AlertOctagon className="w-2.5 h-2.5 text-red-500 dark:text-red-300" />
                           Bloqueado
                         </span>
                       )}
                     </div>
 
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700 flex-shrink-0">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 flex-shrink-0">
                       {group.cardData?.displayStatus || 'Jira'}
                     </span>
                   </div>
 
                   {/* Card Title / Summary */}
-                  <h4 className="text-xs font-semibold text-slate-100 line-clamp-2 mb-3 leading-snug break-words">
+                  <h4 className="text-xs font-semibold text-slate-800 dark:text-slate-100 line-clamp-2 mb-3 leading-snug break-words">
                     {group.summary}
                   </h4>
 
@@ -619,11 +619,11 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
                     {group.events.map((ev, idx) => (
                       <div key={ev.id} className="min-w-0">
                         {group.events.length > 1 && (
-                          <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1 px-0.5">
-                            <span className="font-semibold text-slate-400">
+                          <div className="flex items-center justify-between text-[10px] text-slate-400 dark:text-slate-500 mb-1 px-0.5">
+                            <span className="font-semibold text-slate-600 dark:text-slate-400">
                               #{idx + 1} · {ev.diff?.label || ev.diff?.field || ev.eventType}
                             </span>
-                            <span className="text-[9px] text-slate-500">
+                            <span className="text-[9px] text-slate-400 dark:text-slate-500">
                               {formatTimeAgo(ev.eventTime)}
                             </span>
                           </div>
@@ -635,8 +635,8 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
                 </div>
 
                 {/* Action Button & Metadata Footer */}
-                <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400">
                     <Tag className="w-2.5 h-2.5" />
                     <span>{group.projectKey}</span>
                     {group.cardData?.assignee && (
@@ -651,7 +651,7 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
                   {activeTab === 'pending' ? (
                     <button
                       onClick={() => handleReviewGroup(group)}
-                      className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/40 text-xs font-bold transition-all shadow-sm group-hover:bg-emerald-600 group-hover:text-white"
+                      className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-300 dark:bg-emerald-600/20 dark:hover:bg-emerald-600 dark:text-emerald-300 dark:hover:text-white dark:border-emerald-500/40 text-xs font-bold transition-all shadow-sm group-hover:bg-emerald-600 group-hover:text-white"
                       title="Marcar todas as alterações deste card como revisadas"
                     >
                       <Check className="w-3.5 h-3.5" />
@@ -660,10 +660,10 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
                   ) : (
                     <button
                       onClick={() => handleUnreviewGroup(group)}
-                      className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-700 transition-all"
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 text-xs font-semibold border border-slate-300 dark:border-slate-700 transition-all"
                       title="Mover alterações deste card de volta para pendentes"
                     >
-                      <RotateCcw className="w-3 h-3 text-amber-400" />
+                      <RotateCcw className="w-3 h-3 text-amber-500 dark:text-amber-400" />
                       <span>{group.events.length > 1 ? `Desfazer (${group.events.length})` : 'Desfazer'}</span>
                     </button>
                   )}
@@ -676,29 +676,29 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
 
       {/* Modal de Instruções do Webhook */}
       {isWebhookModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-[#0e1424] border border-blue-900/60 rounded-2xl w-full max-w-xl p-6 shadow-2xl relative text-slate-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 dark:bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-[#0e1424] border border-slate-200 dark:border-blue-900/60 rounded-2xl w-full max-w-xl p-6 shadow-2xl relative text-slate-800 dark:text-slate-200">
             <button
               onClick={() => setIsWebhookModalOpen(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-all"
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 dark:hover:text-white p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
             >
               <X className="w-5 h-5" />
             </button>
 
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400">
+              <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-600/20 border border-blue-200 dark:border-blue-500/40 flex items-center justify-center text-blue-600 dark:text-blue-400">
                 <Radio className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-white">Configuração do Webhook do Jira</h3>
-                <p className="text-xs text-slate-400">Receba notificações instantâneas em tempo real no TaskLS.</p>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">Configuração do Webhook do Jira</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Receba notificações instantâneas em tempo real no TaskLS.</p>
               </div>
             </div>
 
             <div className="space-y-4 text-xs">
               {/* Webhook URL Box */}
               <div>
-                <label className="block font-bold text-slate-300 mb-1.5">
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1.5">
                   1. URL do Webhook do TaskLS:
                 </label>
                 <div className="flex items-center gap-2">
@@ -706,11 +706,11 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
                     type="text"
                     readOnly
                     value={webhookInfo?.webhookUrl || 'https://taskls.duckdns.org/api/jira/webhook'}
-                    className="flex-1 px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs font-mono text-emerald-400 select-all"
+                    className="flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-mono text-emerald-600 dark:text-emerald-400 select-all"
                   />
                   <button
                     onClick={copyWebhookUrl}
-                    className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold flex items-center gap-1.5 transition-all"
+                    className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold flex items-center gap-1.5 transition-all shadow-md shadow-blue-600/30"
                   >
                     <Copy className="w-3.5 h-3.5" />
                     <span>{isCopied ? 'Copiado!' : 'Copiar'}</span>
@@ -719,16 +719,16 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
               </div>
 
               {/* Step-by-step instructions */}
-              <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2 text-slate-300 leading-relaxed">
-                <p className="font-bold text-white">2. Como ativar no Jira Cloud:</p>
-                <ol className="list-decimal list-inside space-y-1.5 text-slate-300">
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 space-y-2 text-slate-700 dark:text-slate-300 leading-relaxed">
+                <p className="font-bold text-slate-900 dark:text-white">2. Como ativar no Jira Cloud:</p>
+                <ol className="list-decimal list-inside space-y-1.5 text-slate-700 dark:text-slate-300">
                   <li>
                     Acesse o Jira como Administrador em:{' '}
                     <a
                       href={webhookInfo?.settingsUrl || 'https://sysmiddle.atlassian.net/plugins/servlet/webhooks'}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-blue-400 hover:underline font-semibold"
+                      className="text-blue-600 dark:text-blue-400 hover:underline font-semibold"
                     >
                       Configurações ➔ Sistema ➔ WebHooks ↗
                     </a>
@@ -737,13 +737,13 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
                   <li>Cole a URL acima no campo <strong>URL</strong>.</li>
                   <li>
                     No campo <strong>JQL</strong>, restrinja aos seus projetos (opcional):
-                    <div className="mt-1 p-2 bg-slate-950 rounded border border-slate-800 font-mono text-[11px] text-amber-300">
+                    <div className="mt-1 p-2 bg-white dark:bg-slate-950 rounded border border-slate-200 dark:border-slate-800 font-mono text-[11px] text-amber-700 dark:text-amber-300">
                       project in ({webhookInfo?.projects?.map((p) => `"${p}"`).join(', ') || '"ESM", "NEO", "VOAL"'})
                     </div>
                   </li>
                   <li>
                     Em <strong>Eventos</strong>, marque as opções:
-                    <ul className="list-disc list-inside ml-4 mt-0.5 text-slate-400">
+                    <ul className="list-disc list-inside ml-4 mt-0.5 text-slate-500 dark:text-slate-400">
                       <li><strong>Issue:</strong> created, updated</li>
                       <li><strong>Comment:</strong> created, updated</li>
                     </ul>
@@ -752,7 +752,7 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
                 </ol>
               </div>
 
-              <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-500/30 text-blue-300 text-[11px]">
+              <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-500/30 text-blue-700 dark:text-blue-300 text-[11px]">
                 💡 <strong>Abordagem Híbrida Ativa:</strong> Mesmo antes de configurar o webhook ou se alguma notificação falhar, você pode clicar no botão <strong>"Sincronizar Jira"</strong> a qualquer momento para resgatar todo o histórico recente!
               </div>
             </div>
@@ -760,7 +760,7 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
             <div className="mt-5 flex justify-end">
               <button
                 onClick={() => setIsWebhookModalOpen(false)}
-                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition-all"
+                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-white font-bold text-xs border border-slate-300 dark:border-slate-700 transition-all"
               >
                 Fechar
               </button>
@@ -976,16 +976,16 @@ const EventDeltaBox: React.FC<{ event: JiraReviewEvent }> = ({ event }) => {
   switch (eventType) {
     case 'status_changed':
       return (
-        <div className="p-2.5 rounded-lg bg-blue-950/40 border border-blue-500/30 text-xs min-w-0 overflow-hidden">
-          <div className="text-[10px] font-bold text-blue-300 mb-1.5 flex items-center gap-1">
+        <div className="p-2.5 rounded-lg bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-500/30 text-xs min-w-0 overflow-hidden">
+          <div className="text-[10px] font-bold text-blue-700 dark:text-blue-300 mb-1.5 flex items-center gap-1">
             <span>🔄 Status alterado:</span>
           </div>
           <div className="flex flex-wrap items-center gap-2 font-bold min-w-0">
-            <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-[10px] break-words">
+            <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 text-[10px] break-words">
               {diff.from || 'Sem status'}
             </span>
-            <ArrowRight className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
-            <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-200 border border-blue-500/40 text-[10px] break-words">
+            <ArrowRight className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400 flex-shrink-0" />
+            <span className="px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-500/20 text-blue-800 dark:text-blue-200 border border-blue-300 dark:border-blue-500/40 text-[10px] break-words">
               {diff.to || 'Desconhecido'}
             </span>
           </div>
@@ -996,18 +996,18 @@ const EventDeltaBox: React.FC<{ event: JiraReviewEvent }> = ({ event }) => {
       return (
         <div className={`p-2.5 rounded-lg border text-xs min-w-0 overflow-hidden ${
           diff.isBlocked
-            ? 'bg-red-500/20 border-red-500/50 text-red-200'
-            : 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
+            ? 'bg-red-50 border-red-300 text-red-700 dark:bg-red-500/20 dark:border-red-500/50 dark:text-red-200'
+            : 'bg-emerald-50 border-emerald-300 text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-500/40 dark:text-emerald-200'
         }`}>
           <div className="flex items-center gap-1.5 font-bold min-w-0 break-words">
             {diff.isBlocked ? (
               <>
-                <AlertOctagon className="w-4 h-4 text-red-400 flex-shrink-0" />
+                <AlertOctagon className="w-4 h-4 text-red-500 dark:text-red-400 flex-shrink-0" />
                 <span className="break-words">🚨 Marcado como Impedimento (Card Bloqueado)</span>
               </>
             ) : (
               <>
-                <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                <Check className="w-4 h-4 text-emerald-500 dark:text-emerald-400 flex-shrink-0" />
                 <span className="break-words">✅ Impedimento Removido (Card Desbloqueado)</span>
               </>
             )}
@@ -1018,12 +1018,12 @@ const EventDeltaBox: React.FC<{ event: JiraReviewEvent }> = ({ event }) => {
     case 'comment_added': {
       const cleanText = cleanJiraMarkup(diff.text || 'Sem texto no comentário');
       return (
-        <div className="p-2.5 rounded-lg bg-purple-950/30 border border-purple-500/30 text-xs min-w-0 overflow-hidden">
-          <div className="text-[10px] font-bold text-purple-300 mb-1.5 flex items-center gap-1">
-            <MessageSquare className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
+        <div className="p-2.5 rounded-lg bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-500/30 text-xs min-w-0 overflow-hidden">
+          <div className="text-[10px] font-bold text-purple-700 dark:text-purple-300 mb-1.5 flex items-center gap-1">
+            <MessageSquare className="w-3.5 h-3.5 text-purple-500 dark:text-purple-400 flex-shrink-0" />
             <span>Novo comentário registrado:</span>
           </div>
-          <div className="text-slate-200 text-xs max-h-36 overflow-y-auto break-words break-all whitespace-pre-wrap bg-purple-950/40 p-2.5 rounded-lg border border-purple-500/20 leading-relaxed font-sans">
+          <div className="text-slate-800 dark:text-slate-200 text-xs max-h-36 overflow-y-auto break-words break-all whitespace-pre-wrap bg-white dark:bg-purple-950/40 p-2.5 rounded-lg border border-purple-200 dark:border-purple-500/20 leading-relaxed font-sans shadow-inner">
             {renderFormattedComment(cleanText)}
           </div>
         </div>
@@ -1032,12 +1032,12 @@ const EventDeltaBox: React.FC<{ event: JiraReviewEvent }> = ({ event }) => {
 
     case 'issue_created':
       return (
-        <div className="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-xs min-w-0 overflow-hidden">
-          <div className="text-[10px] font-bold text-emerald-300 mb-1 flex items-center gap-1">
-            <Sparkles className="w-3 h-3 text-emerald-400 flex-shrink-0" />
+        <div className="p-2.5 rounded-lg bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-500/30 text-xs min-w-0 overflow-hidden">
+          <div className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 mb-1 flex items-center gap-1">
+            <Sparkles className="w-3 h-3 text-emerald-500 dark:text-emerald-400 flex-shrink-0" />
             <span>Novo card incluído no Jira:</span>
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-[11px] text-emerald-200 font-semibold min-w-0">
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-emerald-800 dark:text-emerald-200 font-semibold min-w-0">
             <span>Tipo: {diff.issueType || 'Demanda'}</span>
             {diff.priority && <span>· Prioridade: {diff.priority}</span>}
           </div>
@@ -1046,15 +1046,15 @@ const EventDeltaBox: React.FC<{ event: JiraReviewEvent }> = ({ event }) => {
 
     case 'assignee_changed':
       return (
-        <div className="p-2.5 rounded-lg bg-amber-950/30 border border-amber-500/30 text-xs min-w-0 overflow-hidden">
-          <div className="text-[10px] font-bold text-amber-300 mb-1 flex items-center gap-1">
-            <User className="w-3 h-3 text-amber-400 flex-shrink-0" />
+        <div className="p-2.5 rounded-lg bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-500/30 text-xs min-w-0 overflow-hidden">
+          <div className="text-[10px] font-bold text-amber-700 dark:text-amber-300 mb-1 flex items-center gap-1">
+            <User className="w-3 h-3 text-amber-500 dark:text-amber-400 flex-shrink-0" />
             <span>Responsável alterado:</span>
           </div>
           <div className="flex flex-wrap items-center gap-2 font-bold text-[11px] min-w-0">
             <span className="text-slate-400 line-through break-words">{diff.from}</span>
-            <ArrowRight className="w-3 h-3 text-amber-400 flex-shrink-0" />
-            <span className="text-amber-200 break-words">{diff.to}</span>
+            <ArrowRight className="w-3 h-3 text-amber-500 dark:text-amber-400 flex-shrink-0" />
+            <span className="text-amber-800 dark:text-amber-200 break-words">{diff.to}</span>
           </div>
         </div>
       );
@@ -1071,8 +1071,8 @@ const EventDeltaBox: React.FC<{ event: JiraReviewEvent }> = ({ event }) => {
 
       if (isLong) {
         return (
-          <div className="p-2.5 rounded-lg bg-slate-800/60 border border-slate-700/60 text-xs min-w-0 overflow-hidden">
-            <div className="text-[10px] font-bold text-slate-300 mb-1.5 flex items-center justify-between">
+          <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-xs min-w-0 overflow-hidden">
+            <div className="text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
               <span className="truncate">{diff.label || `Campo alterado: ${diff.field}`}</span>
             </div>
 
@@ -1082,17 +1082,17 @@ const EventDeltaBox: React.FC<{ event: JiraReviewEvent }> = ({ event }) => {
                   <span className="text-[9px] font-semibold text-slate-500 uppercase tracking-wider block mb-0.5">
                     Anterior:
                   </span>
-                  <div className="p-2 rounded bg-slate-950/60 border border-slate-800 text-[11px] text-slate-400 line-through max-h-24 overflow-y-auto break-words break-all whitespace-pre-wrap">
+                  <div className="p-2 rounded bg-white dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400 line-through max-h-24 overflow-y-auto break-words break-all whitespace-pre-wrap">
                     {fromText}
                   </div>
                 </div>
               )}
 
               <div className="min-w-0">
-                <span className="text-[9px] font-semibold text-blue-400 uppercase tracking-wider block mb-0.5">
+                <span className="text-[9px] font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider block mb-0.5">
                   Novo:
                 </span>
-                <div className="p-2 rounded bg-slate-950/80 border border-blue-500/30 text-[11px] text-slate-100 font-medium max-h-32 overflow-y-auto break-words break-all whitespace-pre-wrap">
+                <div className="p-2 rounded bg-white dark:bg-slate-950/80 border border-blue-200 dark:border-blue-500/30 text-[11px] text-slate-800 dark:text-slate-100 font-medium max-h-32 overflow-y-auto break-words break-all whitespace-pre-wrap">
                   {toText || 'vazio'}
                 </div>
               </div>
@@ -1102,14 +1102,14 @@ const EventDeltaBox: React.FC<{ event: JiraReviewEvent }> = ({ event }) => {
       }
 
       return (
-        <div className="p-2.5 rounded-lg bg-slate-800/60 border border-slate-700/60 text-xs min-w-0 overflow-hidden">
-          <div className="text-[10px] font-bold text-slate-400 mb-1 truncate">
+        <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-xs min-w-0 overflow-hidden">
+          <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1 truncate">
             {diff.label || `Campo alterado: ${diff.field}`}
           </div>
-          <div className="flex flex-wrap items-center gap-1.5 font-medium text-[11px] text-slate-300 min-w-0">
-            <span className="line-through text-slate-500 break-words break-all">{fromText || 'vazio'}</span>
+          <div className="flex flex-wrap items-center gap-1.5 font-medium text-[11px] text-slate-700 dark:text-slate-300 min-w-0">
+            <span className="line-through text-slate-400 break-words break-all">{fromText || 'vazio'}</span>
             <ArrowRight className="w-3 h-3 text-slate-400 flex-shrink-0" />
-            <span className="text-white font-bold break-words break-all">{toText || 'vazio'}</span>
+            <span className="text-slate-900 dark:text-white font-bold break-words break-all">{toText || 'vazio'}</span>
           </div>
         </div>
       );
@@ -1124,37 +1124,37 @@ const EventTypeBadge: React.FC<{ type: string }> = ({ type }) => {
   switch (type) {
     case 'status_changed':
       return (
-        <span className="px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/30 text-[9px] font-bold uppercase tracking-wide">
+        <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-500/15 dark:text-blue-300 dark:border-blue-500/30 text-[9px] font-bold uppercase tracking-wide">
           Status
         </span>
       );
     case 'flagged_changed':
       return (
-        <span className="px-1.5 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/40 text-[9px] font-bold uppercase tracking-wide">
+        <span className="px-1.5 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 dark:bg-red-500/20 dark:text-red-300 dark:border-red-500/40 text-[9px] font-bold uppercase tracking-wide">
           Impedimento
         </span>
       );
     case 'comment_added':
       return (
-        <span className="px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30 text-[9px] font-bold uppercase tracking-wide">
+        <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-500/15 dark:text-purple-300 dark:border-purple-500/30 text-[9px] font-bold uppercase tracking-wide">
           Comentário
         </span>
       );
     case 'issue_created':
       return (
-        <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[9px] font-bold uppercase tracking-wide">
+        <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30 text-[9px] font-bold uppercase tracking-wide">
           Novo Card
         </span>
       );
     case 'assignee_changed':
       return (
-        <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[9px] font-bold uppercase tracking-wide">
+        <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30 text-[9px] font-bold uppercase tracking-wide">
           Responsável
         </span>
       );
     default:
       return (
-        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 text-[9px] font-bold uppercase tracking-wide">
+        <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 text-[9px] font-bold uppercase tracking-wide">
           Alteração
         </span>
       );

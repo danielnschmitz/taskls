@@ -21,10 +21,14 @@ import {
   Check,
   Scale,
   BarChart3,
+  Sun,
+  Moon,
+  Laptop,
 } from 'lucide-react';
 import { Priority, Task, DndStatus, CategoryInfo, ModuleType } from '../types';
 import { PomodoroTimer } from './PomodoroTimer';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import {
   triggerBrowserNotification,
   requestBrowserNotificationPermission,
@@ -81,6 +85,9 @@ export const Header: React.FC<HeaderProps> = ({
   onShowToast,
 }) => {
   const { user, logout, isDefaultPassword } = useAuth();
+  const { theme, resolvedTheme, setTheme } = useTheme();
+  const [showThemeMenu, setShowThemeMenu] = useState(false);
+  const themeMenuRef = useRef<HTMLDivElement>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [autostartEnabled, setAutostartEnabled] = useState(false);
   const [isTogglingAutostart, setIsTogglingAutostart] = useState(false);
@@ -95,20 +102,23 @@ export const Header: React.FC<HeaderProps> = ({
   const canAccessHealth = Boolean(user?.isAdmin || userModules.includes('health'));
   const canAccessDashboards = Boolean(user?.isAdmin || userModules.includes('dashboards'));
 
-  // Fechar menu de módulos ao clicar fora
+  // Fechar menus ao clicar fora
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (moduleMenuRef.current && !moduleMenuRef.current.contains(event.target as Node)) {
         setShowModuleMenu(false);
       }
+      if (themeMenuRef.current && !themeMenuRef.current.contains(event.target as Node)) {
+        setShowThemeMenu(false);
+      }
     };
-    if (showModuleMenu) {
+    if (showModuleMenu || showThemeMenu) {
       document.addEventListener('mousedown', handleClickOutside);
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showModuleMenu]);
+  }, [showModuleMenu, showThemeMenu]);
 
   // Fetch autostart status
   useEffect(() => {
@@ -207,7 +217,7 @@ export const Header: React.FC<HeaderProps> = ({
   const isDndActive = Boolean(dndStatus?.enabled);
 
   return (
-    <header className="sticky top-0 z-30 bg-[#0c1222]/95 backdrop-blur-md border-b border-slate-800/80 px-4 lg:px-8 py-3 transition-all">
+    <header className="sticky top-0 z-30 bg-white/95 dark:bg-[#0c1222]/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800/80 px-4 lg:px-8 py-3 transition-colors duration-200">
       <div className="max-w-[1680px] mx-auto flex flex-col xl:flex-row items-center justify-between gap-3.5">
         
         {/* Brand Logo, Title & Module Switcher */}
@@ -218,14 +228,14 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-extrabold text-xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-100 to-slate-400">
+                <span className="font-extrabold text-xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-slate-900 via-slate-700 to-slate-500 dark:from-white dark:via-slate-100 dark:to-slate-400">
                   TaskLS
                 </span>
-                <span className="px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                <span className="px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
                   Pro
                 </span>
               </div>
-              <p className="text-xs text-slate-400 font-medium">Plataforma Modular</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Plataforma Modular</p>
             </div>
           </div>
 
@@ -234,10 +244,10 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={() => setShowModuleMenu(!showModuleMenu)}
-              className="flex items-center gap-2 px-3 py-2 rounded-2xl bg-slate-950/80 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-200 text-xs font-bold shadow-inner transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+              className="flex items-center gap-2 px-3 py-2 rounded-2xl bg-slate-100/90 hover:bg-slate-200 border border-slate-300 hover:border-slate-400 text-slate-800 dark:bg-slate-950/80 dark:hover:bg-slate-900 dark:border-slate-800 dark:hover:border-slate-700 dark:text-slate-200 text-xs font-bold shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
               title="Alternar Módulo da Plataforma"
             >
-              <div className="w-6 h-6 rounded-lg bg-indigo-600/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30">
+              <div className="w-6 h-6 rounded-lg bg-indigo-600/10 text-indigo-600 dark:bg-indigo-600/20 dark:text-indigo-400 flex items-center justify-center border border-indigo-500/20 dark:border-indigo-500/30">
                 <Menu className="w-3.5 h-3.5" />
               </div>
               <span className="hidden sm:inline font-bold">
@@ -247,15 +257,15 @@ export const Header: React.FC<HeaderProps> = ({
                 {activeModule === 'dashboards' && 'Dashboards'}
                 {activeModule === 'settings' && 'Configurações'}
               </span>
-              <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${showModuleMenu ? 'rotate-180 text-indigo-400' : ''}`} />
+              <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${showModuleMenu ? 'rotate-180 text-indigo-500' : ''}`} />
             </button>
 
             {/* Dropdown do Menu Sanduíche */}
             {showModuleMenu && (
-              <div className="absolute left-0 mt-2 w-72 bg-[#0c1222]/98 border border-slate-700/90 rounded-2xl shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-2 backdrop-blur-xl ring-1 ring-white/10">
-                <div className="px-3 py-2 border-b border-slate-800 mb-1.5 flex items-center justify-between">
+              <div className="absolute left-0 mt-2 w-72 bg-white/98 dark:bg-[#0c1222]/98 border border-slate-200 dark:border-slate-700/90 rounded-2xl shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-2 backdrop-blur-xl ring-1 ring-black/5 dark:ring-white/10">
+                <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 mb-1.5 flex items-center justify-between">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Módulos da Plataforma</span>
-                  <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">TaskLS Pro</span>
+                  <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">TaskLS Pro</span>
                 </div>
 
                 <div className="space-y-1">
@@ -268,20 +278,20 @@ export const Header: React.FC<HeaderProps> = ({
                       }}
                       className={`w-full text-left p-2.5 rounded-xl flex items-center justify-between gap-3 transition-all ${
                         activeModule === 'tasks'
-                          ? 'bg-indigo-600/20 border border-indigo-500/40 text-white shadow-inner'
-                          : 'hover:bg-slate-800/80 text-slate-300 border border-transparent'
+                          ? 'bg-indigo-50 border border-indigo-200 text-indigo-900 shadow-sm dark:bg-indigo-600/20 dark:border-indigo-500/40 dark:text-white dark:shadow-inner'
+                          : 'hover:bg-slate-100 text-slate-700 dark:hover:bg-slate-800/80 dark:text-slate-300 border border-transparent'
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${activeModule === 'tasks' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30' : 'bg-slate-800 text-slate-400'}`}>
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${activeModule === 'tasks' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}>
                           <CheckCircle2 className="w-4 h-4" />
                         </div>
                         <div>
                           <span className="block text-xs font-bold leading-tight">Gestão de Tarefas</span>
-                          <span className="text-[10px] text-slate-400">Tarefas, agendas, backlog e prazos</span>
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400">Tarefas, agendas, backlog e prazos</span>
                         </div>
                       </div>
-                      {activeModule === 'tasks' && <Check className="w-4 h-4 text-indigo-400 flex-shrink-0" />}
+                      {activeModule === 'tasks' && <Check className="w-4 h-4 text-indigo-600 dark:text-indigo-400 flex-shrink-0" />}
                     </button>
                   )}
 
@@ -294,20 +304,20 @@ export const Header: React.FC<HeaderProps> = ({
                       }}
                       className={`w-full text-left p-2.5 rounded-xl flex items-center justify-between gap-3 transition-all ${
                         activeModule === 'cards'
-                          ? 'bg-purple-600/20 border border-purple-500/40 text-white shadow-inner'
-                          : 'hover:bg-slate-800/80 text-slate-300 border border-transparent'
+                          ? 'bg-purple-50 border border-purple-200 text-purple-900 shadow-sm dark:bg-purple-600/20 dark:border-purple-500/40 dark:text-white dark:shadow-inner'
+                          : 'hover:bg-slate-100 text-slate-700 dark:hover:bg-slate-800/80 dark:text-slate-300 border border-transparent'
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${activeModule === 'cards' ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30' : 'bg-slate-800 text-slate-400'}`}>
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${activeModule === 'cards' ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}>
                           <FileText className="w-4 h-4" />
                         </div>
                         <div>
                           <span className="block text-xs font-bold leading-tight">Escrita de Cards</span>
-                          <span className="text-[10px] text-slate-400">Templates com macros e Markdown</span>
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400">Templates com macros e Markdown</span>
                         </div>
                       </div>
-                      {activeModule === 'cards' && <Check className="w-4 h-4 text-purple-400 flex-shrink-0" />}
+                      {activeModule === 'cards' && <Check className="w-4 h-4 text-purple-600 dark:text-purple-400 flex-shrink-0" />}
                     </button>
                   )}
 
@@ -320,20 +330,20 @@ export const Header: React.FC<HeaderProps> = ({
                       }}
                       className={`w-full text-left p-2.5 rounded-xl flex items-center justify-between gap-3 transition-all ${
                         activeModule === 'health'
-                          ? 'bg-emerald-600/20 border border-emerald-500/40 text-white shadow-inner'
-                          : 'hover:bg-slate-800/80 text-slate-300 border border-transparent'
+                          ? 'bg-emerald-50 border border-emerald-200 text-emerald-900 shadow-sm dark:bg-emerald-600/20 dark:border-emerald-500/40 dark:text-white dark:shadow-inner'
+                          : 'hover:bg-slate-100 text-slate-700 dark:hover:bg-slate-800/80 dark:text-slate-300 border border-transparent'
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${activeModule === 'health' ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30' : 'bg-slate-800 text-slate-400'}`}>
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${activeModule === 'health' ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}>
                           <Scale className="w-4 h-4" />
                         </div>
                         <div>
                           <span className="block text-xs font-bold leading-tight">Saúde & Peso</span>
-                          <span className="text-[10px] text-slate-400">Evolução, pesagens e bot Telegram</span>
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400">Evolução, pesagens e bot Telegram</span>
                         </div>
                       </div>
-                      {activeModule === 'health' && <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />}
+                      {activeModule === 'health' && <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />}
                     </button>
                   )}
 
@@ -346,20 +356,20 @@ export const Header: React.FC<HeaderProps> = ({
                       }}
                       className={`w-full text-left p-2.5 rounded-xl flex items-center justify-between gap-3 transition-all ${
                         activeModule === 'dashboards'
-                          ? 'bg-cyan-600/20 border border-cyan-500/40 text-white shadow-inner'
-                          : 'hover:bg-slate-800/80 text-slate-300 border border-transparent'
+                          ? 'bg-cyan-50 border border-cyan-200 text-cyan-900 shadow-sm dark:bg-cyan-600/20 dark:border-cyan-500/40 dark:text-white dark:shadow-inner'
+                          : 'hover:bg-slate-100 text-slate-700 dark:hover:bg-slate-800/80 dark:text-slate-300 border border-transparent'
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${activeModule === 'dashboards' ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/30' : 'bg-slate-800 text-slate-400'}`}>
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${activeModule === 'dashboards' ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/30' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}>
                           <BarChart3 className="w-4 h-4" />
                         </div>
                         <div>
                           <span className="block text-xs font-bold leading-tight">Dashboards Analíticos</span>
-                          <span className="text-[10px] text-slate-400">LeadTime Jira, gargalos e métricas</span>
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400">LeadTime Jira, gargalos e métricas</span>
                         </div>
                       </div>
-                      {activeModule === 'dashboards' && <Check className="w-4 h-4 text-cyan-400 flex-shrink-0" />}
+                      {activeModule === 'dashboards' && <Check className="w-4 h-4 text-cyan-600 dark:text-cyan-400 flex-shrink-0" />}
                     </button>
                   )}
 
@@ -372,23 +382,23 @@ export const Header: React.FC<HeaderProps> = ({
                       }}
                       className={`w-full text-left p-2.5 rounded-xl flex items-center justify-between gap-3 transition-all ${
                         activeModule === 'settings'
-                          ? 'bg-slate-700/40 border border-slate-500/40 text-white shadow-inner'
-                          : 'hover:bg-slate-800/80 text-slate-300 border border-transparent'
+                          ? 'bg-slate-100 border border-slate-300 text-slate-900 shadow-sm dark:bg-slate-700/40 dark:border-slate-500/40 dark:text-white dark:shadow-inner'
+                          : 'hover:bg-slate-100 text-slate-700 dark:hover:bg-slate-800/80 dark:text-slate-300 border border-transparent'
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${activeModule === 'settings' ? 'bg-slate-700 text-white shadow-md shadow-slate-700/30' : 'bg-slate-800 text-slate-400'}`}>
-                          <Settings className="w-4 h-4 text-indigo-400" />
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${activeModule === 'settings' ? 'bg-slate-800 text-white shadow-md dark:bg-slate-700' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}>
+                          <Settings className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
                         </div>
                         <div>
                           <div className="flex items-center gap-1.5">
                             <span className="block text-xs font-bold leading-tight">Configurações</span>
-                            <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 px-1 py-0.2 rounded border border-amber-500/20">ADMIN</span>
+                            <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1 py-0.2 rounded border border-amber-500/20">ADMIN</span>
                           </div>
-                          <span className="text-[10px] text-slate-400">Usuários e integração Jira</span>
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400">Usuários e integração Jira</span>
                         </div>
                       </div>
-                      {activeModule === 'settings' && <Check className="w-4 h-4 text-indigo-400 flex-shrink-0" />}
+                      {activeModule === 'settings' && <Check className="w-4 h-4 text-indigo-500 dark:text-indigo-400 flex-shrink-0" />}
                     </button>
                   )}
                 </div>
@@ -506,10 +516,10 @@ export const Header: React.FC<HeaderProps> = ({
           {activeModule === 'tasks' && (
             <button
               onClick={onOpenBackupModal}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/60 text-xs font-semibold transition-all"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 dark:bg-slate-900/80 dark:hover:bg-slate-800 dark:text-slate-300 dark:hover:text-white dark:border-slate-700/60 text-xs font-semibold transition-all shadow-sm"
               title="Exportar/Importar Backup JSON ou CSV"
             >
-              <Database className="w-3.5 h-3.5 text-emerald-400" />
+              <Database className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
               <span className="hidden lg:inline">Backup</span>
             </button>
           )}
@@ -523,19 +533,19 @@ export const Header: React.FC<HeaderProps> = ({
                 ? 'TaskLS inicia automaticamente com o Windows (Clique para desativar)'
                 : 'Clique para fazer o TaskLS iniciar com o Windows'
             }
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all shadow-sm ${
               autostartEnabled
-                ? 'bg-emerald-950/40 text-emerald-400 border-emerald-500/30 hover:bg-emerald-950/60'
-                : 'bg-slate-900/80 text-slate-400 border-slate-700/60 hover:text-slate-300 hover:border-slate-600'
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-500/30 dark:hover:bg-emerald-950/60'
+                : 'bg-slate-100 text-slate-600 border-slate-300 hover:text-slate-900 hover:bg-slate-200 dark:bg-slate-900/80 dark:text-slate-400 dark:border-slate-700/60 dark:hover:text-slate-300 dark:hover:border-slate-600'
             }`}
           >
             {isTogglingAutostart ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
             ) : (
-              <Power className={`w-3.5 h-3.5 ${autostartEnabled ? 'text-emerald-400' : 'text-slate-400'}`} />
+              <Power className={`w-3.5 h-3.5 ${autostartEnabled ? 'text-emerald-500 dark:text-emerald-400' : 'text-slate-400'}`} />
             )}
             <span className="hidden xl:inline">Windows:</span>
-            <span className={autostartEnabled ? 'text-emerald-400 font-bold' : 'text-slate-400'}>
+            <span className={autostartEnabled ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-500 dark:text-slate-400'}>
               {autostartEnabled ? 'ON' : 'OFF'}
             </span>
           </button>
@@ -545,15 +555,93 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={handleTestNotification}
             disabled={isTestingNotif}
             title="Enviar notificação de teste no navegador"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/60 text-xs font-semibold transition-all shadow-sm"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 dark:bg-slate-900/80 dark:hover:bg-slate-800 dark:text-slate-300 dark:hover:text-white dark:border-slate-700/60 text-xs font-semibold transition-all shadow-sm"
           >
             {isTestingNotif ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-500" />
             ) : (
-              <Bell className="w-3.5 h-3.5 text-amber-400" />
+              <Bell className="w-3.5 h-3.5 text-amber-500" />
             )}
             <span className="hidden xl:inline">Testar</span>
           </button>
+
+          {/* Theme Selector Toggle (Light / Dark / System) */}
+          <div className="relative" ref={themeMenuRef}>
+            <button
+              onClick={() => setShowThemeMenu(!showThemeMenu)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 dark:bg-slate-900/80 dark:hover:bg-slate-800 dark:text-slate-300 dark:hover:text-white dark:border-slate-700/60 text-xs font-semibold transition-all shadow-sm"
+              title="Alternar Tema da Interface (Claro / Escuro / Sistema)"
+            >
+              {resolvedTheme === 'dark' ? (
+                <Moon className="w-3.5 h-3.5 text-indigo-400" />
+              ) : (
+                <Sun className="w-3.5 h-3.5 text-amber-500" />
+              )}
+              <span className="hidden lg:inline capitalize">
+                {theme === 'system' ? 'Sistema' : theme === 'dark' ? 'Escuro' : 'Claro'}
+              </span>
+              <ChevronDown className="w-3 h-3 opacity-60" />
+            </button>
+
+            {showThemeMenu && (
+              <div className="absolute right-0 mt-2 w-44 bg-white/98 dark:bg-[#0c1222]/98 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-1.5 z-50 text-xs animate-in fade-in slide-in-from-top-1 backdrop-blur-xl ring-1 ring-black/5 dark:ring-white/10">
+                <span className="block px-2.5 py-1 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                  Tema da Interface:
+                </span>
+                <button
+                  onClick={() => {
+                    setTheme('light');
+                    setShowThemeMenu(false);
+                  }}
+                  className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between transition-all ${
+                    theme === 'light'
+                      ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 font-bold'
+                      : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Sun className="w-3.5 h-3.5 text-amber-500" />
+                    <span>Claro</span>
+                  </div>
+                  {theme === 'light' && <Check className="w-3.5 h-3.5 text-amber-500" />}
+                </button>
+                <button
+                  onClick={() => {
+                    setTheme('dark');
+                    setShowThemeMenu(false);
+                  }}
+                  className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between transition-all ${
+                    theme === 'dark'
+                      ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-800 dark:text-indigo-300 font-bold'
+                      : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Moon className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Escuro</span>
+                  </div>
+                  {theme === 'dark' && <Check className="w-3.5 h-3.5 text-indigo-400" />}
+                </button>
+                <button
+                  onClick={() => {
+                    setTheme('system');
+                    setShowThemeMenu(false);
+                  }}
+                  className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between transition-all ${
+                    theme === 'system'
+                      ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white font-bold'
+                      : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Laptop className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Automático (Sistema)</span>
+                  </div>
+                  {theme === 'system' && <Check className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />}
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* New Task Button (Desktop, apenas no Módulo Tarefas) */}
           {activeModule === 'tasks' && (
@@ -571,10 +659,10 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="relative">
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/60 text-xs font-semibold transition-all"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 dark:bg-slate-900/80 dark:hover:bg-slate-800 dark:text-slate-300 dark:hover:text-white dark:border-slate-700/60 text-xs font-semibold transition-all shadow-sm"
                 title={`Conectado como ${user.username}`}
               >
-                <div className="w-5 h-5 rounded-lg bg-indigo-600/30 text-indigo-400 flex items-center justify-center font-bold text-[10px]">
+                <div className="w-5 h-5 rounded-lg bg-indigo-600/20 text-indigo-600 dark:bg-indigo-600/30 dark:text-indigo-400 flex items-center justify-center font-bold text-[10px]">
                   {user.username.charAt(0).toUpperCase()}
                 </div>
                 <span className="hidden md:inline">{user.username}</span>
@@ -585,12 +673,12 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
 
               {showUserMenu && (
-                <div className="absolute right-0 mt-2 w-48 bg-[#0c1222] border border-slate-700 rounded-2xl shadow-2xl p-1.5 z-50 text-xs animate-in fade-in slide-in-from-top-1">
-                  <div className="px-3 py-2 border-b border-slate-800 mb-1">
-                    <span className="text-[10px] text-slate-400 block">Usuário Conectado</span>
-                    <span className="font-bold text-white text-xs">{user.username}</span>
+                <div className="absolute right-0 mt-2 w-48 bg-white/98 dark:bg-[#0c1222] border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-1.5 z-50 text-xs animate-in fade-in slide-in-from-top-1 backdrop-blur-xl ring-1 ring-black/5 dark:ring-white/10">
+                  <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 mb-1">
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 block">Usuário Conectado</span>
+                    <span className="font-bold text-slate-900 dark:text-white text-xs">{user.username}</span>
                     {isDefaultPassword && (
-                      <span className="inline-block mt-1 text-[10px] text-amber-400 font-semibold">
+                      <span className="inline-block mt-1 text-[10px] text-amber-600 dark:text-amber-400 font-semibold">
                         ⚠️ Senha padrão ativa
                       </span>
                     )}
@@ -602,9 +690,9 @@ export const Header: React.FC<HeaderProps> = ({
                         setShowUserMenu(false);
                         onSelectModule('settings');
                       }}
-                      className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-800 text-slate-300 flex items-center gap-2"
+                      className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center gap-2 transition-colors"
                     >
-                      <Settings className="w-3.5 h-3.5 text-indigo-400" />
+                      <Settings className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
                       <span>Configurações</span>
                     </button>
                   )}
@@ -615,9 +703,9 @@ export const Header: React.FC<HeaderProps> = ({
                         setShowUserMenu(false);
                         onOpenChangePassword();
                       }}
-                      className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-800 text-slate-300 flex items-center gap-2"
+                      className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center gap-2 transition-colors"
                     >
-                      <KeyRound className="w-3.5 h-3.5 text-indigo-400" />
+                      <KeyRound className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
                       <span>Alterar Senha</span>
                     </button>
                   )}
@@ -627,7 +715,7 @@ export const Header: React.FC<HeaderProps> = ({
                       setShowUserMenu(false);
                       logout();
                     }}
-                    className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-rose-950/40 text-rose-400 font-semibold flex items-center gap-2 border-t border-slate-800/80 mt-1"
+                    className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-rose-50 text-rose-600 dark:hover:bg-rose-950/40 dark:text-rose-400 font-semibold flex items-center gap-2 border-t border-slate-200 dark:border-slate-800/80 mt-1 transition-colors"
                   >
                     <LogOut className="w-3.5 h-3.5" />
                     <span>Sair (Logout)</span>

@@ -509,7 +509,7 @@ export const App: React.FC = () => {
 
   if (isAuthLoading) {
     return (
-      <div className="min-h-screen bg-[#070b14] flex flex-col items-center justify-center text-slate-400 gap-3">
+      <div className="min-h-screen bg-slate-50 dark:bg-[#070b14] flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 gap-3">
         <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
         <span className="text-xs font-semibold">Carregando TaskLS...</span>
       </div>
@@ -521,7 +521,7 @@ export const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#090d16] text-slate-100 flex flex-col">
+    <div className="min-h-screen bg-slate-50 text-slate-800 dark:bg-[#090d16] dark:text-slate-100 flex flex-col transition-colors duration-200">
       {/* Top Header */}
       <Header
         activeModule={activeModule}
@@ -552,16 +552,16 @@ export const App: React.FC = () => {
         
         {/* Aviso de Senha Padrão */}
         {isDefaultPassword && (
-          <div className="p-3.5 rounded-2xl bg-amber-950/40 border border-amber-500/30 text-amber-200 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg shadow-amber-950/10">
+          <div className="p-3.5 rounded-2xl bg-amber-500/10 dark:bg-amber-950/40 border border-amber-500/30 text-amber-900 dark:text-amber-200 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg shadow-amber-950/5">
             <div className="flex items-center gap-2.5">
-              <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+              <AlertCircle className="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0" />
               <span>
                 <strong>Aviso de Segurança:</strong> Você está utilizando uma senha temporária/inicial. É obrigatório definir uma nova senha pessoal para prosseguir.
               </span>
             </div>
             <button
               onClick={() => setIsChangePasswordModalOpen(true)}
-              className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold border border-amber-500/40 text-xs transition-all flex-shrink-0"
+              className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-800 dark:text-amber-300 font-bold border border-amber-500/40 text-xs transition-all flex-shrink-0"
             >
               Alterar Senha Agora
             </button>
@@ -592,15 +592,15 @@ export const App: React.FC = () => {
         {activeModule === 'tasks' && canAccessTasks && (
           <>
             {/* Navigation Tabs (Seleção de Painéis) & Filtros de Tarefas */}
-            <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-3.5 border-b border-slate-800 pb-3.5">
+            <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-3.5 border-b border-slate-200 dark:border-slate-800 pb-3.5">
               {/* Seleção de Painéis */}
-              <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-900/80 border border-slate-800 rounded-xl shadow-inner">
+              <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-xl shadow-inner">
                 <button
                   onClick={() => setActiveTab('all')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                     activeTab === 'all'
                       ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                      : 'text-slate-400 hover:text-slate-200'
+                      : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
                   }`}
                 >
                   <LayoutGrid className="w-3.5 h-3.5" />
@@ -612,7 +612,7 @@ export const App: React.FC = () => {
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                     activeTab === 'week'
                       ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                      : 'text-slate-400 hover:text-slate-200'
+                      : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
                   }`}
                 >
                   <Calendar className="w-3.5 h-3.5" />
@@ -624,7 +624,7 @@ export const App: React.FC = () => {
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                     activeTab === 'upcoming'
                       ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                      : 'text-slate-400 hover:text-slate-200'
+                      : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
                   }`}
                 >
                   <CalendarDays className="w-3.5 h-3.5" />
@@ -636,7 +636,7 @@ export const App: React.FC = () => {
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                     activeTab === 'backlog'
                       ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                      : 'text-slate-400 hover:text-slate-200'
+                      : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
                   }`}
                 >
                   <Inbox className="w-3.5 h-3.5" />
@@ -649,7 +649,7 @@ export const App: React.FC = () => {
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                       activeTab === 'jira'
                         ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
-                        : 'text-slate-400 hover:text-slate-200'
+                        : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
                     }`}
                   >
                     <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
@@ -665,7 +665,7 @@ export const App: React.FC = () => {
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                       activeTab === 'jira_reviews'
                         ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
-                        : 'text-slate-400 hover:text-slate-200'
+                        : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
                     }`}
                   >
                     <BellRing className="w-3.5 h-3.5" />
@@ -689,12 +689,12 @@ export const App: React.FC = () => {
                     placeholder="Buscar tarefas..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-900/90 border border-slate-700/60 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all shadow-sm"
+                    className="w-full pl-8 pr-7 py-1.5 text-xs bg-white dark:bg-slate-900/90 border border-slate-300 dark:border-slate-700/60 rounded-xl text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all shadow-sm"
                   />
                   {searchQuery && (
                     <button
                       onClick={() => setSearchQuery('')}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-200"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
                     >
                       ✕
                     </button>
@@ -705,7 +705,7 @@ export const App: React.FC = () => {
                 <select
                   value={selectedPriority}
                   onChange={(e) => setSelectedPriority(e.target.value as Priority | 'all')}
-                  className="px-2.5 py-1.5 text-xs font-medium bg-slate-900/90 border border-slate-700/60 rounded-xl text-slate-300 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-sm"
+                  className="px-2.5 py-1.5 text-xs font-medium bg-white dark:bg-slate-900/90 border border-slate-300 dark:border-slate-700/60 rounded-xl text-slate-700 dark:text-slate-300 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-sm"
                 >
                   <option value="all">Todas Prioridades</option>
                   <option value="urgent">🚨 Urgente</option>
@@ -718,7 +718,7 @@ export const App: React.FC = () => {
                 <select
                   value={selectedCategory}
                   onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="px-2.5 py-1.5 text-xs font-medium bg-slate-900/90 border border-slate-700/60 rounded-xl text-slate-300 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-sm"
+                  className="px-2.5 py-1.5 text-xs font-medium bg-white dark:bg-slate-900/90 border border-slate-300 dark:border-slate-700/60 rounded-xl text-slate-700 dark:text-slate-300 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-sm"
                 >
                   <option value="all">Todas Categorias</option>
                   {categories.map((cat) => (
@@ -737,7 +737,7 @@ export const App: React.FC = () => {
                       setSelectedCategory('all');
                     }}
                     title="Limpar todos os filtros"
-                    className="px-2.5 py-1.5 text-xs font-semibold text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-xl transition-all"
+                    className="px-2.5 py-1.5 text-xs font-semibold text-rose-500 dark:text-rose-400 hover:text-rose-600 dark:hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-xl transition-all"
                   >
                     Limpar
                   </button>
@@ -745,7 +745,7 @@ export const App: React.FC = () => {
 
                 {/* Modo Foco Badge */}
                 {focusMode && (
-                  <span className="text-amber-400 font-bold flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-xl text-xs">
+                  <span className="text-amber-500 dark:text-amber-400 font-bold flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-xl text-xs">
                     <Target className="w-3.5 h-3.5" />
                     Modo Foco Ativo
                   </span>
@@ -875,8 +875,8 @@ export const App: React.FC = () => {
 
         {/* Sem Permissões de Módulo */}
         {!canAccessTasks && !canAccessCards && !canAccessHealth && !canAccessDashboards && !user?.isAdmin && (
-          <div className="py-24 text-center text-slate-400 bg-slate-900/30 rounded-2xl border border-slate-800 p-8">
-            <p className="text-base font-semibold text-slate-200">Você não possui permissão para acessar nenhum módulo no momento.</p>
+          <div className="py-24 text-center text-slate-600 dark:text-slate-400 bg-white/60 dark:bg-slate-900/30 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 shadow-sm">
+            <p className="text-base font-semibold text-slate-800 dark:text-slate-200">Você não possui permissão para acessar nenhum módulo no momento.</p>
             <p className="text-xs text-slate-500 mt-2">Entre em contato com o administrador do sistema para solicitar a liberação de módulos na sua conta.</p>
           </div>
         )}
@@ -884,7 +884,7 @@ export const App: React.FC = () => {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-800/80 bg-[#090d16] py-4 px-6 text-center text-xs text-slate-500">
+      <footer className="border-t border-slate-200 dark:border-slate-800/80 bg-white dark:bg-[#090d16] py-4 px-6 text-center text-xs text-slate-500 transition-colors">
         <p>
           TaskLS &bull; Gestão de Tarefas & Notificações Windows &bull; PostgreSQL 18
         </p>
@@ -954,21 +954,21 @@ export const App: React.FC = () => {
             key={toast.id}
             className={`pointer-events-auto p-3.5 rounded-xl border shadow-xl flex items-center justify-between gap-3 text-xs font-semibold backdrop-blur-md transition-all animate-in slide-in-from-bottom-3 ${
               toast.type === 'success'
-                ? 'bg-emerald-950/90 border-emerald-500/40 text-emerald-200'
+                ? 'bg-emerald-50 dark:bg-emerald-950/90 border-emerald-300 dark:border-emerald-500/40 text-emerald-900 dark:text-emerald-200'
                 : toast.type === 'error'
-                ? 'bg-rose-950/90 border-rose-500/40 text-rose-200'
-                : 'bg-indigo-950/90 border-indigo-500/40 text-indigo-200'
+                ? 'bg-rose-50 dark:bg-rose-950/90 border-rose-300 dark:border-rose-500/40 text-rose-900 dark:text-rose-200'
+                : 'bg-indigo-50 dark:bg-indigo-950/90 border-indigo-300 dark:border-indigo-500/40 text-indigo-900 dark:text-indigo-200'
             }`}
           >
             <div className="flex items-center gap-2">
-              {toast.type === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />}
-              {toast.type === 'error' && <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />}
-              {toast.type === 'info' && <Info className="w-4 h-4 text-indigo-400 flex-shrink-0" />}
+              {toast.type === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />}
+              {toast.type === 'error' && <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 flex-shrink-0" />}
+              {toast.type === 'info' && <Info className="w-4 h-4 text-indigo-600 dark:text-indigo-400 flex-shrink-0" />}
               <span>{toast.message}</span>
             </div>
             <button
               onClick={() => setToasts((prev) => prev.filter((t) => t.id !== toast.id))}
-              className="text-slate-400 hover:text-white"
+              className="text-slate-400 hover:text-slate-700 dark:hover:text-white"
             >
               <X className="w-3.5 h-3.5" />
             </button>

@@ -30,16 +30,16 @@ export const WeekProgress: React.FC<WeekProgressProps> = ({ days }) => {
   };
 
   return (
-    <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-3.5 mb-4 shadow-sm">
+    <div className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 rounded-xl p-3.5 mb-4 shadow-sm transition-colors">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
         
         {/* Left Stats */}
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500/20 to-violet-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 flex-shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500/20 to-violet-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 flex-shrink-0">
             {percentage === 100 ? (
-              <Sparkles className="w-4 h-4 text-emerald-400" />
+              <Sparkles className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
             ) : percentage >= 50 ? (
-              <Flame className="w-4 h-4 text-amber-400" />
+              <Flame className="w-4 h-4 text-amber-500 dark:text-amber-400" />
             ) : (
               <TrendingUp className="w-4 h-4" />
             )}
@@ -47,20 +47,20 @@ export const WeekProgress: React.FC<WeekProgressProps> = ({ days }) => {
 
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-white tracking-tight">
+              <span className="text-xs font-bold text-slate-800 dark:text-white tracking-tight">
                 Progresso Semanal
               </span>
               <span
                 className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
                   percentage === 100
-                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                    : 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/25'
+                    ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
+                    : 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-500/25'
                 }`}
               >
                 {percentage}%
               </span>
             </div>
-            <p className="text-[11px] text-slate-400 mt-0.5 font-medium">
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
               {getMotivationalMessage()}
             </p>
           </div>
@@ -73,9 +73,9 @@ export const WeekProgress: React.FC<WeekProgressProps> = ({ days }) => {
               <span className="text-[10px] uppercase tracking-wider text-slate-500 font-bold block">
                 Hoje
               </span>
-              <span className="text-slate-300">
+              <span className="text-slate-700 dark:text-slate-300">
                 {todayPending === 0 && todayTasks.length > 0 ? (
-                  <span className="text-emerald-400 font-bold">Tudo feito! ✨</span>
+                  <span className="text-emerald-600 dark:text-emerald-400 font-bold">Tudo feito! ✨</span>
                 ) : (
                   `${todayCompleted}/${todayTasks.length} feitas (${todayPending} pendentes)`
                 )}
@@ -83,11 +83,11 @@ export const WeekProgress: React.FC<WeekProgressProps> = ({ days }) => {
             </div>
           )}
 
-          <div className="text-right border-l border-slate-800 pl-4">
+          <div className="text-right border-l border-slate-200 dark:border-slate-800 pl-4">
             <span className="text-[10px] uppercase tracking-wider text-slate-500 font-bold block">
               Total da Semana
             </span>
-            <span className="text-white font-bold">
+            <span className="text-slate-800 dark:text-white font-bold">
               {completed} <span className="text-slate-500 font-normal">/</span> {total}
             </span>
           </div>
@@ -96,7 +96,7 @@ export const WeekProgress: React.FC<WeekProgressProps> = ({ days }) => {
       </div>
 
       {/* Progress bar */}
-      <div className="w-full bg-slate-950/80 h-2 rounded-full mt-3 overflow-hidden border border-slate-800/60 p-0.5">
+      <div className="w-full bg-slate-200/80 dark:bg-slate-950/80 h-2 rounded-full mt-3 overflow-hidden border border-slate-200 dark:border-slate-800/60 p-0.5">
         <div
           className={`h-full rounded-full transition-all duration-500 ${
             percentage === 100

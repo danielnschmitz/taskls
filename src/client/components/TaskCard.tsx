@@ -104,7 +104,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       case 'low':
       default:
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
             Baixa
           </span>
         );
@@ -149,12 +149,12 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       onDragStart={handleDragStart}
       className={`group relative rounded-xl border p-3 transition-all duration-200 cursor-grab active:cursor-grabbing ${
         completed
-          ? 'bg-slate-950/40 border-slate-800/50 opacity-65 hover:opacity-90'
-          : 'bg-slate-900/80 border-slate-800 hover:border-slate-700/80 hover:bg-slate-900 hover:shadow-md hover:shadow-black/40'
+          ? 'bg-slate-100/50 dark:bg-slate-950/40 border-slate-200 dark:border-slate-800/50 opacity-65 hover:opacity-90'
+          : 'bg-white dark:bg-slate-900/80 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700/80 hover:bg-slate-50/50 dark:hover:bg-slate-900 shadow-sm dark:shadow-md hover:shadow-md dark:hover:shadow-black/40'
       }`}
     >
       {/* Quick Actions Floating Toolbar (Pinned inside top-right) */}
-      <div className="absolute top-2 right-2 flex items-center gap-0.5 bg-slate-900/95 border border-slate-700/80 rounded-lg p-0.5 shadow-lg backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity z-20">
+      <div className="absolute top-2 right-2 flex items-center gap-0.5 bg-white/95 dark:bg-slate-900/95 border border-slate-200 dark:border-slate-700/80 rounded-lg p-0.5 shadow-lg backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity z-20">
         {/* Snooze button */}
         <div className="relative">
           <button
@@ -163,8 +163,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               e.stopPropagation();
               setShowSnoozeMenu(!showSnoozeMenu);
             }}
-            className={`p-1 rounded-md hover:bg-slate-800 text-slate-400 hover:text-amber-300 transition-all ${
-              isSnoozed ? 'text-amber-400' : ''
+            className={`p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-amber-500 dark:hover:text-amber-300 transition-all ${
+              isSnoozed ? 'text-amber-500 dark:text-amber-400' : ''
             }`}
             title="Adiar lembrete (Snooze)"
           >
@@ -172,7 +172,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           </button>
 
           {showSnoozeMenu && (
-            <div className="absolute right-0 top-full mt-1.5 w-36 bg-[#0c1222] border border-slate-700 rounded-xl shadow-2xl z-30 p-1 text-xs">
+            <div className="absolute right-0 top-full mt-1.5 w-36 bg-white dark:bg-[#0c1222] border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl z-30 p-1 text-xs">
               <span className="block px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                 Adiar Alerta:
               </span>
@@ -182,7 +182,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   onSnooze?.(task, 15);
                   setShowSnoozeMenu(false);
                 }}
-                className="w-full text-left px-2 py-1 rounded hover:bg-slate-800 text-slate-300 text-[11px]"
+                className="w-full text-left px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-[11px]"
               >
                 + 15 minutos
               </button>
@@ -192,7 +192,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   onSnooze?.(task, 30);
                   setShowSnoozeMenu(false);
                 }}
-                className="w-full text-left px-2 py-1 rounded hover:bg-slate-800 text-slate-300 text-[11px]"
+                className="w-full text-left px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-[11px]"
               >
                 + 30 minutos
               </button>
@@ -202,7 +202,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   onSnooze?.(task, 60);
                   setShowSnoozeMenu(false);
                 }}
-                className="w-full text-left px-2 py-1 rounded hover:bg-slate-800 text-slate-300 text-[11px]"
+                className="w-full text-left px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-[11px]"
               >
                 + 1 hora
               </button>
@@ -213,7 +213,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                     onCancelSnooze?.(task);
                     setShowSnoozeMenu(false);
                   }}
-                  className="w-full text-left px-2 py-1 rounded hover:bg-rose-950/40 text-rose-400 text-[11px] border-t border-slate-800 mt-1"
+                  className="w-full text-left px-2 py-1 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 text-[11px] border-t border-slate-200 dark:border-slate-800 mt-1"
                 >
                   Cancelar adiamento
                 </button>
@@ -228,7 +228,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             e.stopPropagation();
             onEdit(task);
           }}
-          className="p-1 rounded-md hover:bg-slate-800 text-slate-400 hover:text-indigo-300 transition-all"
+          className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 transition-all"
           title="Editar tarefa"
         >
           <Pencil className="w-3.5 h-3.5" />
@@ -240,7 +240,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             e.stopPropagation();
             onDelete(task);
           }}
-          className="p-1 rounded-md hover:bg-slate-800 text-slate-400 hover:text-rose-400 transition-all"
+          className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition-all"
           title="Excluir tarefa"
         >
           <Trash2 className="w-3.5 h-3.5" />
@@ -254,7 +254,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           className={`mt-0.5 shrink-0 w-5 h-5 rounded-md border flex items-center justify-center transition-all ${
             completed
               ? 'bg-emerald-600 border-emerald-500 text-white shadow-sm shadow-emerald-600/30'
-              : 'border-slate-600 hover:border-indigo-400 bg-slate-950/50 text-transparent'
+              : 'border-slate-300 dark:border-slate-600 hover:border-indigo-400 bg-white dark:bg-slate-950/50 text-transparent'
           }`}
           title={completed ? 'Marcar como pendente' : 'Marcar como concluída'}
         >
@@ -265,7 +265,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         <div className="flex-1 min-w-0">
           <h4
             className={`text-sm font-semibold tracking-tight leading-snug break-words ${
-              completed ? 'line-through text-slate-500' : 'text-slate-100'
+              completed ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-800 dark:text-slate-100'
             }`}
           >
             {task.title}
@@ -275,7 +275,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           {task.description && (
             <p
               className={`mt-1 text-xs line-clamp-2 leading-relaxed ${
-                completed ? 'text-slate-600' : 'text-slate-400'
+                completed ? 'text-slate-400 dark:text-slate-600' : 'text-slate-600 dark:text-slate-400'
               }`}
             >
               {task.description}
@@ -284,14 +284,14 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
           {/* Snoozed Badge */}
           {isSnoozed && task.snoozed_until && (
-            <div className="mt-1.5 flex items-center gap-1.5 text-[10px] font-bold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-lg w-fit">
-              <Clock className="w-3 h-3 text-amber-400" />
+            <div className="mt-1.5 flex items-center gap-1.5 text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-lg w-fit">
+              <Clock className="w-3 h-3 text-amber-500 dark:text-amber-400" />
               <span>
                 Adiada até {format(new Date(task.snoozed_until), 'HH:mm')}
               </span>
               <button
                 onClick={() => onCancelSnooze?.(task)}
-                className="hover:text-amber-100 ml-1"
+                className="hover:text-amber-900 dark:hover:text-amber-100 ml-1"
                 title="Cancelar adiamento"
               >
                 ✕
@@ -301,17 +301,17 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
           {/* Checklist / Subtasks preview */}
           {hasSubtasks && (
-            <div className="mt-2 pt-1.5 border-t border-slate-800/60">
+            <div className="mt-2 pt-1.5 border-t border-slate-200 dark:border-slate-800/60">
               <div className="flex items-center justify-between">
                 <button
                   type="button"
                   onClick={() => setShowSubtasks(!showSubtasks)}
-                  className="flex items-center gap-1 text-[11px] font-semibold text-slate-400 hover:text-slate-200 transition-colors"
+                  className="flex items-center gap-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors"
                 >
                   {showSubtasks ? (
-                    <ChevronUp className="w-3.5 h-3.5 text-indigo-400" />
+                    <ChevronUp className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
                   ) : (
-                    <ChevronDown className="w-3.5 h-3.5 text-indigo-400" />
+                    <ChevronDown className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
                   )}
                   <span>
                     Subtarefas ({completedSubtasksCount}/{subtasks.length})
@@ -319,7 +319,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 </button>
 
                 {/* Subtask Mini Bar */}
-                <div className="w-16 bg-slate-800 h-1 rounded-full overflow-hidden">
+                <div className="w-16 bg-slate-200 dark:bg-slate-800 h-1 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-indigo-500 rounded-full transition-all"
                     style={{
@@ -336,21 +336,21 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                     <div
                       key={sub.id}
                       onClick={() => onToggleSubtask?.(task, sub.id)}
-                      className="flex items-center gap-2 text-xs text-slate-300 hover:text-white cursor-pointer py-0.5"
+                      className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white cursor-pointer py-0.5"
                     >
                       <button
                         type="button"
                         className={`w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0 transition-all ${
                           sub.completed
                             ? 'bg-indigo-600 border-indigo-500 text-white'
-                            : 'border-slate-600 hover:border-indigo-400'
+                            : 'border-slate-300 dark:border-slate-600 hover:border-indigo-400'
                         }`}
                       >
                         {sub.completed && <Check className="w-2.5 h-2.5 stroke-[3]" />}
                       </button>
                       <span
                         className={`text-[11px] leading-snug break-words ${
-                          sub.completed ? 'line-through text-slate-500' : ''
+                          sub.completed ? 'line-through text-slate-400 dark:text-slate-500' : ''
                         }`}
                       >
                         {sub.title}
@@ -387,12 +387,12 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               <span
                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium border ${
                   task.type === 'weekly'
-                    ? 'bg-indigo-950/30 text-indigo-300 border-indigo-500/20'
+                    ? 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-500/20'
                     : task.type === 'monthly'
-                    ? 'bg-purple-950/30 text-purple-300 border-purple-500/20'
+                    ? 'bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-500/20'
                     : task.type === 'once'
-                    ? 'bg-cyan-950/30 text-cyan-300 border-cyan-500/20'
-                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                    ? 'bg-cyan-50 dark:bg-cyan-950/30 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-500/20'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
                 }`}
               >
                 {task.type === 'weekly' || task.type === 'monthly' ? (
@@ -407,10 +407,10 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             {/* Notifications badges */}
             {showNotifications && task.notification_times && task.notification_times.length > 0 && (
               <span
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20 font-medium"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/20 font-medium"
                 title={`Notificações configuradas: ${task.notification_times.join(', ')}`}
               >
-                <Bell className="w-3 h-3 text-amber-400" />
+                <Bell className="w-3 h-3 text-amber-500 dark:text-amber-400" />
                 <span>{task.notification_times.join(', ')}</span>
               </span>
             )}

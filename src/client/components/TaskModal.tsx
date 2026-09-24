@@ -263,19 +263,19 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm overflow-y-auto">
-      <div className="relative w-full max-w-2xl bg-[#0d1424] border border-slate-700/80 rounded-2xl shadow-2xl shadow-black/80 overflow-hidden my-8">
+      <div className="relative w-full max-w-2xl bg-white dark:bg-[#0d1424] border border-slate-200 dark:border-slate-700/80 rounded-2xl shadow-2xl shadow-slate-900/20 dark:shadow-black/80 overflow-hidden my-8 transition-colors">
         
         {/* Modal Header */}
-        <div className="px-6 py-4 border-b border-slate-800/80 flex items-center justify-between bg-slate-900/50">
+        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800/80 flex items-center justify-between bg-slate-50/80 dark:bg-slate-900/50">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+            <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
               <Calendar className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white tracking-tight">
+              <h3 className="text-base font-bold text-slate-800 dark:text-white tracking-tight">
                 {initialData ? 'Editar Tarefa' : 'Nova Tarefa'}
               </h3>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 Configure os detalhes, regras de repetição e lembretes do Windows.
               </p>
             </div>
@@ -283,7 +283,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
           >
             <X className="w-5 h-5" />
           </button>
@@ -293,7 +293,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
         <form onSubmit={handleSubmit} className="p-6 space-y-5 max-h-[calc(85vh-120px)] overflow-y-auto">
           
           {errorMsg && (
-            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-medium flex items-center gap-2">
+            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-medium flex items-center gap-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
               <span>{errorMsg}</span>
             </div>
@@ -301,8 +301,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
           {/* Title */}
           <div>
-            <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-              Título da Tarefa <span className="text-indigo-400">*</span>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+              Título da Tarefa <span className="text-indigo-600 dark:text-indigo-400">*</span>
             </label>
             <input
               type="text"
@@ -311,13 +311,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               placeholder="Ex: Revisar relatórios semanais de vendas"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-950/70 border border-slate-700/80 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30 text-sm transition-all"
+              className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950/70 border border-slate-300 dark:border-slate-700/80 rounded-xl text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30 text-sm transition-all"
             />
           </div>
 
           {/* Description */}
           <div>
-            <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
               Descrição / Notas (Opcional)
             </label>
             <textarea
@@ -325,13 +325,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               placeholder="Detalhes adicionais, checklists ou observações..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-3.5 py-2 bg-slate-950/70 border border-slate-700/80 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30 text-sm transition-all resize-none"
+              className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-950/70 border border-slate-300 dark:border-slate-700/80 rounded-xl text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30 text-sm transition-all resize-none"
             />
           </div>
 
           {/* Task Type Selector */}
           <div>
-            <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
               Tipo de Ocorrência & Recorrência
             </label>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
@@ -341,13 +341,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 onClick={() => setType('weekly')}
                 className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition-all ${
                   type === 'weekly'
-                    ? 'bg-indigo-950/40 border-indigo-500 ring-1 ring-indigo-500/30 text-white'
-                    : 'bg-slate-900/50 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-300'
+                    ? 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-500 ring-1 ring-indigo-500/30 text-indigo-950 dark:text-white'
+                    : 'bg-slate-50/80 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-700 hover:text-slate-800 dark:hover:text-slate-300'
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <Repeat className={`w-4 h-4 ${type === 'weekly' ? 'text-indigo-400' : 'text-slate-500'}`} />
-                  {type === 'weekly' && <Check className="w-3.5 h-3.5 text-indigo-400" />}
+                  <Repeat className={`w-4 h-4 ${type === 'weekly' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500'}`} />
+                  {type === 'weekly' && <Check className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />}
                 </div>
                 <span className="text-xs font-bold mt-1">Semanal</span>
                 <span className="text-[10px] text-slate-500">Dias fixos da semana</span>
@@ -359,13 +359,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 onClick={() => setType('once')}
                 className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition-all ${
                   type === 'once'
-                    ? 'bg-cyan-950/40 border-cyan-500 ring-1 ring-cyan-500/30 text-white'
-                    : 'bg-slate-900/50 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-300'
+                    ? 'bg-cyan-50 dark:bg-cyan-950/40 border-cyan-500 ring-1 ring-cyan-500/30 text-cyan-950 dark:text-white'
+                    : 'bg-slate-50/80 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-700 hover:text-slate-800 dark:hover:text-slate-300'
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <Calendar className={`w-4 h-4 ${type === 'once' ? 'text-cyan-400' : 'text-slate-500'}`} />
-                  {type === 'once' && <Check className="w-3.5 h-3.5 text-cyan-400" />}
+                  <Calendar className={`w-4 h-4 ${type === 'once' ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-400 dark:text-slate-500'}`} />
+                  {type === 'once' && <Check className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />}
                 </div>
                 <span className="text-xs font-bold mt-1">Única</span>
                 <span className="text-[10px] text-slate-500">Data específica</span>
@@ -377,13 +377,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 onClick={() => setType('monthly')}
                 className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition-all ${
                   type === 'monthly'
-                    ? 'bg-purple-950/40 border-purple-500 ring-1 ring-purple-500/30 text-white'
-                    : 'bg-slate-900/50 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-300'
+                    ? 'bg-purple-50 dark:bg-purple-950/40 border-purple-500 ring-1 ring-purple-500/30 text-purple-950 dark:text-white'
+                    : 'bg-slate-50/80 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-700 hover:text-slate-800 dark:hover:text-slate-300'
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <CalendarDays className={`w-4 h-4 ${type === 'monthly' ? 'text-purple-400' : 'text-slate-500'}`} />
-                  {type === 'monthly' && <Check className="w-3.5 h-3.5 text-purple-400" />}
+                  <CalendarDays className={`w-4 h-4 ${type === 'monthly' ? 'text-purple-600 dark:text-purple-400' : 'text-slate-400 dark:text-slate-500'}`} />
+                  {type === 'monthly' && <Check className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />}
                 </div>
                 <span className="text-xs font-bold mt-1">Mensal</span>
                 <span className="text-[10px] text-slate-500">Dia X ou padrão</span>
@@ -395,13 +395,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 onClick={() => setType('none')}
                 className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition-all ${
                   type === 'none'
-                    ? 'bg-emerald-950/40 border-emerald-500 ring-1 ring-emerald-500/30 text-white'
-                    : 'bg-slate-900/50 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-300'
+                    ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-500 ring-1 ring-emerald-500/30 text-emerald-950 dark:text-white'
+                    : 'bg-slate-50/80 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-700 hover:text-slate-800 dark:hover:text-slate-300'
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <Inbox className={`w-4 h-4 ${type === 'none' ? 'text-emerald-400' : 'text-slate-500'}`} />
-                  {type === 'none' && <Check className="w-3.5 h-3.5 text-emerald-400" />}
+                  <Inbox className={`w-4 h-4 ${type === 'none' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`} />
+                  {type === 'none' && <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />}
                 </div>
                 <span className="text-xs font-bold mt-1">Sem Data</span>
                 <span className="text-[10px] text-slate-500">Backlog / Ideias</span>
@@ -413,8 +413,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
           {/* 1. Weekly Days Selection */}
           {type === 'weekly' && (
-            <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-800 space-y-2">
-              <label className="block text-xs font-semibold text-slate-300">
+            <div className="p-4 rounded-xl bg-slate-50/80 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 space-y-2">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                 Selecione os dias da semana em que esta tarefa se repete:
               </label>
               <div className="flex flex-wrap gap-2 pt-1">
@@ -428,7 +428,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                       className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all ${
                         isSelected
                           ? 'bg-indigo-600 border-indigo-500 text-white shadow-md shadow-indigo-600/30'
-                          : 'bg-slate-950/60 border-slate-700 text-slate-400 hover:text-slate-200'
+                          : 'bg-white dark:bg-slate-950/60 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                       }`}
                       title={w.fullName}
                     >
@@ -442,8 +442,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
           {/* 2. Once Due Date */}
           {type === 'once' && (
-            <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-800 space-y-2">
-              <label className="block text-xs font-semibold text-slate-300">
+            <div className="p-4 rounded-xl bg-slate-50/80 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 space-y-2">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                 Data de Realização da Tarefa:
               </label>
               <input
@@ -451,15 +451,15 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 required
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
-                className="w-full sm:w-auto px-3.5 py-2 bg-slate-950/80 border border-slate-700 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-cyan-500"
+                className="w-full sm:w-auto px-3.5 py-2 bg-white dark:bg-slate-950/80 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:border-cyan-500"
               />
             </div>
           )}
 
           {/* 3. Monthly Recurrence Rules */}
           {type === 'monthly' && (
-            <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-800 space-y-3">
-              <label className="block text-xs font-semibold text-slate-300">
+            <div className="p-4 rounded-xl bg-slate-50/80 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 space-y-3">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                 Como essa tarefa deve se repetir mensalmente?
               </label>
 
@@ -472,16 +472,16 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   onChange={() => setMonthlyType('day_of_month')}
                   className="accent-purple-500"
                 />
-                <span className="text-xs text-slate-300 font-medium">Em um dia específico do mês</span>
+                <span className="text-xs text-slate-700 dark:text-slate-300 font-medium">Em um dia específico do mês</span>
               </label>
 
               {monthlyType === 'day_of_month' && (
                 <div className="pl-6 flex items-center gap-2 pt-1">
-                  <span className="text-xs text-slate-400">Todo dia</span>
+                  <span className="text-xs text-slate-600 dark:text-slate-400">Todo dia</span>
                   <select
                     value={monthlyDay}
                     onChange={(e) => setMonthlyDay(parseInt(e.target.value, 10))}
-                    className="px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 text-xs font-semibold focus:outline-none focus:border-purple-500"
+                    className="px-3 py-1.5 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 text-xs font-semibold focus:outline-none focus:border-purple-500"
                   >
                     {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
                       <option key={day} value={day}>
@@ -489,7 +489,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                       </option>
                     ))}
                   </select>
-                  <span className="text-xs text-slate-400">de cada mês</span>
+                  <span className="text-xs text-slate-600 dark:text-slate-400">de cada mês</span>
                 </div>
               )}
 
@@ -502,18 +502,18 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   onChange={() => setMonthlyType('pattern')}
                   className="accent-purple-500"
                 />
-                <span className="text-xs text-slate-300 font-medium">
+                <span className="text-xs text-slate-700 dark:text-slate-300 font-medium">
                   Em um padrão relativo (ex: última sexta-feira do mês)
                 </span>
               </label>
 
               {monthlyType === 'pattern' && (
                 <div className="pl-6 flex flex-wrap items-center gap-2 pt-1">
-                  <span className="text-xs text-slate-400">Na</span>
+                  <span className="text-xs text-slate-600 dark:text-slate-400">Na</span>
                   <select
                     value={monthlyPattern}
                     onChange={(e) => setMonthlyPattern(e.target.value as MonthlyPattern)}
-                    className="px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 text-xs font-semibold focus:outline-none focus:border-purple-500"
+                    className="px-3 py-1.5 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 text-xs font-semibold focus:outline-none focus:border-purple-500"
                   >
                     <option value="first">1ª</option>
                     <option value="second">2ª</option>
@@ -524,7 +524,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   <select
                     value={monthlyWeekday}
                     onChange={(e) => setMonthlyWeekday(parseInt(e.target.value, 10))}
-                    className="px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 text-xs font-semibold focus:outline-none focus:border-purple-500"
+                    className="px-3 py-1.5 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 text-xs font-semibold focus:outline-none focus:border-purple-500"
                   >
                     <option value={1}>Segunda-feira</option>
                     <option value={2}>Terça-feira</option>
@@ -534,7 +534,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     <option value={6}>Sábado</option>
                     <option value={0}>Domingo</option>
                   </select>
-                  <span className="text-xs text-slate-400">do mês</span>
+                  <span className="text-xs text-slate-600 dark:text-slate-400">do mês</span>
                 </div>
               )}
             </div>
@@ -543,8 +543,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           {/* Notification Times */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                <Bell className="w-3.5 h-3.5 text-amber-400" />
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                <Bell className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
                 <span>Horários de Notificação no Windows</span>
               </label>
               <span className="text-[11px] text-slate-500">
@@ -555,21 +555,21 @@ export const TaskModal: React.FC<TaskModalProps> = ({
             {/* List of active notification times */}
             <div className="flex flex-wrap items-center gap-2 mb-2.5">
               {notificationTimes.length === 0 ? (
-                <span className="text-xs text-slate-500 italic py-1">
+                <span className="text-xs text-slate-400 dark:text-slate-500 italic py-1">
                   Nenhum horário configurado (a tarefa não emitirá notificação).
                 </span>
               ) : (
                 notificationTimes.map((time) => (
                   <span
                     key={time}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold"
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs font-bold"
                   >
                     <Clock className="w-3 h-3" />
                     <span>{time}</span>
                     <button
                       type="button"
                       onClick={() => handleRemoveTime(time)}
-                      className="hover:text-amber-100 p-0.5 rounded"
+                      className="hover:text-amber-950 dark:hover:text-amber-100 p-0.5 rounded"
                       title="Remover horário"
                     >
                       <X className="w-3 h-3" />
@@ -591,26 +591,26 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     handleAddTime();
                   }
                 }}
-                className="px-3 py-1.5 bg-slate-950/80 border border-slate-700 rounded-lg text-slate-200 text-xs focus:outline-none focus:border-amber-500"
+                className="px-3 py-1.5 bg-white dark:bg-slate-950/80 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 text-xs focus:outline-none focus:border-amber-500"
               />
               <button
                 type="button"
                 onClick={() => handleAddTime()}
-                className="px-3 py-1.5 rounded-lg bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/30 text-amber-300 text-xs font-semibold flex items-center gap-1 transition-all"
+                className="px-3 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs font-semibold flex items-center gap-1 transition-all"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Adicionar</span>
               </button>
 
               {/* Quick presets */}
-              <div className="flex items-center gap-1 ml-auto text-[11px] text-slate-400">
+              <div className="flex items-center gap-1 ml-auto text-[11px] text-slate-500 dark:text-slate-400">
                 <span className="hidden sm:inline">Sugestões:</span>
                 {PRESET_TIMES.map((pt) => (
                   <button
                     key={pt}
                     type="button"
                     onClick={() => handleAddTime(pt)}
-                    className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 hover:border-amber-500/40 text-slate-400 hover:text-amber-300 text-[10px] transition-all"
+                    className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-amber-500/40 text-slate-600 dark:text-slate-400 hover:text-amber-600 dark:hover:text-amber-300 text-[10px] transition-all"
                   >
                     +{pt}
                   </button>
@@ -620,10 +620,10 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           </div>
 
           {/* Checklist / Subtasks Section */}
-          <div className="pt-2 border-t border-slate-800">
+          <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
             <div className="flex items-center justify-between mb-2">
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                <CheckSquare className="w-3.5 h-3.5 text-indigo-400" />
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                <CheckSquare className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                 <span>Checklist de Subtarefas</span>
               </label>
               <span className="text-[11px] text-slate-500">
@@ -637,7 +637,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 {subtasks.map((sub) => (
                   <div
                     key={sub.id}
-                    className="flex items-center justify-between gap-2 p-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs"
+                    className="flex items-center justify-between gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 text-xs"
                   >
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                       <button
@@ -646,14 +646,14 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                         className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-all ${
                           sub.completed
                             ? 'bg-indigo-600 border-indigo-500 text-white'
-                            : 'border-slate-600 hover:border-indigo-400'
+                            : 'border-slate-300 dark:border-slate-600 hover:border-indigo-400'
                         }`}
                       >
                         {sub.completed && <Check className="w-3 h-3 stroke-[3]" />}
                       </button>
                       <span
-                        className={`text-slate-200 truncate ${
-                          sub.completed ? 'line-through text-slate-500' : ''
+                        className={`truncate ${
+                          sub.completed ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-800 dark:text-slate-200'
                         }`}
                       >
                         {sub.title}
@@ -663,7 +663,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     <button
                       type="button"
                       onClick={() => handleRemoveSubtask(sub.id)}
-                      className="text-slate-500 hover:text-rose-400 p-1 rounded"
+                      className="text-slate-400 hover:text-rose-500 dark:hover:text-rose-400 p-1 rounded"
                       title="Remover item"
                     >
                       <X className="w-3.5 h-3.5" />
@@ -686,12 +686,12 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     handleAddSubtask();
                   }
                 }}
-                className="flex-1 px-3.5 py-1.5 bg-slate-950/80 border border-slate-700 rounded-xl text-slate-100 placeholder-slate-500 text-xs focus:outline-none focus:border-indigo-500"
+                className="flex-1 px-3.5 py-1.5 bg-white dark:bg-slate-950/80 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 text-xs focus:outline-none focus:border-indigo-500"
               />
               <button
                 type="button"
                 onClick={handleAddSubtask}
-                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1 transition-all"
+                className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1 transition-all"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Adicionar</span>
@@ -700,17 +700,17 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           </div>
 
           {/* Priority & Category */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-800">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-200 dark:border-slate-800">
             
             {/* Priority */}
             <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                 Prioridade
               </label>
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as Priority)}
-                className="w-full px-3 py-2 bg-slate-950/70 border border-slate-700 rounded-xl text-slate-200 text-xs font-medium focus:outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 bg-white dark:bg-slate-950/70 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 text-xs font-medium focus:outline-none focus:border-indigo-500"
               >
                 <option value="low">▫️ Baixa</option>
                 <option value="medium">🔹 Média</option>
@@ -721,7 +721,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
             {/* Category */}
             <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                 Categoria
               </label>
               <input
@@ -730,7 +730,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 placeholder="Ex: Trabalho, Pessoal..."
-                className="w-full px-3 py-2 bg-slate-950/70 border border-slate-700 rounded-xl text-slate-200 text-xs font-medium focus:outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 bg-white dark:bg-slate-950/70 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 text-xs font-medium focus:outline-none focus:border-indigo-500"
               />
               <datalist id="category-suggestions">
                 {CATEGORY_SUGGESTIONS.map((cat) => (
@@ -749,8 +749,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                       onClick={() => setCategory(catName)}
                       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border transition-all ${
                         category.toLowerCase() === catName.toLowerCase()
-                          ? 'border-indigo-500 bg-indigo-500/20 text-white'
-                          : 'border-slate-800 bg-slate-950/60 text-slate-400 hover:text-slate-200'
+                          ? 'border-indigo-500 bg-indigo-500/20 text-indigo-700 dark:text-white'
+                          : 'border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-950/60 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                       }`}
                       style={
                         category.toLowerCase() === catName.toLowerCase()
@@ -768,11 +768,11 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           </div>
 
           {/* Modal Footer */}
-          <div className="pt-4 border-t border-slate-800/80 flex items-center justify-end gap-3">
+          <div className="pt-4 border-t border-slate-200 dark:border-slate-800/80 flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-xs font-semibold transition-all"
+              className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-all"
             >
               Cancelar
             </button>

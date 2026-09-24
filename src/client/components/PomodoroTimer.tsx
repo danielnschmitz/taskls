@@ -162,14 +162,14 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ tasks, onShowToast
         onClick={() => setIsOpen(!isOpen)}
         className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all ${
           isRunning
-            ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 shadow-sm shadow-rose-500/20 animate-pulse'
-            : 'bg-slate-900/80 text-slate-300 hover:text-white border-slate-700/60 hover:bg-slate-800'
+            ? 'bg-rose-50 text-rose-600 border-rose-300 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/40 shadow-sm shadow-rose-500/20 animate-pulse'
+            : 'bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border-slate-300 dark:bg-slate-900/80 dark:text-slate-300 dark:hover:text-white dark:border-slate-700/60 dark:hover:bg-slate-800'
         }`}
         title="Timer Pomodoro Integrado"
       >
         <span className="text-sm">🍅</span>
         <span className="font-mono font-bold">{formatTime(timeLeft)}</span>
-        <span className="text-[10px] uppercase font-bold text-slate-400 hidden sm:inline">
+        <span className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 hidden sm:inline">
           {mode === 'focus' ? 'Foco' : 'Pausa'}
         </span>
         <ChevronDown className="w-3 h-3 text-slate-400" />
@@ -177,22 +177,22 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ tasks, onShowToast
 
       {/* Popover Dropdown */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 bg-[#0c1324] border border-slate-700/80 rounded-2xl shadow-2xl shadow-black/80 p-4 z-50 backdrop-blur-xl animate-in fade-in zoom-in-95">
+        <div className="absolute right-0 mt-2 w-80 bg-white/98 dark:bg-[#0c1324] border border-slate-200 dark:border-slate-700/80 rounded-2xl shadow-2xl shadow-slate-200/50 dark:shadow-black/80 p-4 z-50 backdrop-blur-xl animate-in fade-in zoom-in-95 ring-1 ring-black/5 dark:ring-white/10">
           {/* Header */}
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2">
-              <Timer className="w-4 h-4 text-rose-400" />
-              <span className="text-xs font-bold text-white tracking-tight">
+              <Timer className="w-4 h-4 text-rose-500 dark:text-rose-400" />
+              <span className="text-xs font-bold text-slate-900 dark:text-white tracking-tight">
                 Pomodoro & Foco
               </span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-400 border border-rose-500/25">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-500/25">
                 {completedSessions} {completedSessions === 1 ? 'bloco' : 'blocos'}
               </span>
               <button
                 onClick={() => setIsOpen(false)}
-                className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800"
+                className="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -200,13 +200,13 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ tasks, onShowToast
           </div>
 
           {/* Mode Selector Tabs */}
-          <div className="mt-3.5 grid grid-cols-3 gap-1 p-1 rounded-xl bg-slate-950/60 border border-slate-800/80">
+          <div className="mt-3.5 grid grid-cols-3 gap-1 p-1 rounded-xl bg-slate-100/80 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80">
             <button
               onClick={() => handleModeChange('focus')}
               className={`py-1 text-[11px] font-semibold rounded-lg transition-all ${
                 mode === 'focus'
                   ? 'bg-rose-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+                  : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
               }`}
             >
               Foco (25m)
@@ -216,7 +216,7 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ tasks, onShowToast
               className={`py-1 text-[11px] font-semibold rounded-lg transition-all ${
                 mode === 'shortBreak'
                   ? 'bg-emerald-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+                  : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
               }`}
             >
               Pausa (5m)
@@ -226,7 +226,7 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ tasks, onShowToast
               className={`py-1 text-[11px] font-semibold rounded-lg transition-all ${
                 mode === 'longBreak'
                   ? 'bg-cyan-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+                  : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
               }`}
             >
               Longa (15m)
@@ -235,15 +235,15 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ tasks, onShowToast
 
           {/* Timer Display */}
           <div className="my-5 text-center">
-            <div className="text-4xl font-extrabold font-mono tracking-tight text-white">
+            <div className="text-4xl font-extrabold font-mono tracking-tight text-slate-900 dark:text-white">
               {formatTime(timeLeft)}
             </div>
-            <p className="text-[11px] text-slate-400 mt-1 font-medium">
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 font-medium">
               {MODE_LABELS[mode]}
             </p>
 
             {/* Progress Bar */}
-            <div className="w-full bg-slate-800/80 h-1.5 rounded-full mt-3 overflow-hidden">
+            <div className="w-full bg-slate-200 dark:bg-slate-800/80 h-1.5 rounded-full mt-3 overflow-hidden">
               <div
                 className={`h-full transition-all duration-300 ${
                   mode === 'focus'
@@ -259,13 +259,13 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ tasks, onShowToast
 
           {/* Link to Task */}
           <div className="mb-4">
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+            <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
               Vincular a uma Tarefa:
             </label>
             <select
               value={selectedTaskId}
               onChange={(e) => setSelectedTaskId(e.target.value)}
-              className="w-full px-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-slate-200 text-xs focus:outline-none focus:border-rose-500 truncate"
+              className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg text-slate-800 dark:text-slate-200 text-xs focus:outline-none focus:border-rose-500 truncate"
             >
               <option value="">Sem tarefa vinculada (geral)</option>
               {tasks.map((t) => (
@@ -277,10 +277,10 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ tasks, onShowToast
           </div>
 
           {/* Controls */}
-          <div className="flex items-center justify-center gap-3 pt-2 border-t border-slate-800">
+          <div className="flex items-center justify-center gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
             <button
               onClick={handleReset}
-              className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
+              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white dark:hover:bg-slate-800 transition-all"
               title="Reiniciar tempo"
             >
               <RotateCcw className="w-4 h-4" />
@@ -309,7 +309,7 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ tasks, onShowToast
 
             <button
               onClick={handleTimerComplete}
-              className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
+              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white dark:hover:bg-slate-800 transition-all"
               title="Avançar / Concluir"
             >
               <SkipForward className="w-4 h-4" />

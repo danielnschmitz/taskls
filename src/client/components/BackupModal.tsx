@@ -119,19 +119,19 @@ export const BackupModal: React.FC<BackupModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm overflow-y-auto">
-      <div className="relative w-full max-w-xl bg-[#0d1424] border border-slate-700/80 rounded-2xl shadow-2xl shadow-black/80 overflow-hidden my-8">
+      <div className="relative w-full max-w-xl bg-white dark:bg-[#0d1424] border border-slate-200 dark:border-slate-700/80 rounded-2xl shadow-2xl shadow-slate-900/20 dark:shadow-black/80 overflow-hidden my-8 transition-colors">
         
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-800/80 flex items-center justify-between bg-slate-900/50">
+        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800/80 flex items-center justify-between bg-slate-50/80 dark:bg-slate-900/50">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-emerald-600/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
               <Database className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white tracking-tight">
+              <h3 className="text-base font-bold text-slate-800 dark:text-white tracking-tight">
                 Backup, Exportação & Restauração
               </h3>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 Exporte todos os seus dados em 1 clique ou restaure backups anteriores.
               </p>
             </div>
@@ -139,7 +139,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
           >
             <X className="w-5 h-5" />
           </button>
@@ -147,7 +147,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
 
         <div className="p-6 space-y-6">
           {errorMsg && (
-            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-medium flex items-center gap-2">
+            <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-800 dark:text-rose-400 text-xs font-medium flex items-center gap-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
               <span>{errorMsg}</span>
             </div>
@@ -155,24 +155,24 @@ export const BackupModal: React.FC<BackupModalProps> = ({
 
           {/* Export Section */}
           <div>
-            <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2.5">
+            <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2.5">
               1. Exportar Dados (1 Clique)
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={handleExportJson}
-                className="p-3.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 text-left flex items-start gap-3 transition-all hover:border-emerald-500/40 group"
+                className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/80 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/80 text-left flex items-start gap-3 transition-all hover:border-emerald-500/40 group"
               >
-                <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center text-emerald-400 group-hover:scale-105 transition-transform">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center text-emerald-600 dark:text-emerald-400 group-hover:scale-105 transition-transform">
                   <FileJson className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className="text-xs font-bold text-white flex items-center gap-1">
+                  <div className="text-xs font-bold text-slate-800 dark:text-white flex items-center gap-1">
                     <span>Backup Completo</span>
-                    <Download className="w-3 h-3 text-emerald-400" />
+                    <Download className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                     Arquivo JSON com tarefas, conclusões e categorias para restauração.
                   </p>
                 </div>
@@ -181,17 +181,17 @@ export const BackupModal: React.FC<BackupModalProps> = ({
               <button
                 type="button"
                 onClick={handleExportCsv}
-                className="p-3.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 text-left flex items-start gap-3 transition-all hover:border-cyan-500/40 group"
+                className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/80 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/80 text-left flex items-start gap-3 transition-all hover:border-cyan-500/40 group"
               >
-                <div className="w-8 h-8 rounded-lg bg-cyan-500/15 border border-cyan-500/25 flex items-center justify-center text-cyan-400 group-hover:scale-105 transition-transform">
+                <div className="w-8 h-8 rounded-lg bg-cyan-500/15 border border-cyan-500/25 flex items-center justify-center text-cyan-600 dark:text-cyan-400 group-hover:scale-105 transition-transform">
                   <FileSpreadsheet className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className="text-xs font-bold text-white flex items-center gap-1">
+                  <div className="text-xs font-bold text-slate-800 dark:text-white flex items-center gap-1">
                     <span>Planilha Excel / CSV</span>
-                    <Download className="w-3 h-3 text-cyan-400" />
+                    <Download className="w-3 h-3 text-cyan-600 dark:text-cyan-400" />
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                     Tabela legível para Excel, Google Sheets ou relatórios.
                   </p>
                 </div>
@@ -200,8 +200,8 @@ export const BackupModal: React.FC<BackupModalProps> = ({
           </div>
 
           {/* Import Section */}
-          <div className="pt-2 border-t border-slate-800">
-            <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2.5">
+          <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
+            <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2.5">
               2. Restaurar / Importar Backup JSON (1 Clique)
             </h4>
 
@@ -219,24 +219,24 @@ export const BackupModal: React.FC<BackupModalProps> = ({
               onClick={() => fileInputRef.current?.click()}
               className={`p-5 rounded-xl border-2 border-dashed text-center cursor-pointer transition-all ${
                 selectedFile
-                  ? 'bg-emerald-950/20 border-emerald-500/40 text-emerald-300'
-                  : 'bg-slate-950/50 border-slate-700 hover:border-indigo-500/50 hover:bg-indigo-950/10 text-slate-400'
+                  ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-400 dark:border-emerald-500/40 text-emerald-800 dark:text-emerald-300'
+                  : 'bg-slate-50/80 dark:bg-slate-950/50 border-slate-300 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-500/50 hover:bg-indigo-50/30 dark:hover:bg-indigo-950/10 text-slate-500 dark:text-slate-400'
               }`}
             >
-              <Upload className="w-6 h-6 mx-auto mb-2 text-indigo-400" />
+              <Upload className="w-6 h-6 mx-auto mb-2 text-indigo-600 dark:text-indigo-400" />
               {selectedFile ? (
                 <div>
-                  <p className="text-xs font-bold text-white">{selectedFile.name}</p>
-                  <p className="text-[11px] text-emerald-400 mt-1">
+                  <p className="text-xs font-bold text-slate-800 dark:text-white">{selectedFile.name}</p>
+                  <p className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-1">
                     {filePreview?.tasks?.length || 0} tarefas prontas para importação. Clique para trocar de arquivo.
                   </p>
                 </div>
               ) : (
                 <div>
-                  <p className="text-xs font-semibold text-slate-300">
+                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                     Clique aqui para selecionar o arquivo JSON de backup
                   </p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
                     Arquivos no formato taskls-backup-*.json
                   </p>
                 </div>
@@ -245,12 +245,12 @@ export const BackupModal: React.FC<BackupModalProps> = ({
 
             {/* Import Mode Options */}
             {filePreview && (
-              <div className="mt-4 p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2">
-                <span className="text-[11px] font-bold text-slate-300 block">
+              <div className="mt-4 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 space-y-2">
+                <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block">
                   Modo de Restauração:
                 </span>
                 
-                <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-300">
+                <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-700 dark:text-slate-300">
                   <input
                     type="radio"
                     name="importMode"
@@ -264,7 +264,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
                   </span>
                 </label>
 
-                <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-300">
+                <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-700 dark:text-slate-300">
                   <input
                     type="radio"
                     name="importMode"
@@ -273,7 +273,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
                     onChange={() => setImportMode('replace')}
                     className="accent-rose-500"
                   />
-                  <span className="text-rose-300">
+                  <span className="text-rose-700 dark:text-rose-300">
                     <strong>Substituir tudo:</strong> Limpa o banco atual e restaura exatamente o arquivo.
                   </span>
                 </label>
@@ -283,11 +283,11 @@ export const BackupModal: React.FC<BackupModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-800/80 bg-slate-900/40 flex items-center justify-end gap-3">
+        <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800/80 bg-slate-50/80 dark:bg-slate-900/40 flex items-center justify-end gap-3">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-xs font-semibold transition-all"
+            className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-all"
           >
             Fechar
           </button>

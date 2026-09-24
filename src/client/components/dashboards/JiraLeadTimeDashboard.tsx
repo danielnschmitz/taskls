@@ -22,6 +22,7 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { JiraLeadTimeIssue, JiraLeadTimeResponse } from '../../types';
+import { ExportChartButton } from '../ExportChartButton';
 
 interface JiraLeadTimeDashboardProps {
   onShowToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
@@ -601,17 +602,17 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Barra de Filtros e Controles Superiores */}
-      <div className="p-4 sm:p-5 rounded-2xl bg-[#0e1628]/90 border border-slate-800 shadow-xl backdrop-blur-sm space-y-4">
+      <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-[#0e1628]/90 border border-slate-200 dark:border-slate-800 shadow-xl backdrop-blur-sm space-y-4">
         {/* Linha 1: Seletores de Projeto, Tipo, Período e Botão de Refresh */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800/80 pb-4">
           <div className="flex flex-wrap items-center gap-3">
             {/* Seletor de Projeto */}
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Projeto:</span>
+              <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Projeto:</span>
               <select
                 value={selectedProject}
                 onChange={(e) => handleProjectChange(e.target.value)}
-                className="px-3 py-1.5 text-xs font-bold bg-slate-950 border border-indigo-500/40 rounded-xl text-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 cursor-pointer shadow-sm"
+                className="px-3 py-1.5 text-xs font-bold bg-slate-50 dark:bg-slate-950 border border-indigo-500/40 rounded-xl text-indigo-600 dark:text-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 cursor-pointer shadow-sm"
               >
                 {data?.availableProjects?.map((p) => (
                   <option key={p} value={p}>
@@ -623,11 +624,11 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
 
             {/* Seletor de Tipo de Item (issuetype) */}
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tipo:</span>
+              <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tipo:</span>
               <select
                 value={selectedIssueType}
                 onChange={(e) => setSelectedIssueType(e.target.value)}
-                className="px-3 py-1.5 text-xs font-semibold bg-slate-950 border border-slate-700 rounded-xl text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-sm"
+                className="px-3 py-1.5 text-xs font-semibold bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-sm"
               >
                 <option value="Todos">Todos os Tipos</option>
                 {data?.availableIssueTypes?.map((t) => (
@@ -639,14 +640,14 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
             </div>
 
             {/* Seletor de Período Preset */}
-            <div className="flex items-center gap-1.5 p-1 bg-slate-950 border border-slate-800 rounded-xl text-xs">
+            <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs">
               <button
                 type="button"
                 onClick={() => setDatePreset('all')}
                 className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
                   datePreset === 'all'
                     ? 'bg-indigo-600 text-white font-bold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
                 Histórico Todo
@@ -657,7 +658,7 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
                 className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
                   datePreset === '30d'
                     ? 'bg-indigo-600 text-white font-bold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
                 30 Dias
@@ -668,7 +669,7 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
                 className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
                   datePreset === '90d'
                     ? 'bg-indigo-600 text-white font-bold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
                 90 Dias
@@ -679,7 +680,7 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
                 className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
                   datePreset === 'ytd'
                     ? 'bg-indigo-600 text-white font-bold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
                 Ano Atual (YTD)
@@ -690,7 +691,7 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
                 className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
                   datePreset === 'custom'
                     ? 'bg-indigo-600 text-white font-bold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
                 Personalizado
@@ -704,14 +705,14 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
                   type="date"
                   value={customStartDate}
                   onChange={(e) => setCustomStartDate(e.target.value)}
-                  className="px-2.5 py-1 text-xs bg-slate-950 border border-slate-700 rounded-xl text-slate-200 focus:outline-none focus:border-indigo-500"
+                  className="px-2.5 py-1 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
                 />
                 <span className="text-slate-500 text-xs">até</span>
                 <input
                   type="date"
                   value={customEndDate}
                   onChange={(e) => setCustomEndDate(e.target.value)}
-                  className="px-2.5 py-1 text-xs bg-slate-950 border border-slate-700 rounded-xl text-slate-200 focus:outline-none focus:border-indigo-500"
+                  className="px-2.5 py-1 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
                 />
               </div>
             )}
@@ -720,7 +721,7 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
           {/* Botão de Atualização em Tempo Real */}
           <div className="flex items-center gap-3">
             {data?.lastUpdated && (
-              <span className="hidden md:inline text-[11px] text-slate-400 font-medium">
+              <span className="hidden md:inline text-[11px] text-slate-500 dark:text-slate-400 font-medium">
                 Última sincronização: {new Date(data.lastUpdated).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
               </span>
             )}
@@ -728,10 +729,10 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
               type="button"
               disabled={isLoading || isRefreshing}
               onClick={() => fetchLeadTimeData(true)}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-indigo-300 hover:text-white border border-slate-700 hover:border-slate-600 text-xs font-bold transition-all shadow-sm active:scale-95"
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 text-indigo-600 dark:text-indigo-300 hover:text-indigo-700 dark:hover:text-white border border-slate-300 dark:border-slate-700 text-xs font-bold transition-all shadow-sm active:scale-95"
               title="Recarregar dados atualizados da nuvem do Jira"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-indigo-400' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-indigo-500 dark:text-indigo-400' : ''}`} />
               <span>{isRefreshing ? 'Sincronizando...' : 'Atualizar Agora'}</span>
             </button>
           </div>
@@ -742,8 +743,8 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
           {/* Filtro por Canal de Distribuição ou Indicador por Tipo de Item */}
           {data?.hasCanal ? (
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-bold text-slate-400 flex items-center gap-1">
-                <Filter className="w-3 h-3 text-slate-500" />
+              <span className="text-xs font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                <Filter className="w-3 h-3 text-slate-400 dark:text-slate-500" />
                 Canal:
               </span>
               <button
@@ -751,8 +752,8 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
                 onClick={() => setSelectedCanais(['all'])}
                 className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition-all border ${
                   selectedCanais.includes('all')
-                    ? 'bg-indigo-600/30 text-indigo-200 border-indigo-500/50 font-bold'
-                    : 'bg-slate-950 text-slate-400 border-slate-800 hover:bg-slate-900'
+                    ? 'bg-indigo-600/10 dark:bg-indigo-600/30 text-indigo-700 dark:text-indigo-200 border-indigo-500/40 dark:border-indigo-500/50 font-bold'
+                    : 'bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900'
                 }`}
               >
                 Todos ({availableCanais.length})
@@ -775,8 +776,8 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
                     }}
                     className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition-all border ${
                       isSelected
-                        ? 'bg-indigo-600/30 text-indigo-200 border-indigo-500/50 font-bold'
-                        : 'bg-slate-950 text-slate-400 border-slate-800 hover:bg-slate-900'
+                        ? 'bg-indigo-600/10 dark:bg-indigo-600/30 text-indigo-700 dark:text-indigo-200 border-indigo-500/40 dark:border-indigo-500/50 font-bold'
+                        : 'bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900'
                     }`}
                   >
                     {c}
@@ -785,10 +786,10 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
               })}
             </div>
           ) : (
-            <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-950/60 px-3 py-1.5 rounded-xl border border-slate-800">
-              <Layers className="w-3.5 h-3.5 text-indigo-400" />
+            <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-950/60 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800">
+              <Layers className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
               <span>
-                Projeto <strong className="text-indigo-300">{selectedProject}</strong> &bull; Análise segmentada por <strong>Tipo de Item</strong> ({filteredIssues.length} cards)
+                Projeto <strong className="text-indigo-600 dark:text-indigo-300">{selectedProject}</strong> &bull; Análise segmentada por <strong>Tipo de Item</strong> ({filteredIssues.length} cards)
               </span>
             </div>
           )}
@@ -796,14 +797,14 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
           {/* Toggle Modo Líquido vs Bruto + Status */}
           <div className="flex flex-wrap items-center gap-3">
             {/* Toggle de Modo de Tempo */}
-            <div className="flex items-center gap-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
+            <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
               <button
                 type="button"
                 onClick={() => setIsLiquidoMode(true)}
                 className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
                   isLiquidoMode
-                    ? 'bg-emerald-600/30 text-emerald-300 font-bold border border-emerald-500/40 shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'bg-emerald-600/15 dark:bg-emerald-600/30 text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-500/40 shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
                 title="Deduz os dias em bloqueio/impedimento do Lead Time e Cycle Time"
               >
@@ -814,8 +815,8 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
                 onClick={() => setIsLiquidoMode(false)}
                 className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
                   !isLiquidoMode
-                    ? 'bg-indigo-600/30 text-indigo-300 font-bold border border-indigo-500/40 shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'bg-indigo-600/15 dark:bg-indigo-600/30 text-indigo-700 dark:text-indigo-300 font-bold border border-indigo-500/40 shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
                 title="Calcula o tempo corrido integral desde a abertura até a conclusão"
               >
@@ -827,7 +828,7 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="px-3 py-1.5 text-xs font-semibold bg-slate-950 border border-slate-700 rounded-xl text-slate-300 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-sm"
+              className="px-3 py-1.5 text-xs font-semibold bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-300 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-sm"
             >
               <option value="all">Todos os Status (Concluídos e Em Andamento)</option>
               <option value="completed_only">Apenas Concluídos / Finalizados</option>
@@ -838,15 +839,15 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
 
       {/* Erro de Comunicação ou Configuração */}
       {fetchError && (
-        <div className="p-4 rounded-2xl bg-rose-950/40 border border-rose-500/40 text-rose-200 text-xs flex items-center justify-between gap-3 shadow-lg">
+        <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-500/40 text-rose-800 dark:text-rose-200 text-xs flex items-center justify-between gap-3 shadow-lg">
           <div className="flex items-center gap-2.5">
-            <AlertCircle className="w-5 h-5 text-rose-400 flex-shrink-0" />
+            <AlertCircle className="w-5 h-5 text-rose-500 dark:text-rose-400 flex-shrink-0" />
             <span>{fetchError}</span>
           </div>
           <button
             type="button"
             onClick={() => fetchLeadTimeData(true)}
-            className="px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 font-bold border border-rose-500/40 text-xs transition-all flex-shrink-0"
+            className="px-3 py-1.5 rounded-xl bg-rose-500/10 dark:bg-rose-500/20 hover:bg-rose-500/20 dark:hover:bg-rose-500/30 text-rose-700 dark:text-rose-200 font-bold border border-rose-500/30 text-xs transition-all flex-shrink-0"
           >
             Tentar Novamente
           </button>
@@ -856,95 +857,95 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
       {/* Cards de Métricas Principais (KPIs) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* KPI 1: Lead Time Médio */}
-        <div className="p-5 rounded-2xl bg-[#0e1628]/90 border border-slate-800 shadow-xl relative overflow-hidden group hover:border-indigo-500/40 transition-all">
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#0e1628]/90 border border-slate-200 dark:border-slate-800 shadow-xl relative overflow-hidden group hover:border-indigo-500/40 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <Timer className="w-4 h-4 text-indigo-400" />
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Timer className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
               Lead Time Médio
             </span>
             <span
               className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
                 isLiquidoMode
-                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                  : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                  ? 'bg-emerald-500/15 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
+                  : 'bg-indigo-500/15 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30'
               }`}
             >
               {isLiquidoMode ? 'Líquido' : 'Bruto'}
             </span>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-black text-white tracking-tight">
+            <span className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
               {metrics.avgLeadTime}
             </span>
-            <span className="text-sm font-semibold text-slate-400">dias</span>
+            <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">dias</span>
           </div>
-          <p className="text-[11px] text-slate-500 mt-2">
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
             Criação até Conclusão {isLiquidoMode ? '(descontando bloqueios)' : '(tempo total corrido)'}
           </p>
         </div>
 
         {/* KPI 2: Cycle Time Técnico Médio */}
-        <div className="p-5 rounded-2xl bg-[#0e1628]/90 border border-slate-800 shadow-xl relative overflow-hidden group hover:border-purple-500/40 transition-all">
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#0e1628]/90 border border-slate-200 dark:border-slate-800 shadow-xl relative overflow-hidden group hover:border-purple-500/40 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <Clock className="w-4 h-4 text-purple-400" />
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Clock className="w-4 h-4 text-purple-500 dark:text-purple-400" />
               Cycle Time Médio
             </span>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-500/15 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/30">
               Dev ➔ Fim
             </span>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-black text-white tracking-tight">
+            <span className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
               {metrics.avgCycleTime}
             </span>
-            <span className="text-sm font-semibold text-slate-400">dias</span>
+            <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">dias</span>
           </div>
-          <p className="text-[11px] text-slate-500 mt-2">
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
             Início do desenvolvimento até a entrega em produção
           </p>
         </div>
 
         {/* KPI 3: Tempo Médio em UAT / Validação */}
-        <div className="p-5 rounded-2xl bg-[#0e1628]/90 border border-slate-800 shadow-xl relative overflow-hidden group hover:border-amber-500/40 transition-all">
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#0e1628]/90 border border-slate-200 dark:border-slate-800 shadow-xl relative overflow-hidden group hover:border-amber-500/40 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <Flame className="w-4 h-4 text-amber-400" />
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Flame className="w-4 h-4 text-amber-500 dark:text-amber-400" />
               Tempo Médio UAT
             </span>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/15 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
               Homologação
             </span>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-black text-white tracking-tight">
+            <span className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
               {metrics.avgUat}
             </span>
-            <span className="text-sm font-semibold text-slate-400">dias</span>
+            <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">dias</span>
           </div>
-          <p className="text-[11px] text-slate-500 mt-2">
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
             Deploy HML até aprovação e Deploy PRD (etapa externa)
           </p>
         </div>
 
         {/* KPI 4: Bloqueio Médio e Volume */}
-        <div className="p-5 rounded-2xl bg-[#0e1628]/90 border border-slate-800 shadow-xl relative overflow-hidden group hover:border-rose-500/40 transition-all">
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#0e1628]/90 border border-slate-200 dark:border-slate-800 shadow-xl relative overflow-hidden group hover:border-rose-500/40 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <ShieldAlert className="w-4 h-4 text-rose-400" />
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <ShieldAlert className="w-4 h-4 text-rose-500 dark:text-rose-400" />
               Bloqueio Médio
             </span>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500/15 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/30">
               Impedimentos
             </span>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-black text-white tracking-tight">
+            <span className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
               {metrics.avgBloqueado}
             </span>
-            <span className="text-sm font-semibold text-slate-400">dias</span>
+            <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">dias</span>
           </div>
-          <p className="text-[11px] text-slate-500 mt-2">
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
             {metrics.completedCards} de {metrics.totalCards} cards concluídos ({metrics.totalCards > 0 ? Math.round((metrics.completedCards / metrics.totalCards) * 100) : 0}%)
           </p>
         </div>
@@ -953,20 +954,27 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
       {/* Gráficos e Comparações */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Gráfico 1: Tempo Médio por Etapa do Fluxo (Funil) */}
-        <div className="lg:col-span-7 p-5 rounded-2xl bg-[#0e1628]/90 border border-slate-800 shadow-xl space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div id="chart-leadtime-stages" className="lg:col-span-7 p-5 rounded-2xl bg-white dark:bg-[#0e1628]/90 border border-slate-200 dark:border-slate-800 shadow-xl space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
             <div>
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <BarChart3 className="w-4 h-4 text-indigo-400" />
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
                 Tempo Médio por Etapa do Fluxo
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 Duração média em dias que os cards permanecem em cada marco
               </p>
             </div>
-            <span className="text-xs font-medium text-slate-400 bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800">
-              {filteredIssues.length} cards analisados
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-800">
+                {filteredIssues.length} cards analisados
+              </span>
+              <ExportChartButton
+                targetId="chart-leadtime-stages"
+                fileName="leadtime-tempo-medio-etapas"
+                onShowToast={onShowToast}
+              />
+            </div>
           </div>
 
           <div className="space-y-4 pt-1">
@@ -975,21 +983,21 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
               return (
                 <div key={etapa.key} className="space-y-1.5">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-slate-200 flex items-center gap-2">
+                    <span className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
                       {etapa.label}
                       {etapa.isBottleneck && (
-                        <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse flex items-center gap-1">
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40 animate-pulse flex items-center gap-1">
                           <Flame className="w-2.5 h-2.5" /> Maior Gargalo
                         </span>
                       )}
                     </span>
-                    <span className="font-mono font-bold text-white">
-                      {etapa.days} <span className="text-slate-400 font-normal">dias</span>
-                      <span className="text-slate-500 text-[10px] ml-1.5">({etapa.count} cards)</span>
+                    <span className="font-mono font-bold text-slate-900 dark:text-white">
+                      {etapa.days} <span className="text-slate-500 dark:text-slate-400 font-normal">dias</span>
+                      <span className="text-slate-400 dark:text-slate-500 text-[10px] ml-1.5">({etapa.count} cards)</span>
                     </span>
                   </div>
 
-                  <div className="h-3 w-full bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-800/80">
+                  <div className="h-3 w-full bg-slate-100 dark:bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-200 dark:border-slate-800/80">
                     <div
                       className={`h-full rounded-full transition-all duration-700 ${
                         etapa.isBottleneck
@@ -1006,19 +1014,24 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
         </div>
 
         {/* Gráfico 2: Desempenho por Canal ou por Tipo de Item */}
-        <div className="lg:col-span-5 p-5 rounded-2xl bg-[#0e1628]/90 border border-slate-800 shadow-xl space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div id="chart-leadtime-performance" className="lg:col-span-5 p-5 rounded-2xl bg-white dark:bg-[#0e1628]/90 border border-slate-200 dark:border-slate-800 shadow-xl space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
             <div>
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Layers className="w-4 h-4 text-purple-400" />
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Layers className="w-4 h-4 text-purple-500 dark:text-purple-400" />
                 {data?.hasCanal ? 'Desempenho por Canal' : 'Desempenho por Tipo de Item'}
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 {data?.hasCanal
                   ? 'Comparativo de Lead Time e UAT por canal de distribuição'
                   : 'Comparativo de Lead Time e UAT por tipo de item/demanda'}
               </p>
             </div>
+            <ExportChartButton
+              targetId="chart-leadtime-performance"
+              fileName={data?.hasCanal ? 'leadtime-desempenho-por-canal' : 'leadtime-desempenho-por-tipo'}
+              onShowToast={onShowToast}
+            />
           </div>
 
           <div className="space-y-3 pt-1">
@@ -1027,26 +1040,26 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
                 <p className="text-xs text-slate-500 italic py-6 text-center">Nenhum dado por canal no período.</p>
               ) : (
                 metrics.byCanal.map((c) => (
-                  <div key={c.canal} className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-2">
+                  <div key={c.canal} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-200">{c.canal}</span>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200">{c.canal}</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20">
                         {c.count} cards
                       </span>
                     </div>
 
                     <div className="grid grid-cols-3 gap-2 pt-1 text-center">
-                      <div className="bg-slate-900/80 p-2 rounded-lg border border-slate-800">
-                        <span className="block text-[10px] font-semibold text-slate-400">Lead Time</span>
-                        <span className="text-sm font-bold text-indigo-300">{c.avgLeadTime}d</span>
+                      <div className="bg-white dark:bg-slate-900/80 p-2 rounded-lg border border-slate-200 dark:border-slate-800 shadow-xs">
+                        <span className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400">Lead Time</span>
+                        <span className="text-sm font-bold text-indigo-600 dark:text-indigo-300">{c.avgLeadTime}d</span>
                       </div>
-                      <div className="bg-slate-900/80 p-2 rounded-lg border border-slate-800">
-                        <span className="block text-[10px] font-semibold text-slate-400">Cycle Time</span>
-                        <span className="text-sm font-bold text-purple-300">{c.avgCycleTime}d</span>
+                      <div className="bg-white dark:bg-slate-900/80 p-2 rounded-lg border border-slate-200 dark:border-slate-800 shadow-xs">
+                        <span className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400">Cycle Time</span>
+                        <span className="text-sm font-bold text-purple-600 dark:text-purple-300">{c.avgCycleTime}d</span>
                       </div>
-                      <div className="bg-slate-900/80 p-2 rounded-lg border border-slate-800">
-                        <span className="block text-[10px] font-semibold text-slate-400">UAT Médio</span>
-                        <span className="text-sm font-bold text-amber-300">{c.avgUat}d</span>
+                      <div className="bg-white dark:bg-slate-900/80 p-2 rounded-lg border border-slate-200 dark:border-slate-800 shadow-xs">
+                        <span className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400">UAT Médio</span>
+                        <span className="text-sm font-bold text-amber-600 dark:text-amber-300">{c.avgUat}d</span>
                       </div>
                     </div>
                   </div>
@@ -1057,26 +1070,26 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
                 <p className="text-xs text-slate-500 italic py-6 text-center">Nenhum dado por tipo de item no período.</p>
               ) : (
                 metrics.byType.map((t) => (
-                  <div key={t.type} className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-2">
+                  <div key={t.type} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-200">{t.type}</span>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200">{t.type}</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20">
                         {t.count} cards
                       </span>
                     </div>
 
                     <div className="grid grid-cols-3 gap-2 pt-1 text-center">
-                      <div className="bg-slate-900/80 p-2 rounded-lg border border-slate-800">
-                        <span className="block text-[10px] font-semibold text-slate-400">Lead Time</span>
-                        <span className="text-sm font-bold text-indigo-300">{t.avgLeadTime}d</span>
+                      <div className="bg-white dark:bg-slate-900/80 p-2 rounded-lg border border-slate-200 dark:border-slate-800 shadow-xs">
+                        <span className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400">Lead Time</span>
+                        <span className="text-sm font-bold text-indigo-600 dark:text-indigo-300">{t.avgLeadTime}d</span>
                       </div>
-                      <div className="bg-slate-900/80 p-2 rounded-lg border border-slate-800">
-                        <span className="block text-[10px] font-semibold text-slate-400">Cycle Time</span>
-                        <span className="text-sm font-bold text-purple-300">{t.avgCycleTime}d</span>
+                      <div className="bg-white dark:bg-slate-900/80 p-2 rounded-lg border border-slate-200 dark:border-slate-800 shadow-xs">
+                        <span className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400">Cycle Time</span>
+                        <span className="text-sm font-bold text-purple-600 dark:text-purple-300">{t.avgCycleTime}d</span>
                       </div>
-                      <div className="bg-slate-900/80 p-2 rounded-lg border border-slate-800">
-                        <span className="block text-[10px] font-semibold text-slate-400">UAT Médio</span>
-                        <span className="text-sm font-bold text-amber-300">{t.avgUat}d</span>
+                      <div className="bg-white dark:bg-slate-900/80 p-2 rounded-lg border border-slate-200 dark:border-slate-800 shadow-xs">
+                        <span className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400">UAT Médio</span>
+                        <span className="text-sm font-bold text-amber-600 dark:text-amber-300">{t.avgUat}d</span>
                       </div>
                     </div>
                   </div>
@@ -1088,16 +1101,16 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
       </div>
 
       {/* Destaques e Outliers do Período */}
-      <div className="p-5 rounded-2xl bg-[#0e1628]/90 border border-slate-800 shadow-xl space-y-3">
-        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-          <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+      <div className="p-5 rounded-2xl bg-white dark:bg-[#0e1628]/90 border border-slate-200 dark:border-slate-800 shadow-xl space-y-3">
+        <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+          <AlertTriangle className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
           Destaques & Outliers do Período
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
           {/* Outlier 1: Maior Gargalo */}
-          <div className="p-3.5 rounded-xl bg-slate-950/80 border border-amber-500/30 space-y-1.5">
-            <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 flex items-center gap-1">
+          <div className="p-3.5 rounded-xl bg-amber-500/5 dark:bg-slate-950/80 border border-amber-500/30 space-y-1.5">
+            <span className="text-[10px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1">
               <Flame className="w-3 h-3" /> Maior Permanência em Etapa
             </span>
             {metrics.outliers.longestStage ? (
@@ -1106,13 +1119,13 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
                   href={metrics.outliers.longestStage.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs font-bold text-white hover:text-indigo-400 flex items-center gap-1 group transition-colors"
+                  className="text-xs font-bold text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-1 group transition-colors"
                 >
-                  <span className="text-indigo-400 font-mono">{metrics.outliers.longestStage.issueKey}</span>
+                  <span className="text-indigo-600 dark:text-indigo-400 font-mono">{metrics.outliers.longestStage.issueKey}</span>
                   <span className="truncate">{metrics.outliers.longestStage.summary}</span>
                   <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 flex-shrink-0 transition-opacity" />
                 </a>
-                <p className="text-[11px] text-amber-300/90 font-medium mt-1">
+                <p className="text-[11px] text-amber-700 dark:text-amber-300/90 font-medium mt-1">
                   <strong>{metrics.outliers.longestStage.days} dias</strong> na etapa {metrics.outliers.longestStage.stage}
                 </p>
               </div>
@@ -1122,8 +1135,8 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
           </div>
 
           {/* Outlier 2: Ativação Mais Rápida */}
-          <div className="p-3.5 rounded-xl bg-slate-950/80 border border-emerald-500/30 space-y-1.5">
-            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1">
+          <div className="p-3.5 rounded-xl bg-emerald-500/5 dark:bg-slate-950/80 border border-emerald-500/30 space-y-1.5">
+            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
               <CheckCircle2 className="w-3 h-3" /> Ativação Mais Rápida (Lead Time)
             </span>
             {metrics.outliers.fastestActivation ? (
@@ -1132,13 +1145,13 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
                   href={metrics.outliers.fastestActivation.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs font-bold text-white hover:text-emerald-400 flex items-center gap-1 group transition-colors"
+                  className="text-xs font-bold text-slate-900 dark:text-white hover:text-emerald-600 dark:hover:text-emerald-400 flex items-center gap-1 group transition-colors"
                 >
-                  <span className="text-emerald-400 font-mono">{metrics.outliers.fastestActivation.issueKey}</span>
+                  <span className="text-emerald-600 dark:text-emerald-400 font-mono">{metrics.outliers.fastestActivation.issueKey}</span>
                   <span className="truncate">{metrics.outliers.fastestActivation.summary}</span>
                   <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 flex-shrink-0 transition-opacity" />
                 </a>
-                <p className="text-[11px] text-emerald-300/90 font-medium mt-1">
+                <p className="text-[11px] text-emerald-700 dark:text-emerald-300/90 font-medium mt-1">
                   Lead Time total de apenas <strong>{metrics.outliers.fastestActivation.days} dias</strong>
                 </p>
               </div>
@@ -1148,8 +1161,8 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
           </div>
 
           {/* Outlier 3: Maior Lead Time Geral */}
-          <div className="p-3.5 rounded-xl bg-slate-950/80 border border-rose-500/30 space-y-1.5">
-            <span className="text-[10px] font-black uppercase tracking-wider text-rose-400 flex items-center gap-1">
+          <div className="p-3.5 rounded-xl bg-rose-500/5 dark:bg-slate-950/80 border border-rose-500/30 space-y-1.5">
+            <span className="text-[10px] font-black uppercase tracking-wider text-rose-600 dark:text-rose-400 flex items-center gap-1">
               <Clock className="w-3 h-3" /> Maior Lead Time Geral
             </span>
             {metrics.outliers.longestLeadTime ? (
@@ -1158,13 +1171,13 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
                   href={metrics.outliers.longestLeadTime.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs font-bold text-white hover:text-rose-400 flex items-center gap-1 group transition-colors"
+                  className="text-xs font-bold text-slate-900 dark:text-white hover:text-rose-600 dark:hover:text-rose-400 flex items-center gap-1 group transition-colors"
                 >
-                  <span className="text-rose-400 font-mono">{metrics.outliers.longestLeadTime.issueKey}</span>
+                  <span className="text-rose-600 dark:text-rose-400 font-mono">{metrics.outliers.longestLeadTime.issueKey}</span>
                   <span className="truncate">{metrics.outliers.longestLeadTime.summary}</span>
                   <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 flex-shrink-0 transition-opacity" />
                 </a>
-                <p className="text-[11px] text-rose-300/90 font-medium mt-1">
+                <p className="text-[11px] text-rose-700 dark:text-rose-300/90 font-medium mt-1">
                   Lead Time acumulado de <strong>{metrics.outliers.longestLeadTime.days} dias</strong>
                 </p>
               </div>
@@ -1176,11 +1189,11 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
       </div>
 
       {/* Tabela Analítica Detalhada com Busca e Exportação */}
-      <div className="p-5 rounded-2xl bg-[#0e1628]/90 border border-slate-800 shadow-xl space-y-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+      <div className="p-5 rounded-2xl bg-white dark:bg-[#0e1628]/90 border border-slate-200 dark:border-slate-800 shadow-xl space-y-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
           <div>
-            <h3 className="text-sm font-bold text-white">Detalhamento Analítico por Card</h3>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white">Detalhamento Analítico por Card</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               Exibindo {sortedIssues.length} cards &bull; Clique nas colunas para ordenar
             </p>
           </div>
@@ -1188,19 +1201,19 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             {/* Campo de Busca Rápida */}
             <div className="relative flex-1 sm:w-64">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
               <input
                 type="text"
                 placeholder="Buscar por key ou resumo..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500"
               />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white text-xs"
                 >
                   ✕
                 </button>
@@ -1221,123 +1234,123 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
         </div>
 
         {/* Tabela Responsiva */}
-        <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/60">
+        <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/60">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="bg-slate-900/90 text-slate-400 border-b border-slate-800 select-none">
+              <tr className="bg-slate-100 dark:bg-slate-900/90 text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 select-none">
                 <th
                   onClick={() => handleSort('key')}
-                  className="p-3 font-bold cursor-pointer hover:text-white transition-colors"
+                  className="p-3 font-bold cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
                 >
                   <div className="flex items-center gap-1">
                     <span>Key</span>
-                    {sortField === 'key' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-400" />)}
+                    {sortField === 'key' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-500 dark:text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />)}
                   </div>
                 </th>
                 <th
                   onClick={() => handleSort('summary')}
-                  className="p-3 font-bold cursor-pointer hover:text-white transition-colors min-w-[200px]"
+                  className="p-3 font-bold cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors min-w-[200px]"
                 >
                   <div className="flex items-center gap-1">
                     <span>Resumo</span>
-                    {sortField === 'summary' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-400" />)}
+                    {sortField === 'summary' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-500 dark:text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />)}
                   </div>
                 </th>
                 <th
                   onClick={() => handleSort(data?.hasCanal ? 'canal' : 'issuetype')}
-                  className="p-3 font-bold cursor-pointer hover:text-white transition-colors"
+                  className="p-3 font-bold cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
                 >
                   <div className="flex items-center gap-1">
                     <span>{data?.hasCanal ? 'Canal' : 'Tipo'}</span>
                     {((data?.hasCanal && sortField === 'canal') || (!data?.hasCanal && sortField === 'issuetype')) && (
-                      sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-400" />
+                      sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-500 dark:text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />
                     )}
                   </div>
                 </th>
                 <th
                   onClick={() => handleSort('status')}
-                  className="p-3 font-bold cursor-pointer hover:text-white transition-colors"
+                  className="p-3 font-bold cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
                 >
                   <div className="flex items-center gap-1">
                     <span>Status</span>
-                    {sortField === 'status' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-400" />)}
+                    {sortField === 'status' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-500 dark:text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />)}
                   </div>
                 </th>
                 <th
                   onClick={() => handleSort('dias_triagem')}
-                  className="p-3 font-bold text-right cursor-pointer hover:text-white transition-colors"
+                  className="p-3 font-bold text-right cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
                 >
                   <div className="flex items-center justify-end gap-1">
                     <span>Triagem</span>
-                    {sortField === 'dias_triagem' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-400" />)}
+                    {sortField === 'dias_triagem' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-500 dark:text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />)}
                   </div>
                 </th>
                 <th
                   onClick={() => handleSort('dias_pronto')}
-                  className="p-3 font-bold text-right cursor-pointer hover:text-white transition-colors"
+                  className="p-3 font-bold text-right cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
                 >
                   <div className="flex items-center justify-end gap-1">
                     <span>Pronto</span>
-                    {sortField === 'dias_pronto' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-400" />)}
+                    {sortField === 'dias_pronto' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-500 dark:text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />)}
                   </div>
                 </th>
                 <th
                   onClick={() => handleSort('dias_dev')}
-                  className="p-3 font-bold text-right cursor-pointer hover:text-white transition-colors"
+                  className="p-3 font-bold text-right cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
                 >
                   <div className="flex items-center justify-end gap-1">
                     <span>Dev & HML</span>
-                    {sortField === 'dias_dev' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-400" />)}
+                    {sortField === 'dias_dev' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-500 dark:text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />)}
                   </div>
                 </th>
                 <th
                   onClick={() => handleSort('dias_uat')}
-                  className="p-3 font-bold text-right cursor-pointer hover:text-white transition-colors"
+                  className="p-3 font-bold text-right cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
                 >
                   <div className="flex items-center justify-end gap-1">
-                    <span className="text-amber-400">UAT</span>
-                    {sortField === 'dias_uat' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-400" />)}
+                    <span className="text-amber-600 dark:text-amber-400">UAT</span>
+                    {sortField === 'dias_uat' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-500 dark:text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />)}
                   </div>
                 </th>
                 <th
                   onClick={() => handleSort('dias_deploy')}
-                  className="p-3 font-bold text-right cursor-pointer hover:text-white transition-colors"
+                  className="p-3 font-bold text-right cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
                 >
                   <div className="flex items-center justify-end gap-1">
                     <span>Deploy</span>
-                    {sortField === 'dias_deploy' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-400" />)}
+                    {sortField === 'dias_deploy' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-500 dark:text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />)}
                   </div>
                 </th>
                 <th
                   onClick={() => handleSort('dias_bloqueado')}
-                  className="p-3 font-bold text-right cursor-pointer hover:text-white transition-colors"
+                  className="p-3 font-bold text-right cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
                 >
                   <div className="flex items-center justify-end gap-1">
-                    <span className="text-rose-400">Bloqueio</span>
-                    {sortField === 'dias_bloqueado' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-400" />)}
+                    <span className="text-rose-600 dark:text-rose-400">Bloqueio</span>
+                    {sortField === 'dias_bloqueado' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-500 dark:text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />)}
                   </div>
                 </th>
                 <th
                   onClick={() => handleSort('cycle_time')}
-                  className="p-3 font-bold text-right cursor-pointer hover:text-white transition-colors"
+                  className="p-3 font-bold text-right cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
                 >
                   <div className="flex items-center justify-end gap-1">
                     <span>Cycle Time</span>
-                    {sortField === 'cycle_time' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-400" />)}
+                    {sortField === 'cycle_time' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-500 dark:text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />)}
                   </div>
                 </th>
                 <th
                   onClick={() => handleSort('lead_time')}
-                  className="p-3 font-bold text-right cursor-pointer hover:text-white transition-colors bg-indigo-950/20"
+                  className="p-3 font-bold text-right cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors bg-indigo-50 dark:bg-indigo-950/20"
                 >
                   <div className="flex items-center justify-end gap-1">
-                    <span className="text-indigo-300 font-extrabold">Lead Time</span>
-                    {sortField === 'lead_time' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-400" />)}
+                    <span className="text-indigo-600 dark:text-indigo-300 font-extrabold">Lead Time</span>
+                    {sortField === 'lead_time' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-500 dark:text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />)}
                   </div>
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60 font-sans">
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60 font-sans">
               {sortedIssues.length === 0 ? (
                 <tr>
                   <td colSpan={12} className="py-8 text-center text-slate-500 italic">
@@ -1350,14 +1363,14 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
                   const cycle = isLiquidoMode ? iss.cycle_time_liquido : iss.cycle_time_tecnico;
 
                   return (
-                    <tr key={iss.key} className="hover:bg-slate-900/60 transition-colors">
+                    <tr key={iss.key} className="hover:bg-slate-100/70 dark:hover:bg-slate-900/60 transition-colors">
                       {/* Key */}
                       <td className="p-3 font-mono font-bold whitespace-nowrap">
                         <a
                           href={iss.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-indigo-400 hover:text-indigo-300 flex items-center gap-1 group"
+                          className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-1 group"
                           title="Abrir no Jira"
                         >
                           <span>{iss.key}</span>
@@ -1367,14 +1380,14 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
 
                       {/* Resumo */}
                       <td className="p-3 max-w-[280px]">
-                        <span className="block truncate text-slate-200 font-medium" title={iss.summary}>
+                        <span className="block truncate text-slate-800 dark:text-slate-200 font-medium" title={iss.summary}>
                           {iss.summary}
                         </span>
                       </td>
 
                       {/* Canal ou Tipo */}
                       <td className="p-3 whitespace-nowrap">
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-900 text-slate-300 border border-slate-800">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800">
                           {data?.hasCanal ? (iss.canal || 'N/D') : iss.issuetype}
                         </span>
                       </td>
@@ -1384,8 +1397,8 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
                         <span
                           className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                             iss.isDone
-                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                              : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                              : 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20'
                           }`}
                         >
                           {iss.status}
@@ -1393,46 +1406,46 @@ export const JiraLeadTimeDashboard: React.FC<JiraLeadTimeDashboardProps> = ({ on
                       </td>
 
                       {/* Triagem */}
-                      <td className="p-3 text-right font-mono text-slate-400">
+                      <td className="p-3 text-right font-mono text-slate-600 dark:text-slate-400">
                         {iss.dias_triagem !== null ? `${iss.dias_triagem}d` : '-'}
                       </td>
 
                       {/* Pronto */}
-                      <td className="p-3 text-right font-mono text-slate-400">
+                      <td className="p-3 text-right font-mono text-slate-600 dark:text-slate-400">
                         {iss.dias_pronto !== null ? `${iss.dias_pronto}d` : '-'}
                       </td>
 
                       {/* Dev */}
-                      <td className="p-3 text-right font-mono text-slate-400">
+                      <td className="p-3 text-right font-mono text-slate-600 dark:text-slate-400">
                         {iss.dias_dev !== null ? `${iss.dias_dev}d` : '-'}
                       </td>
 
                       {/* UAT */}
-                      <td className="p-3 text-right font-mono font-semibold text-amber-300">
+                      <td className="p-3 text-right font-mono font-semibold text-amber-600 dark:text-amber-300">
                         {iss.dias_uat !== null ? `${iss.dias_uat}d` : '-'}
                       </td>
 
                       {/* Deploy */}
-                      <td className="p-3 text-right font-mono text-slate-400">
+                      <td className="p-3 text-right font-mono text-slate-600 dark:text-slate-400">
                         {iss.dias_deploy !== null ? `${iss.dias_deploy}d` : '-'}
                       </td>
 
                       {/* Bloqueio */}
                       <td className="p-3 text-right font-mono">
                         {iss.dias_bloqueado > 0 ? (
-                          <span className="text-rose-400 font-bold">{iss.dias_bloqueado}d</span>
+                          <span className="text-rose-600 dark:text-rose-400 font-bold">{iss.dias_bloqueado}d</span>
                         ) : (
-                          <span className="text-slate-600">0d</span>
+                          <span className="text-slate-400 dark:text-slate-600">0d</span>
                         )}
                       </td>
 
                       {/* Cycle Time */}
-                      <td className="p-3 text-right font-mono text-purple-300">
+                      <td className="p-3 text-right font-mono text-purple-600 dark:text-purple-300">
                         {cycle !== null ? `${cycle}d` : '-'}
                       </td>
 
                       {/* Lead Time */}
-                      <td className="p-3 text-right font-mono font-bold text-white bg-indigo-950/10">
+                      <td className="p-3 text-right font-mono font-bold text-indigo-700 dark:text-white bg-indigo-50/60 dark:bg-indigo-950/10">
                         {lead !== null ? `${lead}d` : '-'}
                       </td>
                     </tr>
