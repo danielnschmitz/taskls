@@ -544,8 +544,8 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
                 key={group.groupId}
                 className={`group relative rounded-xl border p-4 transition-all duration-200 flex flex-col justify-between min-w-0 overflow-hidden ${
                   hasBlocked
-                    ? 'bg-red-50/70 border-red-300 hover:border-red-400 dark:bg-red-500/10 dark:border-red-500/30 dark:hover:border-red-500/50 shadow-sm'
-                    : 'bg-white border-slate-200 hover:border-blue-400 hover:bg-slate-50/80 dark:bg-slate-900/90 dark:border-slate-800 dark:hover:border-blue-500/40 dark:hover:bg-slate-850 shadow-sm hover:shadow-md'
+                    ? 'bg-red-50/70 border-red-300 hover:bg-red-50 hover:border-red-400 dark:bg-red-500/10 dark:border-red-500/30 dark:hover:border-red-500/50 dark:hover:bg-red-500/20 shadow-sm'
+                    : 'bg-white border-slate-200 hover:border-blue-400 hover:bg-slate-50/80 dark:bg-slate-900/90 dark:border-slate-800 dark:hover:border-blue-500/50 dark:hover:bg-slate-800/80 shadow-sm hover:shadow-md'
                 }`}
               >
                 <div className="min-w-0">

@@ -150,7 +150,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       className={`group relative rounded-xl border p-3 transition-all duration-200 cursor-grab active:cursor-grabbing ${
         completed
           ? 'bg-slate-100/50 dark:bg-slate-950/40 border-slate-200 dark:border-slate-800/50 opacity-65 hover:opacity-90'
-          : 'bg-white dark:bg-slate-900/80 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700/80 hover:bg-slate-50/50 dark:hover:bg-slate-900 shadow-sm dark:shadow-md hover:shadow-md dark:hover:shadow-black/40'
+          : 'bg-white dark:bg-slate-900/80 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-50/50 dark:hover:bg-slate-800/70 shadow-sm dark:shadow-md hover:shadow-md dark:hover:shadow-black/40'
       }`}
     >
       {/* Quick Actions Floating Toolbar (Pinned inside top-right) */}

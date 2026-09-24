@@ -105,7 +105,7 @@ export const JiraCard: React.FC<JiraCardProps> = ({ demand, showDueDateBadge = f
 
   const containerClasses = isBlocked
     ? 'group block relative p-3 rounded-xl bg-red-50/70 dark:bg-red-500/15 border border-red-300 dark:border-red-500/40 hover:bg-red-50 hover:border-red-400 dark:hover:bg-red-500/20 dark:hover:border-red-400/70 shadow-sm dark:shadow-lg dark:shadow-red-950/30 ring-1 ring-red-300/50 dark:ring-red-500/25 transition-all duration-200 text-left no-underline'
-    : 'group block relative p-3 rounded-xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800/90 hover:border-indigo-400 hover:bg-slate-50/80 dark:hover:border-indigo-500/60 dark:hover:bg-slate-850 shadow-sm dark:shadow-none hover:shadow-md dark:hover:shadow-indigo-950/20 transition-all duration-200 text-left no-underline';
+    : 'group block relative p-3 rounded-xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800/90 hover:border-indigo-400 hover:bg-slate-50/80 dark:hover:border-indigo-500/60 dark:hover:bg-slate-800/80 shadow-sm dark:shadow-none hover:shadow-md dark:hover:shadow-indigo-950/20 transition-all duration-200 text-left no-underline';
 
   return (
     <a
