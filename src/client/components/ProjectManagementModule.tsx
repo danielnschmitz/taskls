@@ -652,12 +652,12 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(16);
       doc.setTextColor(30, 41, 59);
-      doc.text('TaskLS - Plano de Projeto & Cronograma (Neogrid)', 14, 16);
+      doc.text('Plano de Projeto & Cronograma', 14, 16);
 
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
       doc.setTextColor(100, 116, 139);
-      doc.text(`Gerado em: ${todayStr} | Jornada: ${settings.work_hours_per_day}h/dia`, 14, 22);
+      doc.text(`Gerado em: ${todayStr}`, 14, 22);
 
       // KPI Summary Box
       doc.setFillColor(241, 245, 249);
