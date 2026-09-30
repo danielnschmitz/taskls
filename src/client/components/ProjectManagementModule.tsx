@@ -698,13 +698,15 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
         doc.setFontSize(8);
         doc.setTextColor(255, 255, 255);
         doc.text('#', 16, curY + 5.5);
-        doc.text('Chave', 25, curY + 5.5);
         if (isClientView) {
-          doc.text('Resumo da Demanda', 50, curY + 5.5);
-          doc.text('Início', 205, curY + 5.5);
-          doc.text('Entrega', 230, curY + 5.5);
-          doc.text('Dias Úteis', 255, curY + 5.5);
+          doc.text('Chave', 24, curY + 5.5);
+          doc.text('Resumo da Demanda', 46, curY + 5.5);
+          doc.text('Indústria', 145, curY + 5.5);
+          doc.text('Canal de Distribuição', 190, curY + 5.5);
+          doc.text('Início', 235, curY + 5.5);
+          doc.text('Entrega', 258, curY + 5.5);
         } else {
+          doc.text('Chave', 25, curY + 5.5);
           doc.text('Resumo da Demanda', 50, curY + 5.5);
           doc.text('Responsável', 160, curY + 5.5);
           doc.text('Estimativa', 205, curY + 5.5);
@@ -739,15 +741,24 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
         }
 
         doc.text(String(idx + 1), 16, y + 4.8);
-        doc.text(item.issue_key, 25, y + 4.8);
         if (isClientView) {
           const truncatedSummary =
-            item.summary.length > 95 ? item.summary.substring(0, 93) + '...' : item.summary;
-          doc.text(truncatedSummary, 50, y + 4.8);
-          doc.text(format(parseISO(item.start_date), 'dd/MM/yyyy'), 205, y + 4.8);
-          doc.text(format(parseISO(item.end_date), 'dd/MM/yyyy'), 230, y + 4.8);
-          doc.text(`${item.working_days} d`, 255, y + 4.8);
+            item.summary.length > 55 ? item.summary.substring(0, 53) + '...' : item.summary;
+          const cleanText = (str: string | null | undefined) =>
+            (str || '').replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '').trim() || '-';
+          const ind = cleanText(item.metadata?.industry);
+          const truncatedIndustry = ind.length > 22 ? ind.substring(0, 20) + '...' : ind;
+          const canal = cleanText(item.metadata?.canal);
+          const truncatedCanal = canal.length > 22 ? canal.substring(0, 20) + '...' : canal;
+
+          doc.text(item.issue_key, 24, y + 4.8);
+          doc.text(truncatedSummary, 46, y + 4.8);
+          doc.text(truncatedIndustry, 145, y + 4.8);
+          doc.text(truncatedCanal, 190, y + 4.8);
+          doc.text(format(parseISO(item.start_date), 'dd/MM/yyyy'), 235, y + 4.8);
+          doc.text(format(parseISO(item.end_date), 'dd/MM/yyyy'), 258, y + 4.8);
         } else {
+          doc.text(item.issue_key, 25, y + 4.8);
           const truncatedSummary =
             item.summary.length > 60 ? item.summary.substring(0, 58) + '...' : item.summary;
           doc.text(truncatedSummary, 50, y + 4.8);
