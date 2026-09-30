@@ -10,11 +10,16 @@ import {
   ShieldCheck,
   Sun,
   Moon,
+  Box,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 
-export const LoginScreen: React.FC = () => {
+interface LoginScreenProps {
+  onOpenCalculator?: () => void;
+}
+
+export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenCalculator }) => {
   const { login } = useAuth();
   const { setTheme, resolvedTheme } = useTheme();
   const [username, setUsername] = useState('');
@@ -179,6 +184,26 @@ export const LoginScreen: React.FC = () => {
               </button>
             </div>
           </form>
+        </div>
+
+        {/* Link Público: Calculadora 3D */}
+        <div className="mt-4 text-center">
+          <button
+            type="button"
+            onClick={
+              onOpenCalculator ||
+              (() => {
+                window.location.href = '/calculadora-3d';
+              })
+            }
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/70 dark:bg-slate-900/70 hover:bg-white dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800 text-xs font-bold transition-all shadow-sm active:scale-95 group cursor-pointer"
+          >
+            <Box className="w-4 h-4 text-indigo-500 group-hover:scale-110 transition-transform" />
+            <span>Calculadora de Impressão 3D</span>
+            <span className="text-[10px] uppercase font-bold px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+              Livre
+            </span>
+          </button>
         </div>
 
         {/* Footer info */}

@@ -45,6 +45,8 @@ import { CardWriterModule } from './components/CardWriterModule';
 import { SettingsModule } from './components/SettingsModule';
 import { HealthModule } from './components/HealthModule';
 import { DashboardsModule } from './components/DashboardsModule';
+import { ProjectManagementModule } from './components/ProjectManagementModule';
+import { Calculator3DPage } from './components/Calculator3DPage';
 import { useAuth } from './contexts/AuthContext';
 import {
   triggerBrowserNotification,
@@ -100,6 +102,22 @@ export const App: React.FC = () => {
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
   const [isUserManagementModalOpen, setIsUserManagementModalOpen] = useState(false);
 
+  // Navegação pública de rotas (ex: /calculadora-3d) sem necessidade de autenticação
+  const [currentPath, setCurrentPath] = useState<string>(() => window.location.pathname.toLowerCase());
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setCurrentPath(window.location.pathname.toLowerCase());
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const navigateTo = useCallback((path: string) => {
+    window.history.pushState(null, '', path);
+    setCurrentPath(path.toLowerCase());
+  }, []);
+
   // Jira permission check
   const canAccessJira = Boolean(user?.isAdmin || user?.canAccessJira);
 
@@ -107,21 +125,23 @@ export const App: React.FC = () => {
   const ACTIVE_MODULE_STORAGE_KEY = 'taskls_active_module';
 
   // Modular access checks
-  const userModules = user?.allowedModules || ['tasks', 'cards', 'health', 'dashboards'];
+  const userModules = user?.allowedModules || ['tasks', 'cards', 'health', 'dashboards', 'projects'];
   const canAccessTasks = Boolean(user?.isAdmin || userModules.includes('tasks'));
   const canAccessCards = Boolean(user?.isAdmin || userModules.includes('cards'));
   const canAccessHealth = Boolean(user?.isAdmin || userModules.includes('health'));
   const canAccessDashboards = Boolean(user?.isAdmin || userModules.includes('dashboards'));
+  const canAccessProjects = Boolean(user?.isAdmin || userModules.includes('projects'));
 
   const [activeModule, setActiveModule] = useState<ModuleType>(() => {
     const saved = localStorage.getItem(ACTIVE_MODULE_STORAGE_KEY) as ModuleType | null;
-    if (saved && ['tasks', 'cards', 'health', 'dashboards', 'settings'].includes(saved)) {
+    if (saved && ['tasks', 'cards', 'health', 'dashboards', 'projects', 'settings'].includes(saved)) {
       return saved;
     }
     if (canAccessTasks) return 'tasks';
     if (canAccessCards) return 'cards';
     if (canAccessHealth) return 'health';
     if (canAccessDashboards) return 'dashboards';
+    if (canAccessProjects) return 'projects';
     if (user?.isAdmin) return 'settings';
     return 'tasks';
   });
@@ -135,28 +155,42 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (!isAuthenticated) return;
 
+    const getAvailableFallback = (): ModuleType => {
+      if (canAccessTasks) return 'tasks';
+      if (canAccessCards) return 'cards';
+      if (canAccessHealth) return 'health';
+      if (canAccessDashboards) return 'dashboards';
+      if (canAccessProjects) return 'projects';
+      if (user?.isAdmin) return 'settings';
+      return 'tasks';
+    };
+
     if (activeModule === 'tasks' && !canAccessTasks) {
-      const next = canAccessCards ? 'cards' : canAccessHealth ? 'health' : canAccessDashboards ? 'dashboards' : user?.isAdmin ? 'settings' : 'tasks';
+      const next = getAvailableFallback();
       setActiveModule(next);
       localStorage.setItem(ACTIVE_MODULE_STORAGE_KEY, next);
     } else if (activeModule === 'cards' && !canAccessCards) {
-      const next = canAccessTasks ? 'tasks' : canAccessHealth ? 'health' : canAccessDashboards ? 'dashboards' : user?.isAdmin ? 'settings' : 'cards';
+      const next = getAvailableFallback();
       setActiveModule(next);
       localStorage.setItem(ACTIVE_MODULE_STORAGE_KEY, next);
     } else if (activeModule === 'health' && !canAccessHealth) {
-      const next = canAccessTasks ? 'tasks' : canAccessCards ? 'cards' : canAccessDashboards ? 'dashboards' : user?.isAdmin ? 'settings' : 'health';
+      const next = getAvailableFallback();
       setActiveModule(next);
       localStorage.setItem(ACTIVE_MODULE_STORAGE_KEY, next);
     } else if (activeModule === 'dashboards' && !canAccessDashboards) {
-      const next = canAccessTasks ? 'tasks' : canAccessCards ? 'cards' : canAccessHealth ? 'health' : user?.isAdmin ? 'settings' : 'dashboards';
+      const next = getAvailableFallback();
+      setActiveModule(next);
+      localStorage.setItem(ACTIVE_MODULE_STORAGE_KEY, next);
+    } else if (activeModule === 'projects' && !canAccessProjects) {
+      const next = getAvailableFallback();
       setActiveModule(next);
       localStorage.setItem(ACTIVE_MODULE_STORAGE_KEY, next);
     } else if (activeModule === 'settings' && !user?.isAdmin) {
-      const next = canAccessTasks ? 'tasks' : canAccessCards ? 'cards' : canAccessHealth ? 'health' : canAccessDashboards ? 'dashboards' : 'settings';
+      const next = getAvailableFallback();
       setActiveModule(next);
       localStorage.setItem(ACTIVE_MODULE_STORAGE_KEY, next);
     }
-  }, [user, activeModule, canAccessTasks, canAccessCards, canAccessHealth, canAccessDashboards, isAuthenticated]);
+  }, [user, activeModule, canAccessTasks, canAccessCards, canAccessHealth, canAccessDashboards, canAccessProjects, isAuthenticated]);
 
   // Handlers for Jira Week Navigation
   const handleJiraPrevWeek = () => setJiraWeekBaseDate((prev) => subWeeks(prev, 1));
@@ -507,6 +541,17 @@ export const App: React.FC = () => {
     setIsTaskModalOpen(true);
   };
 
+  // Rota pública sem necessidade de autenticação: Calculadora 3D
+  const isCalculatorRoute =
+    currentPath === '/calculadora-3d' ||
+    currentPath === '/calculo-3d' ||
+    currentPath === '/calculo3d' ||
+    currentPath === '/calculadora';
+
+  if (isCalculatorRoute) {
+    return <Calculator3DPage onNavigateHome={() => navigateTo('/')} />;
+  }
+
   if (isAuthLoading) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-[#070b14] flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 gap-3">
@@ -517,7 +562,7 @@ export const App: React.FC = () => {
   }
 
   if (!isAuthenticated) {
-    return <LoginScreen />;
+    return <LoginScreen onOpenCalculator={() => navigateTo('/calculadora-3d')} />;
   }
 
   return (
@@ -545,6 +590,7 @@ export const App: React.FC = () => {
         onOpenUserManagement={user?.isAdmin ? () => setIsUserManagementModalOpen(true) : undefined}
         onOpenChangePassword={() => setIsChangePasswordModalOpen(true)}
         onShowToast={showToast}
+        onOpenCalculator={() => navigateTo('/calculadora-3d')}
       />
 
       {/* Main Container */}
@@ -581,6 +627,11 @@ export const App: React.FC = () => {
         {/* Módulo: Dashboards Analíticos */}
         {activeModule === 'dashboards' && canAccessDashboards && (
           <DashboardsModule onShowToast={showToast} />
+        )}
+
+        {/* Módulo: Gestão de Projetos (Neogrid) */}
+        {activeModule === 'projects' && canAccessProjects && (
+          <ProjectManagementModule onShowToast={showToast} />
         )}
 
         {/* Módulo: Configurações (Apenas Administrador) */}
@@ -874,7 +925,7 @@ export const App: React.FC = () => {
         )}
 
         {/* Sem Permissões de Módulo */}
-        {!canAccessTasks && !canAccessCards && !canAccessHealth && !canAccessDashboards && !user?.isAdmin && (
+        {!canAccessTasks && !canAccessCards && !canAccessHealth && !canAccessDashboards && !canAccessProjects && !user?.isAdmin && (
           <div className="py-24 text-center text-slate-600 dark:text-slate-400 bg-white/60 dark:bg-slate-900/30 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 shadow-sm">
             <p className="text-base font-semibold text-slate-800 dark:text-slate-200">Você não possui permissão para acessar nenhum módulo no momento.</p>
             <p className="text-xs text-slate-500 mt-2">Entre em contato com o administrador do sistema para solicitar a liberação de módulos na sua conta.</p>

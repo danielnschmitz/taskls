@@ -21,9 +21,11 @@ import {
   Check,
   Scale,
   BarChart3,
+  FolderKanban,
   Sun,
   Moon,
   Laptop,
+  Box,
 } from 'lucide-react';
 import { Priority, Task, DndStatus, CategoryInfo, ModuleType } from '../types';
 import { PomodoroTimer } from './PomodoroTimer';
@@ -59,6 +61,7 @@ interface HeaderProps {
   activeModule: ModuleType;
   onSelectModule: (m: ModuleType) => void;
   onShowToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  onOpenCalculator?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -83,6 +86,7 @@ export const Header: React.FC<HeaderProps> = ({
   activeModule,
   onSelectModule,
   onShowToast,
+  onOpenCalculator,
 }) => {
   const { user, logout, isDefaultPassword } = useAuth();
   const { theme, resolvedTheme, setTheme } = useTheme();
@@ -96,11 +100,12 @@ export const Header: React.FC<HeaderProps> = ({
   const [showModuleMenu, setShowModuleMenu] = useState(false);
   const moduleMenuRef = useRef<HTMLDivElement>(null);
 
-  const userModules = user?.allowedModules || ['tasks', 'cards', 'health', 'dashboards'];
+  const userModules = user?.allowedModules || ['tasks', 'cards', 'health', 'dashboards', 'projects'];
   const canAccessTasks = Boolean(user?.isAdmin || userModules.includes('tasks'));
   const canAccessCards = Boolean(user?.isAdmin || userModules.includes('cards'));
   const canAccessHealth = Boolean(user?.isAdmin || userModules.includes('health'));
   const canAccessDashboards = Boolean(user?.isAdmin || userModules.includes('dashboards'));
+  const canAccessProjects = Boolean(user?.isAdmin || userModules.includes('projects'));
 
   // Fechar menus ao clicar fora
   useEffect(() => {
@@ -255,6 +260,7 @@ export const Header: React.FC<HeaderProps> = ({
                 {activeModule === 'cards' && 'Escrita de Cards'}
                 {activeModule === 'health' && 'Saúde & Peso'}
                 {activeModule === 'dashboards' && 'Dashboards'}
+                {activeModule === 'projects' && 'Gestão de Projetos'}
                 {activeModule === 'settings' && 'Configurações'}
               </span>
               <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${showModuleMenu ? 'rotate-180 text-indigo-500' : ''}`} />
@@ -370,6 +376,32 @@ export const Header: React.FC<HeaderProps> = ({
                         </div>
                       </div>
                       {activeModule === 'dashboards' && <Check className="w-4 h-4 text-cyan-600 dark:text-cyan-400 flex-shrink-0" />}
+                    </button>
+                  )}
+
+                  {canAccessProjects && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSelectModule('projects');
+                        setShowModuleMenu(false);
+                      }}
+                      className={`w-full text-left p-2.5 rounded-xl flex items-center justify-between gap-3 transition-all ${
+                        activeModule === 'projects'
+                          ? 'bg-indigo-50 border border-indigo-200 text-indigo-900 shadow-sm dark:bg-indigo-600/20 dark:border-indigo-500/40 dark:text-white dark:shadow-inner'
+                          : 'hover:bg-slate-100 text-slate-700 dark:hover:bg-slate-800/80 dark:text-slate-300 border border-transparent'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${activeModule === 'projects' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}>
+                          <FolderKanban className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="block text-xs font-bold leading-tight">Gestão de Projetos</span>
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400">Neogrid, backlog sanfona e Gantt</span>
+                        </div>
+                      </div>
+                      {activeModule === 'projects' && <Check className="w-4 h-4 text-indigo-600 dark:text-indigo-400 flex-shrink-0" />}
                     </button>
                   )}
 
@@ -564,6 +596,18 @@ export const Header: React.FC<HeaderProps> = ({
             )}
             <span className="hidden xl:inline">Testar</span>
           </button>
+
+          {/* 3D Calculator Quick Link */}
+          {onOpenCalculator && (
+            <button
+              onClick={onOpenCalculator}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 dark:bg-slate-900/80 dark:hover:bg-slate-800 dark:text-slate-300 dark:hover:text-white dark:border-slate-700/60 text-xs font-semibold transition-all shadow-sm active:scale-95"
+              title="Calculadora de Impressão 3D (Link Público / Acesso Livre)"
+            >
+              <Box className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
+              <span className="hidden lg:inline">Calculadora 3D</span>
+            </button>
+          )}
 
           {/* Theme Selector Toggle (Light / Dark / System) */}
           <div className="relative" ref={themeMenuRef}>

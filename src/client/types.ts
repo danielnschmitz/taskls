@@ -155,7 +155,7 @@ export interface JiraConfig {
   allPossibleStatuses?: string[];
 }
 
-export type ModuleType = 'tasks' | 'cards' | 'health' | 'dashboards' | 'settings';
+export type ModuleType = 'tasks' | 'cards' | 'health' | 'dashboards' | 'projects' | 'settings';
 
 export interface CardTemplate {
   id: string;
@@ -405,6 +405,64 @@ export interface JiraNeoActivationsResponse {
   availableTiposIntegracao: string[];
 }
 
+export interface ProjectHoliday {
+  date: string; // 'YYYY-MM-DD'
+  name: string;
+}
 
+export interface ProjectSettings {
+  delivered_users: string[];
+  work_hours_per_day: number;
+  plan_start_date: string;
+  holidays: ProjectHoliday[];
+  client_hours_markup_percent?: number;
+  client_delivery_buffer_days?: number;
+}
 
+export interface PlanItemInput {
+  id?: string;
+  issue_key: string;
+  summary: string;
+  status?: string;
+  assignee_name: string;
+  estimate_hours: number;
+  sort_order: number;
+  metadata?: any;
+}
 
+export interface ScheduledPlanItem extends PlanItemInput {
+  id: string;
+  start_date: string; // 'YYYY-MM-DD'
+  end_date: string;   // 'YYYY-MM-DD'
+  working_days: number;
+}
+
+export interface ProjectBacklogIssue extends JiraDemand {
+  status: string;
+  issuetype: string;
+  priority: string;
+  created: string;
+}
+
+export interface ProjectBacklogGroup {
+  status: string;
+  count: number;
+  issues: ProjectBacklogIssue[];
+}
+
+export interface ProjectBacklogResponse {
+  project: string;
+  totalBacklog: number;
+  totalPlanned: number;
+  availableAssignees: string[];
+  groups: ProjectBacklogGroup[];
+  lastUpdated: string;
+}
+
+export interface ProjectPlanResponse {
+  project: string;
+  items: ScheduledPlanItem[];
+  settings: ProjectSettings;
+  totalItems: number;
+  totalHours: number;
+}

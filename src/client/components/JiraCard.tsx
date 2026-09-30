@@ -12,15 +12,17 @@ import {
 } from 'lucide-react';
 import { JiraDemand } from '../types';
 
-interface JiraCardProps {
+export interface JiraCardProps {
   demand: JiraDemand;
   showDueDateBadge?: boolean;
+  actionButton?: React.ReactNode;
+  className?: string;
 }
 
 /**
  * Retorna as classes de estilo para o badge de status com base no texto
  */
-function getStatusBadgeStyle(displayStatus: string): string {
+export function getStatusBadgeStyle(displayStatus: string): string {
   const norm = (displayStatus || '').toLowerCase().trim();
 
   if (norm.includes('concluído') || norm.includes('resolvido') || norm.includes('em produção')) {
@@ -51,7 +53,12 @@ function getStatusBadgeStyle(displayStatus: string): string {
   return 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';
 }
 
-export const JiraCard: React.FC<JiraCardProps> = ({ demand, showDueDateBadge = false }) => {
+export const JiraCard: React.FC<JiraCardProps> = ({
+  demand,
+  showDueDateBadge = false,
+  actionButton,
+  className,
+}) => {
   const statusStyle = getStatusBadgeStyle(demand.displayStatus);
   const isBlocked = Boolean(demand.isBlocked);
 
@@ -104,30 +111,40 @@ export const JiraCard: React.FC<JiraCardProps> = ({ demand, showDueDateBadge = f
   }
 
   const containerClasses = isBlocked
-    ? 'group block relative p-3 rounded-xl bg-red-50/70 dark:bg-red-500/15 border border-red-300 dark:border-red-500/40 hover:bg-red-50 hover:border-red-400 dark:hover:bg-red-500/20 dark:hover:border-red-400/70 shadow-sm dark:shadow-lg dark:shadow-red-950/30 ring-1 ring-red-300/50 dark:ring-red-500/25 transition-all duration-200 text-left no-underline'
-    : 'group block relative p-3 rounded-xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800/90 hover:border-indigo-400 hover:bg-slate-50/80 dark:hover:border-indigo-500/60 dark:hover:bg-slate-800/80 shadow-sm dark:shadow-none hover:shadow-md dark:hover:shadow-indigo-950/20 transition-all duration-200 text-left no-underline';
+    ? `group block relative p-3 rounded-xl bg-red-50/70 dark:bg-red-500/15 border border-red-300 dark:border-red-500/40 hover:bg-red-50 hover:border-red-400 dark:hover:bg-red-500/20 dark:hover:border-red-400/70 shadow-sm dark:shadow-lg dark:shadow-red-950/30 ring-1 ring-red-300/50 dark:ring-red-500/25 transition-all duration-200 text-left no-underline ${className || ''}`
+    : `group block relative p-3 rounded-xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800/90 hover:border-indigo-400 hover:bg-slate-50/80 dark:hover:border-indigo-500/60 dark:hover:bg-slate-800/80 shadow-sm dark:shadow-none hover:shadow-md dark:hover:shadow-indigo-950/20 transition-all duration-200 text-left no-underline ${className || ''}`;
 
-  return (
-    <a
-      href={demand.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className={containerClasses}
-      title={isBlocked ? `[BLOQUEADO] ${demand.key}: ${demand.summary}` : `Abrir ${demand.key} no Jira`}
-    >
+  const innerContent = (
+    <>
       {/* Top row: Key + Link icon & Status Badge */}
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-1.5 min-w-0">
-          <span
-            className={`text-xs font-black tracking-wide flex items-center gap-1 ${
-              isBlocked
-                ? 'text-red-600 dark:text-red-300 group-hover:text-red-700 dark:group-hover:text-red-200 group-hover:underline'
-                : 'text-indigo-600 dark:text-indigo-400 group-hover:text-indigo-700 dark:group-hover:text-indigo-300 group-hover:underline'
-            }`}
-          >
-            {demand.key}
-            <ExternalLink className="w-3 h-3 opacity-60 group-hover:opacity-100 transition-opacity flex-shrink-0" />
-          </span>
+          {actionButton ? (
+            <a
+              href={demand.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`text-xs font-black tracking-wide flex items-center gap-1 ${
+                isBlocked
+                  ? 'text-red-600 dark:text-red-300 group-hover:text-red-700 dark:group-hover:text-red-200 hover:underline'
+                  : 'text-indigo-600 dark:text-indigo-400 group-hover:text-indigo-700 dark:group-hover:text-indigo-300 hover:underline'
+              }`}
+            >
+              {demand.key}
+              <ExternalLink className="w-3 h-3 opacity-60 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+            </a>
+          ) : (
+            <span
+              className={`text-xs font-black tracking-wide flex items-center gap-1 ${
+                isBlocked
+                  ? 'text-red-600 dark:text-red-300 group-hover:text-red-700 dark:group-hover:text-red-200 group-hover:underline'
+                  : 'text-indigo-600 dark:text-indigo-400 group-hover:text-indigo-700 dark:group-hover:text-indigo-300 group-hover:underline'
+              }`}
+            >
+              {demand.key}
+              <ExternalLink className="w-3 h-3 opacity-60 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+            </span>
+          )}
 
           {isBlocked && (
             <span
@@ -157,7 +174,18 @@ export const JiraCard: React.FC<JiraCardProps> = ({ demand, showDueDateBadge = f
             : 'text-slate-800 group-hover:text-slate-950 dark:text-slate-100 dark:group-hover:text-white'
         }`}
       >
-        {demand.summary}
+        {actionButton ? (
+          <a
+            href={demand.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:underline"
+          >
+            {demand.summary}
+          </a>
+        ) : (
+          demand.summary
+        )}
       </h4>
 
       {/* Capsules / Badges */}
@@ -234,6 +262,33 @@ export const JiraCard: React.FC<JiraCardProps> = ({ demand, showDueDateBadge = f
           </span>
         )}
       </div>
+
+      {/* Action button row (e.g. Incluir no Plano) */}
+      {actionButton && (
+        <div className="pt-2.5 mt-2.5 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-end">
+          {actionButton}
+        </div>
+      )}
+    </>
+  );
+
+  if (actionButton) {
+    return (
+      <div className={containerClasses}>
+        {innerContent}
+      </div>
+    );
+  }
+
+  return (
+    <a
+      href={demand.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={containerClasses}
+      title={isBlocked ? `[BLOQUEADO] ${demand.key}: ${demand.summary}` : `Abrir ${demand.key} no Jira`}
+    >
+      {innerContent}
     </a>
   );
 };

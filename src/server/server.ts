@@ -17,6 +17,7 @@ import { userRoutes } from './userRoutes';
 import { cardRouter } from './cardRoutes';
 import { healthRouter } from './healthRoutes';
 import { dashboardRoutes } from './dashboardRoutes';
+import { projectRoutes } from './projectRoutes';
 import { authenticateToken, requireAdmin, requireModule } from './auth';
 import { startScheduler, stopScheduler } from './scheduler';
 import { processWebhookPayload, migrateAdfEventsInDb, startJiraSyncScheduler, stopJiraSyncScheduler } from './jiraEvents';
@@ -59,7 +60,10 @@ app.use('/api/health', authenticateToken, requireModule('health'), healthRouter)
 // 6. Rotas do módulo de Dashboards Analíticos
 app.use('/api/dashboards', authenticateToken, requireModule('dashboards'), dashboardRoutes);
 
-// 7. Todas as demais rotas da API são protegidas por autenticação
+// 7. Rotas do módulo de Gestão de Projetos (Neogrid)
+app.use('/api/projects', authenticateToken, requireModule('projects'), projectRoutes);
+
+// 8. Todas as demais rotas da API são protegidas por autenticação
 app.use('/api', authenticateToken, router);
 
 // Serve static frontend files if built

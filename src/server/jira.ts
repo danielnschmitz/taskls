@@ -277,7 +277,7 @@ export function formatDisplayStatus(projectKey: string, rawStatus: string): stri
 /**
  * Helper para extrair valor de texto de campos customizados do Jira
  */
-function extractFieldValue(val: any): string | null {
+export function extractFieldValue(val: any): string | null {
   if (val === null || val === undefined) return null;
   if (typeof val === 'string') return val.trim() || null;
   if (typeof val === 'number') return String(val);
@@ -300,6 +300,96 @@ const DONE_STATUS_NAMES = new Set([
   'closed',
   'resolved',
 ]);
+
+/**
+ * Converte uma única issue do Jira no formato JiraDemand
+ */
+export function parseSingleJiraIssue(
+  issue: any,
+  host: string,
+  industryField: string = 'customfield_10780',
+  layoutField: string = 'customfield_10714',
+  flaggedField: string = 'customfield_10021'
+): JiraDemand {
+  const rawStatus = issue.fields?.status?.name || 'Desconhecido';
+  const projKey = issue.fields?.project?.key || '';
+  const projName = issue.fields?.project?.name || projKey;
+  const displayStatus = formatDisplayStatus(projKey, rawStatus);
+
+  let epicInfo: { key: string; summary?: string } | null = null;
+  if (issue.fields?.parent) {
+    epicInfo = {
+      key: issue.fields.parent.key,
+      summary: issue.fields.parent.fields?.summary || issue.fields.parent.key,
+    };
+  }
+
+  let assigneeInfo: { displayName: string; avatarUrl?: string } | null = null;
+  if (issue.fields?.assignee) {
+    assigneeInfo = {
+      displayName: issue.fields.assignee.displayName || issue.fields.assignee.name || 'Sem nome',
+      avatarUrl:
+        issue.fields.assignee.avatarUrls?.['32x32'] ||
+        issue.fields.assignee.avatarUrls?.['24x24'],
+    };
+  }
+
+  const industryVal = extractFieldValue(issue.fields?.[industryField]);
+  const layoutVal = extractFieldValue(issue.fields?.[layoutField]);
+
+  // Verificação se o card está bloqueado / com impedimento (Flagged[Checkboxes] = Impediment)
+  const flaggedVal =
+    issue.fields?.[flaggedField] ??
+    issue.fields?.customfield_10021 ??
+    issue.fields?.['Flagged[Checkboxes]'] ??
+    issue.fields?.flagged;
+
+  let isBlocked = false;
+  let blockedReason: string | null = null;
+
+  if (Array.isArray(flaggedVal)) {
+    for (const item of flaggedVal) {
+      const valStr = (typeof item === 'string' ? item : item?.value || '').trim();
+      if (valStr.toLowerCase().includes('impediment') || valStr.toLowerCase().includes('impedimento')) {
+        isBlocked = true;
+        blockedReason = valStr;
+        break;
+      }
+    }
+  } else if (typeof flaggedVal === 'string') {
+    const valStr = flaggedVal.trim();
+    if (valStr.toLowerCase().includes('impediment') || valStr.toLowerCase().includes('impedimento')) {
+      isBlocked = true;
+      blockedReason = valStr;
+    }
+  } else if (flaggedVal && typeof flaggedVal === 'object') {
+    const valStr = (flaggedVal.value || '').trim();
+    if (valStr.toLowerCase().includes('impediment') || valStr.toLowerCase().includes('impedimento')) {
+      isBlocked = true;
+      blockedReason = valStr;
+    }
+  }
+
+  return {
+    id: issue.id,
+    key: issue.key,
+    summary: issue.fields?.summary || 'Sem resumo',
+    duedate: issue.fields?.duedate || '',
+    project: {
+      key: projKey,
+      name: projName,
+    },
+    rawStatus,
+    displayStatus,
+    assignee: assigneeInfo,
+    epic: epicInfo,
+    industry: industryVal,
+    layout: layoutVal,
+    isBlocked,
+    blockedReason,
+    url: `https://${host}/browse/${issue.key}`,
+  };
+}
 
 /**
  * Converte issues do Jira no formato JiraDemand[]
@@ -328,87 +418,13 @@ function parseJiraIssues(
       continue;
     }
 
-    const projKey = issue.fields?.project?.key || '';
-    const projName = issue.fields?.project?.name || projKey;
-    const displayStatus = formatDisplayStatus(projKey, rawStatus);
+    const demand = parseSingleJiraIssue(issue, host, industryField, layoutField, flaggedField);
 
-    if (excludeDone && DONE_STATUS_NAMES.has(displayStatus.toLowerCase().trim())) {
+    if (excludeDone && DONE_STATUS_NAMES.has(demand.displayStatus.toLowerCase().trim())) {
       continue;
     }
 
-    let epicInfo: { key: string; summary?: string } | null = null;
-    if (issue.fields?.parent) {
-      epicInfo = {
-        key: issue.fields.parent.key,
-        summary: issue.fields.parent.fields?.summary || issue.fields.parent.key,
-      };
-    }
-
-    let assigneeInfo: { displayName: string; avatarUrl?: string } | null = null;
-    if (issue.fields?.assignee) {
-      assigneeInfo = {
-        displayName: issue.fields.assignee.displayName || issue.fields.assignee.name || 'Sem nome',
-        avatarUrl:
-          issue.fields.assignee.avatarUrls?.['32x32'] ||
-          issue.fields.assignee.avatarUrls?.['24x24'],
-      };
-    }
-
-    const industryVal = extractFieldValue(issue.fields?.[industryField]);
-    const layoutVal = extractFieldValue(issue.fields?.[layoutField]);
-
-    // Verificação se o card está bloqueado / com impedimento (Flagged[Checkboxes] = Impediment)
-    const flaggedVal =
-      issue.fields?.[flaggedField] ??
-      issue.fields?.customfield_10021 ??
-      issue.fields?.['Flagged[Checkboxes]'] ??
-      issue.fields?.flagged;
-
-    let isBlocked = false;
-    let blockedReason: string | null = null;
-
-    if (Array.isArray(flaggedVal)) {
-      for (const item of flaggedVal) {
-        const valStr = (typeof item === 'string' ? item : item?.value || '').trim();
-        if (valStr.toLowerCase().includes('impediment') || valStr.toLowerCase().includes('impedimento')) {
-          isBlocked = true;
-          blockedReason = valStr;
-          break;
-        }
-      }
-    } else if (typeof flaggedVal === 'string') {
-      const valStr = flaggedVal.trim();
-      if (valStr.toLowerCase().includes('impediment') || valStr.toLowerCase().includes('impedimento')) {
-        isBlocked = true;
-        blockedReason = valStr;
-      }
-    } else if (flaggedVal && typeof flaggedVal === 'object') {
-      const valStr = (flaggedVal.value || '').trim();
-      if (valStr.toLowerCase().includes('impediment') || valStr.toLowerCase().includes('impedimento')) {
-        isBlocked = true;
-        blockedReason = valStr;
-      }
-    }
-
-    demands.push({
-      id: issue.id,
-      key: issue.key,
-      summary: issue.fields?.summary || 'Sem resumo',
-      duedate: issue.fields?.duedate, // 'YYYY-MM-DD'
-      project: {
-        key: projKey,
-        name: projName,
-      },
-      rawStatus,
-      displayStatus,
-      assignee: assigneeInfo,
-      epic: epicInfo,
-      industry: industryVal,
-      layout: layoutVal,
-      isBlocked,
-      blockedReason,
-      url: `https://${host}/browse/${issue.key}`,
-    });
+    demands.push(demand);
   }
 
   return demands;

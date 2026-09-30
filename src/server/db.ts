@@ -2,6 +2,7 @@ import { Pool } from 'pg';
 import dotenv from 'dotenv';
 import path from 'path';
 import crypto from 'crypto';
+import { DEFAULT_PROJECT_SETTINGS } from './projectScheduling';
 
 // Load .env from project root
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
@@ -235,7 +236,42 @@ export async function initDatabase(): Promise<void> {
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
       CREATE INDEX IF NOT EXISTS idx_health_measures_user_type_date ON health_body_measures(user_id, measure_type, logged_at DESC);
+
+      -- Módulo de Gestão de Projetos: Itens do Plano de Projeto (Neogrid)
+      CREATE TABLE IF NOT EXISTS project_plan_items (
+        id VARCHAR(36) PRIMARY KEY,
+        project_key VARCHAR(20) NOT NULL DEFAULT 'NEO',
+        issue_key VARCHAR(50) NOT NULL,
+        summary TEXT NOT NULL,
+        status VARCHAR(50),
+        assignee_name VARCHAR(100) NOT NULL,
+        estimate_hours NUMERIC(6,2) NOT NULL,
+        sort_order INTEGER NOT NULL,
+        start_date DATE NOT NULL,
+        end_date DATE NOT NULL,
+        metadata JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(project_key, issue_key)
+      );
+      CREATE INDEX IF NOT EXISTS idx_plan_items_order ON project_plan_items(project_key, sort_order ASC);
+      CREATE INDEX IF NOT EXISTS idx_plan_items_issue_key ON project_plan_items(issue_key);
+
+      -- Atualizar módulos permitidos para incluir 'projects'
+      ALTER TABLE users ALTER COLUMN allowed_modules SET DEFAULT ARRAY['tasks', 'cards', 'health', 'dashboards', 'projects']::TEXT[];
+      UPDATE users SET allowed_modules = array_append(allowed_modules, 'projects')
+      WHERE allowed_modules IS NOT NULL AND NOT ('projects' = ANY(allowed_modules));
     `);
+
+    // Seed de Configurações Iniciais de Gestão de Projetos
+    const projSettingsCheck = await client.query(`SELECT value FROM app_settings WHERE key = 'project_management_settings'`);
+    if (projSettingsCheck.rows.length === 0) {
+      await client.query(
+        `INSERT INTO app_settings (key, value) VALUES ('project_management_settings', $1) ON CONFLICT (key) DO NOTHING`,
+        [JSON.stringify(DEFAULT_PROJECT_SETTINGS)]
+      );
+      console.log('[DB] Configurações padrão de Gestão de Projetos e feriados carregadas.');
+    }
 
     // Seed de Usuário Administrador Inicial (se não houver nenhum)
     const userCountRes = await client.query('SELECT COUNT(*) FROM users');
