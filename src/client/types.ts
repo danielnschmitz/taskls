@@ -109,6 +109,7 @@ export interface JiraDemand {
   } | null;
   industry: string | null;
   layout: string | null;
+  canal?: string | null;
   isBlocked?: boolean;
   blockedReason?: string | null;
   url: string;

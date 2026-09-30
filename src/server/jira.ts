@@ -77,6 +77,7 @@ export interface JiraDemand {
   } | null;
   industry: string | null;
   layout: string | null;
+  canal?: string | null;
   isBlocked?: boolean;
   blockedReason?: string | null;
   url: string;
@@ -309,7 +310,8 @@ export function parseSingleJiraIssue(
   host: string,
   industryField: string = 'customfield_10780',
   layoutField: string = 'customfield_10714',
-  flaggedField: string = 'customfield_10021'
+  flaggedField: string = 'customfield_10021',
+  canalField: string = 'customfield_10273'
 ): JiraDemand {
   const rawStatus = issue.fields?.status?.name || 'Desconhecido';
   const projKey = issue.fields?.project?.key || '';
@@ -336,6 +338,11 @@ export function parseSingleJiraIssue(
 
   const industryVal = extractFieldValue(issue.fields?.[industryField]);
   const layoutVal = extractFieldValue(issue.fields?.[layoutField]);
+  const canalVal =
+    extractFieldValue(issue.fields?.[canalField]) ||
+    extractFieldValue(issue.fields?.customfield_10273) ||
+    extractFieldValue(issue.fields?.['Canal de distribuição']) ||
+    extractFieldValue(issue.fields?.['Canal']);
 
   // Verificação se o card está bloqueado / com impedimento (Flagged[Checkboxes] = Impediment)
   const flaggedVal =
@@ -385,6 +392,7 @@ export function parseSingleJiraIssue(
     epic: epicInfo,
     industry: industryVal,
     layout: layoutVal,
+    canal: canalVal,
     isBlocked,
     blockedReason,
     url: `https://${host}/browse/${issue.key}`,

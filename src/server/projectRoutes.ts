@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { pool } from './db';
-import { getJiraConfig, getAuthHeader, parseSingleJiraIssue } from './jira';
+import { getJiraConfig, getAuthHeader, parseSingleJiraIssue, extractFieldValue } from './jira';
 import {
   ProjectSettings,
   DEFAULT_PROJECT_SETTINGS,
@@ -178,6 +178,7 @@ projectRoutes.get('/neo/backlog', async (req: Request, res: Response): Promise<v
     const industryField = config.custom_fields?.industry || 'customfield_10780';
     const layoutField = config.custom_fields?.layout || 'customfield_10714';
     const flaggedField = (config as any).custom_fields?.flagged || 'customfield_10021';
+    const canalField = 'customfield_10273';
 
     // Busca paginada no Jira: apenas tipos "Ativação" e "Tarefa" (não considera Épicos)
     const jql = 'project = "NEO" AND issuetype in ("Ativação", "Tarefa") ORDER BY status ASC, created DESC';
@@ -195,6 +196,7 @@ projectRoutes.get('/neo/backlog', async (req: Request, res: Response): Promise<v
       flaggedField,
       industryField,
       layoutField,
+      canalField,
     ];
     const allIssues: any[] = [];
     let nextPageToken: string | undefined = undefined;
@@ -274,7 +276,7 @@ projectRoutes.get('/neo/backlog', async (req: Request, res: Response): Promise<v
         assigneesSet.add(assigneeName);
       }
 
-      const demand = parseSingleJiraIssue(issue, host, industryField, layoutField, flaggedField);
+      const demand = parseSingleJiraIssue(issue, host, industryField, layoutField, flaggedField, canalField);
 
       backlogItems.push({
         ...demand,
@@ -327,19 +329,74 @@ projectRoutes.get('/neo/plan', async (req: Request, res: Response): Promise<void
       `SELECT * FROM project_plan_items WHERE project_key = 'NEO' ORDER BY sort_order ASC`
     );
 
-    const rawItems: PlanItemInput[] = resPlan.rows.map((r) => ({
-      id: r.id,
-      issue_key: r.issue_key,
-      summary: r.summary,
-      status: r.status,
-      assignee_name: r.assignee_name,
-      estimate_hours: Number(r.estimate_hours),
-      sort_order: r.sort_order,
-      metadata: {
-        ...(r.metadata || {}),
-        url: `https://${host}/browse/${r.issue_key}`,
-      },
-    }));
+    // Se algum item não tiver canal no metadata, buscar do Jira e atualizar
+    const missingCanalKeys = resPlan.rows
+      .filter((r) => !r.metadata?.canal)
+      .map((r) => r.issue_key);
+
+    const canalMap = new Map<string, { canal: string | null; industry: string | null }>();
+
+    if (missingCanalKeys.length > 0 && config.api_token && config.domain && config.email) {
+      try {
+        const jql = `key in (${missingCanalKeys.map((k) => `"${k}"`).join(',')})`;
+        const searchRes = await fetch(`https://${host}/rest/api/3/search/jql`, {
+          method: 'POST',
+          headers: {
+            Authorization: getAuthHeader(config),
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({
+            jql,
+            fields: ['key', 'customfield_10780', 'customfield_10273'],
+            maxResults: 100,
+          }),
+        });
+        if (searchRes.ok) {
+          const data: any = await searchRes.json();
+          for (const iss of data.issues || []) {
+            const ind = extractFieldValue(iss.fields?.customfield_10780);
+            const can = extractFieldValue(iss.fields?.customfield_10273);
+            canalMap.set(iss.key, { canal: can, industry: ind });
+          }
+        }
+      } catch (err) {
+        console.warn('[Projects API] Falha ao enriquecer canal/indústria:', err);
+      }
+    }
+
+    const rawItems: PlanItemInput[] = resPlan.rows.map((r) => {
+      const enriched = canalMap.get(r.issue_key);
+      const meta = { ...(r.metadata || {}) };
+      if (enriched) {
+        if (!meta.canal && enriched.canal) meta.canal = enriched.canal;
+        if (!meta.industry && enriched.industry) meta.industry = enriched.industry;
+      }
+      return {
+        id: r.id,
+        issue_key: r.issue_key,
+        summary: r.summary,
+        status: r.status,
+        assignee_name: r.assignee_name,
+        estimate_hours: Number(r.estimate_hours),
+        sort_order: r.sort_order,
+        metadata: {
+          ...meta,
+          url: `https://${host}/browse/${r.issue_key}`,
+        },
+      };
+    });
+
+    if (canalMap.size > 0) {
+      for (const item of rawItems) {
+        if (canalMap.has(item.issue_key)) {
+          pool.query(
+            `UPDATE project_plan_items SET metadata = $1 WHERE id = $2`,
+            [JSON.stringify(item.metadata), item.id]
+          ).catch(() => {});
+        }
+      }
+    }
 
     // Recalcular para garantir consistência perfeita com as configurações atuais
     const scheduled = calculatePlanSchedule(rawItems, settings);

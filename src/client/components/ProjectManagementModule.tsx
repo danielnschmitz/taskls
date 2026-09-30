@@ -35,6 +35,7 @@ import {
   Eye,
   EyeOff,
   Pencil,
+  Radio,
 } from 'lucide-react';
 import {
   format,
@@ -305,6 +306,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
         epic: addingIssue.epic,
         industry: addingIssue.industry,
         layout: addingIssue.layout,
+        canal: addingIssue.canal || null,
         isBlocked: addingIssue.isBlocked,
         blockedReason: addingIssue.blockedReason,
         rawStatus: addingIssue.rawStatus,
@@ -777,6 +779,8 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
           Ordem: idx + 1,
           'Chave Jira': item.issue_key,
           'Resumo da Demanda': item.summary,
+          'Indústria': item.metadata?.industry || '-',
+          'Canal de Distribuição': item.metadata?.canal || '-',
           Status: item.status || 'Planejado',
         };
         if (!isClientView) {
@@ -785,7 +789,6 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
         }
         row['Data Início'] = item.start_date;
         row['Data Fim'] = item.end_date;
-        row['Dias Úteis'] = item.working_days;
         row['Link Jira'] = item.metadata?.url || `https://sysmiddle.atlassian.net/browse/${item.issue_key}`;
         return row;
       });
@@ -797,23 +800,25 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
         ? [
             { wch: 8 },  // Ordem
             { wch: 14 }, // Chave
-            { wch: 65 }, // Resumo
+            { wch: 60 }, // Resumo
+            { wch: 22 }, // Indústria
+            { wch: 24 }, // Canal de Distribuição
             { wch: 18 }, // Status
             { wch: 14 }, // Data Início
             { wch: 14 }, // Data Fim
-            { wch: 12 }, // Dias Úteis
             { wch: 45 }, // Link Jira
           ]
         : [
             { wch: 8 },  // Ordem
             { wch: 14 }, // Chave
             { wch: 45 }, // Resumo
+            { wch: 22 }, // Indústria
+            { wch: 24 }, // Canal de Distribuição
             { wch: 18 }, // Status
             { wch: 22 }, // Responsável
             { wch: 16 }, // Estimativa
             { wch: 14 }, // Data Início
             { wch: 14 }, // Data Fim
-            { wch: 12 }, // Dias Úteis
             { wch: 45 }, // Link Jira
           ];
 
@@ -1459,7 +1464,16 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                                   <span className="truncate">{item.metadata.layout}</span>
                                 </span>
                               )}
-                              {!item.metadata?.epic && !item.metadata?.industry && !item.metadata?.layout && (
+                              {item.metadata?.canal && (
+                                <span
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-500/30 text-[9px] font-medium truncate max-w-[110px]"
+                                  title={`Canal: ${item.metadata.canal}`}
+                                >
+                                  <Radio className="w-2.5 h-2.5 flex-shrink-0 text-sky-500" />
+                                  <span className="truncate">{item.metadata.canal}</span>
+                                </span>
+                              )}
+                              {!item.metadata?.epic && !item.metadata?.industry && !item.metadata?.layout && !item.metadata?.canal && (
                                 <span className="text-slate-400 text-[10px]">-</span>
                               )}
                             </div>
