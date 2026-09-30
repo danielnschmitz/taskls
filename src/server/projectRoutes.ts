@@ -98,11 +98,17 @@ projectRoutes.put('/settings', async (req: Request, res: Response): Promise<void
       const recalculated = calculatePlanSchedule(existingItems, merged);
 
       for (const item of recalculated) {
+        const oldRow = planRes.rows.find((r) => r.id === item.id || r.issue_key === item.issue_key);
+        const meta = { ...(item.metadata || {}) };
+        if (oldRow && (oldRow.start_date !== item.start_date || oldRow.end_date !== item.end_date)) {
+          meta.previous_start_date = oldRow.start_date;
+          meta.previous_end_date = oldRow.end_date;
+        }
         await pool.query(
           `UPDATE project_plan_items
-           SET start_date = $1, end_date = $2, updated_at = NOW()
-           WHERE id = $3`,
-          [item.start_date, item.end_date, item.id]
+           SET start_date = $1, end_date = $2, metadata = $3, updated_at = NOW()
+           WHERE id = $4`,
+          [item.start_date, item.end_date, JSON.stringify(meta), item.id]
         );
       }
     }

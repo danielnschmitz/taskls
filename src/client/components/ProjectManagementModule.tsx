@@ -115,6 +115,16 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
   const [localItems, setLocalItems] = useState<ScheduledPlanItem[]>([]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
+  // Map of stored server items for fast baseline comparison
+  const serverItemMap = useMemo(() => {
+    const map = new Map<string, ScheduledPlanItem>();
+    for (const it of serverItems) {
+      if (it.id) map.set(it.id, it);
+      if (it.issue_key) map.set(it.issue_key, it);
+    }
+    return map;
+  }, [serverItems]);
+
   // Backlog state
   const [backlogData, setBacklogData] = useState<ProjectBacklogResponse | null>(null);
   const [openAccordions, setOpenAccordions] = useState<Record<string, boolean>>({});
@@ -373,10 +383,34 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
   const handleSavePlan = async () => {
     try {
       setIsSavingPlan(true);
+
+      const itemsToSave = localItems.map((item) => {
+        const baseItem = serverItemMap.get(item.issue_key) || (item.id ? serverItemMap.get(item.id) : undefined);
+        const meta = { ...(item.metadata || {}) };
+        if (baseItem) {
+          if (baseItem.start_date !== item.start_date) {
+            meta.previous_start_date = baseItem.start_date;
+          }
+          if (baseItem.end_date !== item.end_date) {
+            meta.previous_end_date = baseItem.end_date;
+          }
+        }
+        if (meta.previous_start_date === item.start_date) {
+          delete meta.previous_start_date;
+        }
+        if (meta.previous_end_date === item.end_date) {
+          delete meta.previous_end_date;
+        }
+        return {
+          ...item,
+          metadata: meta,
+        };
+      });
+
       const res = await fetch('/api/projects/neo/plan', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: localItems }),
+        body: JSON.stringify({ items: itemsToSave }),
       });
 
       if (!res.ok) {
@@ -470,6 +504,59 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       };
     });
   }, [localItems, isClientView, holidaySet, settings]);
+
+  // Itens salvos transformados para o modo de exibição atual (para comparação de datas de início e fim)
+  const serverDisplayItems = useMemo(() => {
+    if (!isClientView) {
+      return serverItems;
+    }
+
+    const markupPercent = Number(settings.client_hours_markup_percent) || 0;
+    const bufferDays =
+      settings.client_delivery_buffer_days !== undefined
+        ? Math.max(0, Number(settings.client_delivery_buffer_days) || 0)
+        : 1;
+
+    const clientInputs: PlanItemInput[] = serverItems.map((item) => {
+      const adjustedHours =
+        markupPercent > 0
+          ? Math.round(item.estimate_hours * (1 + markupPercent / 100) * 10) / 10
+          : item.estimate_hours;
+
+      return {
+        ...item,
+        estimate_hours: adjustedHours,
+      };
+    });
+
+    const recalculated = calculatePlanSchedule(clientInputs, settings);
+
+    if (bufferDays <= 0) {
+      return recalculated;
+    }
+
+    return recalculated.map((item) => {
+      const origEndDate = parseISO(item.end_date);
+      const adjustedEndDate = addWorkingDays(origEndDate, bufferDays, holidaySet);
+      const adjustedEndStr = format(adjustedEndDate, 'yyyy-MM-dd');
+      const adjustedWorkingDays = countWorkingDays(item.start_date, adjustedEndStr, holidaySet);
+
+      return {
+        ...item,
+        end_date: adjustedEndStr,
+        working_days: adjustedWorkingDays,
+      };
+    });
+  }, [serverItems, isClientView, holidaySet, settings]);
+
+  const serverDisplayItemMap = useMemo(() => {
+    const map = new Map<string, ScheduledPlanItem>();
+    for (const it of serverDisplayItems) {
+      if (it.id) map.set(it.id, it);
+      if (it.issue_key) map.set(it.issue_key, it);
+    }
+    return map;
+  }, [serverDisplayItems]);
 
   // Metrics computation for Gantt & Header
   const totalPlannedHours = useMemo(() => {
@@ -1265,6 +1352,39 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                       const displayStatus = item.metadata?.displayStatus || item.status || 'Planejado';
                       const statusStyle = getStatusBadgeStyle(displayStatus);
 
+                      const baseItem = serverDisplayItemMap.get(item.issue_key) || (item.id ? serverDisplayItemMap.get(item.id) : undefined);
+
+                      let oldStartDate: string | null = null;
+                      if (baseItem && baseItem.start_date !== item.start_date) {
+                        oldStartDate = baseItem.start_date;
+                      } else if (!hasUnsavedChanges && item.metadata?.previous_start_date && item.metadata.previous_start_date !== item.start_date) {
+                        oldStartDate = item.metadata.previous_start_date;
+                      }
+
+                      let oldEndDate: string | null = null;
+                      if (baseItem && baseItem.end_date !== item.end_date) {
+                        oldEndDate = baseItem.end_date;
+                      } else if (!hasUnsavedChanges && item.metadata?.previous_end_date) {
+                        let histEnd = item.metadata.previous_end_date;
+                        if (isClientView) {
+                          const bufferDays =
+                            settings.client_delivery_buffer_days !== undefined
+                              ? Math.max(0, Number(settings.client_delivery_buffer_days) || 0)
+                              : 1;
+                          if (bufferDays > 0) {
+                            try {
+                              const adjusted = addWorkingDays(parseISO(histEnd), bufferDays, holidaySet);
+                              histEnd = format(adjusted, 'yyyy-MM-dd');
+                            } catch {
+                              // fallback
+                            }
+                          }
+                        }
+                        if (histEnd !== item.end_date) {
+                          oldEndDate = histEnd;
+                        }
+                      }
+
                       return (
                         <tr
                           key={item.id}
@@ -1371,11 +1491,49 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                               </button>
                             </td>
                           )}
-                          <td className="py-3 px-3 text-slate-600 dark:text-slate-400">
-                            {format(parseISO(item.start_date), 'dd/MM/yyyy')}
+                          <td className="py-3 px-3">
+                            <div className="flex flex-col">
+                              {oldStartDate && (
+                                <span
+                                  className="text-[10px] font-medium text-slate-400 dark:text-slate-500 line-through decoration-dashed"
+                                  style={{ textDecoration: 'line-through dashed' }}
+                                  title={`Data de início anterior: ${format(parseISO(oldStartDate), 'dd/MM/yyyy')}`}
+                                >
+                                  {format(parseISO(oldStartDate), 'dd/MM/yyyy')}
+                                </span>
+                              )}
+                              <span
+                                className={`text-xs ${
+                                  oldStartDate
+                                    ? 'font-bold text-slate-800 dark:text-slate-100'
+                                    : 'text-slate-600 dark:text-slate-400'
+                                }`}
+                              >
+                                {format(parseISO(item.start_date), 'dd/MM/yyyy')}
+                              </span>
+                            </div>
                           </td>
-                          <td className="py-3 px-3 text-slate-600 dark:text-slate-400">
-                            {format(parseISO(item.end_date), 'dd/MM/yyyy')}
+                          <td className="py-3 px-3">
+                            <div className="flex flex-col">
+                              {oldEndDate && (
+                                <span
+                                  className="text-[10px] font-medium text-slate-400 dark:text-slate-500 line-through decoration-dashed"
+                                  style={{ textDecoration: 'line-through dashed' }}
+                                  title={`Data de término anterior: ${format(parseISO(oldEndDate), 'dd/MM/yyyy')}`}
+                                >
+                                  {format(parseISO(oldEndDate), 'dd/MM/yyyy')}
+                                </span>
+                              )}
+                              <span
+                                className={`text-xs ${
+                                  oldEndDate
+                                    ? 'font-bold text-slate-800 dark:text-slate-100'
+                                    : 'text-slate-600 dark:text-slate-400'
+                                }`}
+                              >
+                                {format(parseISO(item.end_date), 'dd/MM/yyyy')}
+                              </span>
+                            </div>
                           </td>
                           <td className="py-3 px-3">
                             {item.metadata?.duedate ? (
