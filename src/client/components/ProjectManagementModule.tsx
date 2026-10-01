@@ -41,6 +41,7 @@ import {
   Globe,
   Briefcase,
   GripVertical,
+  Play,
 } from 'lucide-react';
 import {
   format,
@@ -93,6 +94,94 @@ const ASSIGNEE_COLORS = [
   { bg: 'bg-blue-500', text: 'text-blue-700 dark:text-blue-300', border: 'border-blue-400', lightBg: 'bg-blue-50 dark:bg-blue-950/40', bar: '#3b82f6' },
   { bg: 'bg-teal-500', text: 'text-teal-700 dark:text-teal-300', border: 'border-teal-400', lightBg: 'bg-teal-50 dark:bg-teal-950/40', bar: '#14b8a6' },
 ];
+
+export type ExecutionStatus = 'not_started' | 'started' | 'completed';
+
+export interface TaskExecutionState {
+  status: ExecutionStatus;
+  label: string;
+  isDelayedStart: boolean;
+  delayDays: number;
+}
+
+/**
+ * Determina o estado de execução da tarefa e verifica se está atrasada por não ter sido iniciada
+ */
+export function getTaskExecutionState(item: ScheduledPlanItem): TaskExecutionState {
+  const meta = item.metadata || {};
+  let status: ExecutionStatus = 'not_started';
+
+  if (meta.execution_status === 'completed') {
+    status = 'completed';
+  } else if (meta.execution_status === 'started') {
+    status = 'started';
+  } else if (meta.execution_status === 'not_started') {
+    status = 'not_started';
+  } else {
+    // Inferência inteligente pelo texto do status atual
+    const st = (item.status || meta.displayStatus || meta.rawStatus || '').toLowerCase().trim();
+    if (
+      st.includes('concluíd') ||
+      st.includes('concluid') ||
+      st.includes('finalizad') ||
+      st.includes('resolvid') ||
+      st.includes('em produç') ||
+      st.includes('em produc') ||
+      st === 'done'
+    ) {
+      status = 'completed';
+    } else if (
+      st.includes('iniciad') ||
+      st.includes('em andamento') ||
+      st.includes('em desenvolvimento') ||
+      st.includes('desenvolvimento') ||
+      st.includes('execução') ||
+      st.includes('execucao') ||
+      st === 'in progress'
+    ) {
+      status = 'started';
+    } else {
+      status = 'not_started';
+    }
+  }
+
+  // Regra de Atraso por Não Ter Sido Iniciada:
+  // Se ainda NÃO foi iniciada (status 'not_started') E a data planejada de início é anterior a hoje
+  let isDelayedStart = false;
+  let delayDays = 0;
+
+  if (status === 'not_started' && item.start_date) {
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    if (item.start_date < todayStr) {
+      isDelayedStart = true;
+      try {
+        const startD = parseISO(item.start_date.substring(0, 10));
+        const todayD = parseISO(todayStr);
+        delayDays = Math.max(1, differenceInCalendarDays(todayD, startD));
+      } catch {
+        delayDays = 1;
+      }
+    }
+  }
+
+  let label = 'Não Iniciada';
+  if (status === 'completed') {
+    label = 'Concluída';
+  } else if (status === 'started') {
+    label = 'Iniciada';
+  } else if (isDelayedStart) {
+    label = 'Atrasada: não iniciada';
+  } else {
+    label = item.metadata?.displayStatus || item.status || 'Não Iniciada';
+  }
+
+  return {
+    status,
+    label,
+    isDelayedStart,
+    delayDays,
+  };
+}
 
 export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = ({
   onShowToast,
@@ -190,6 +279,23 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
   const [editStatus, setEditStatus] = useState<string>('Planejado');
   const [editIndustry, setEditIndustry] = useState<string>('');
   const [editCanal, setEditCanal] = useState<string>('');
+  const [editExecutionStatus, setEditExecutionStatus] = useState<ExecutionStatus>('not_started');
+
+  // Dropdown menu de status na linha da tabela
+  const [openStatusMenuId, setOpenStatusMenuId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (openStatusMenuId) {
+        const target = e.target as HTMLElement;
+        if (!target.closest('[data-status-menu-container]')) {
+          setOpenStatusMenuId(null);
+        }
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [openStatusMenuId]);
 
   // Modo de visualização alternativo
   const [isClientView, setIsClientView] = useState(false);
@@ -706,6 +812,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
     setEditStatus(baseItem.status || 'Planejado');
     setEditIndustry(baseItem.metadata?.industry || '');
     setEditCanal(baseItem.metadata?.canal || '');
+    setEditExecutionStatus(getTaskExecutionState(baseItem).status);
   };
 
   // Confirm edit of plan item
@@ -732,18 +839,38 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
     const updatedList = localItems.map((item) => {
       if (item.id === editingItem.id || item.issue_key === editingItem.issue_key) {
         const newMeta = { ...(item.metadata || {}) };
+        newMeta.execution_status = editExecutionStatus;
+
+        let updatedStatus = item.status;
+        if (editExecutionStatus === 'completed') {
+          updatedStatus = 'Concluída';
+          newMeta.displayStatus = 'Concluída';
+          if (!newMeta.completed_at) newMeta.completed_at = new Date().toISOString();
+        } else if (editExecutionStatus === 'started') {
+          updatedStatus = 'Iniciada';
+          newMeta.displayStatus = 'Iniciada';
+          if (!newMeta.started_at) newMeta.started_at = new Date().toISOString();
+        } else {
+          updatedStatus = isManual ? (editStatus.trim() || 'Planejado') : (newMeta.rawStatus || 'Planejado');
+          newMeta.displayStatus = updatedStatus;
+          delete newMeta.completed_at;
+          delete newMeta.started_at;
+        }
+
         if (isManual) {
           if (editIndustry.trim()) newMeta.industry = editIndustry.trim();
           else delete newMeta.industry;
           if (editCanal.trim()) newMeta.canal = editCanal.trim();
           else delete newMeta.canal;
-          newMeta.displayStatus = editStatus.trim() || 'Planejado';
-          newMeta.rawStatus = editStatus.trim() || 'Planejado';
+          if (editExecutionStatus === 'not_started') {
+            newMeta.displayStatus = editStatus.trim() || 'Planejado';
+            newMeta.rawStatus = editStatus.trim() || 'Planejado';
+          }
         }
         return {
           ...item,
           summary: isManual ? editSummary.trim() : item.summary,
-          status: isManual ? (editStatus.trim() || 'Planejado') : item.status,
+          status: updatedStatus,
           estimate_hours: Number(editEstimateHours),
           assignee_name: editAssignee.trim(),
           metadata: newMeta,
@@ -755,6 +882,54 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
     applySchedule(updatedList);
     setEditingItem(null);
     onShowToast(`Demanda ${editingItem.issue_key} atualizada e cronograma recalculado!`, 'success');
+  };
+
+  // Alterna diretamente o status de execução de uma tarefa (Não Iniciada / Iniciada / Concluída)
+  const handleUpdateTaskExecutionStatus = (
+    itemToUpdate: ScheduledPlanItem,
+    newExecutionStatus: ExecutionStatus
+  ) => {
+    setOpenStatusMenuId(null);
+    const updatedList = localItems.map((item) => {
+      if (item.id === itemToUpdate.id || item.issue_key === itemToUpdate.issue_key) {
+        const meta = { ...(item.metadata || {}) };
+        meta.execution_status = newExecutionStatus;
+
+        let newStatus = item.status;
+        if (newExecutionStatus === 'completed') {
+          newStatus = 'Concluída';
+          meta.completed_at = new Date().toISOString();
+          meta.displayStatus = 'Concluída';
+        } else if (newExecutionStatus === 'started') {
+          newStatus = 'Iniciada';
+          meta.started_at = new Date().toISOString();
+          meta.displayStatus = 'Iniciada';
+        } else {
+          newStatus = meta.rawStatus || 'Planejado';
+          meta.displayStatus = meta.rawStatus || 'Planejado';
+          delete meta.completed_at;
+          delete meta.started_at;
+        }
+
+        return {
+          ...item,
+          status: newStatus,
+          metadata: meta,
+        };
+      }
+      return item;
+    });
+
+    setLocalItems(updatedList);
+    setHasUnsavedChanges(true);
+
+    const statusLabel =
+      newExecutionStatus === 'completed'
+        ? 'Concluída'
+        : newExecutionStatus === 'started'
+        ? 'Iniciada'
+        : 'Não Iniciada';
+    onShowToast(`Demanda ${itemToUpdate.issue_key} marcada como "${statusLabel}". Clique em "Salvar Alterações" para gravar.`, 'info');
   };
 
   // Object for JiraCard representation in editing modal
@@ -977,6 +1152,21 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
     }
     return maxDateStr;
   }, [displayPlanItems]);
+
+  // Estatísticas de execução do plano (Não iniciadas, Iniciadas, Concluídas, Atrasadas por não início)
+  const executionStats = useMemo(() => {
+    let started = 0;
+    let completed = 0;
+    let delayedNotStarted = 0;
+    for (const it of localItems) {
+      const st = getTaskExecutionState(it);
+      if (st.status === 'completed') completed++;
+      else if (st.status === 'started') started++;
+      if (st.isDelayedStart) delayedNotStarted++;
+    }
+    const notStarted = Math.max(0, localItems.length - started - completed);
+    return { started, completed, notStarted, delayedNotStarted };
+  }, [localItems]);
 
   // Gantt Timeline Dates Calculation (Exclui sábados e domingos)
   const ganttTimelineDays = useMemo(() => {
@@ -1782,6 +1972,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                   <div className="space-y-2">
                     {displayPlanItems.map((item, idx) => {
                       const color = assigneeColorMap.get(item.assignee_name.trim()) || ASSIGNEE_COLORS[0];
+                      const execState = getTaskExecutionState(item);
                       const startDate = parseISO(item.start_date);
                       const endDate = parseISO(item.end_date);
 
@@ -1830,7 +2021,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                           {/* Row Label (Left) */}
                           <div className="w-64 flex-shrink-0 pr-3 pl-2 flex items-center justify-between min-w-0">
                             <div className="min-w-0">
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="text-[10px] font-mono font-bold text-slate-400">
                                   #{idx + 1}
                                 </span>
@@ -1847,6 +2038,33 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                                   >
                                     {item.issue_key}
                                   </a>
+                                )}
+                                {execState.isDelayedStart && (
+                                  <span
+                                    className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded bg-rose-100 dark:bg-rose-950/70 text-rose-700 dark:text-rose-300 text-[9px] font-bold border border-rose-300 dark:border-rose-800"
+                                    title={`Atrasada: deveria ter iniciado em ${format(startDate, 'dd/MM/yyyy')} (${execState.delayDays}d de atraso por não início)`}
+                                  >
+                                    <AlertTriangle className="w-2.5 h-2.5 text-rose-500 animate-pulse" />
+                                    <span>Atrasada</span>
+                                  </span>
+                                )}
+                                {execState.status === 'started' && (
+                                  <span
+                                    className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded bg-blue-100 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 text-[9px] font-bold border border-blue-300 dark:border-blue-800"
+                                    title="Tarefa iniciada"
+                                  >
+                                    <Play className="w-2 h-2 text-blue-500 fill-current" />
+                                    <span>Iniciada</span>
+                                  </span>
+                                )}
+                                {execState.status === 'completed' && (
+                                  <span
+                                    className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 text-[9px] font-bold border border-emerald-300 dark:border-emerald-800"
+                                    title="Tarefa concluída"
+                                  >
+                                    <Check className="w-2.5 h-2.5 text-emerald-500" />
+                                    <span>Concluída</span>
+                                  </span>
                                 )}
                                 {!isClientView && (
                                   <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
@@ -1890,13 +2108,24 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                                 left: `${leftPercent}%`,
                                 width: `${Math.max(widthPercent, 1.5)}%`,
                               }}
-                              className={`absolute top-1 bottom-1 rounded-md shadow-sm transition-all flex items-center px-2 min-w-[28px] overflow-hidden ${color.bg} text-white group-hover:brightness-110 cursor-pointer`}
+                              className={`absolute top-1 bottom-1 rounded-md shadow-sm transition-all flex items-center px-2 min-w-[28px] overflow-hidden ${color.bg} text-white group-hover:brightness-110 cursor-pointer ${
+                                execState.isDelayedStart ? 'ring-2 ring-rose-500 ring-offset-1 dark:ring-offset-slate-900' : ''
+                              } ${execState.status === 'completed' ? 'opacity-90' : ''}`}
                               title={
                                 isClientView
-                                  ? `${item.issue_key}: ${item.summary}\nInício: ${format(startDate, 'dd/MM/yyyy')}\nEntrega: ${format(endDate, 'dd/MM/yyyy')}\nDias Úteis: ${item.working_days}`
-                                  : `${item.issue_key}: ${item.summary}\nResponsável: ${item.assignee_name}\nEstimativa: ${item.estimate_hours}h\nInício: ${format(startDate, 'dd/MM/yyyy')}\nFim: ${format(endDate, 'dd/MM/yyyy')}\nDias Úteis: ${item.working_days}\n(Clique para editar)`
+                                  ? `${item.issue_key}: ${item.summary}\nStatus: ${execState.label}\nInício: ${format(startDate, 'dd/MM/yyyy')}\nEntrega: ${format(endDate, 'dd/MM/yyyy')}\nDias Úteis: ${item.working_days}`
+                                  : `${item.issue_key}: ${item.summary}\nStatus: ${execState.label}${execState.isDelayedStart ? ` (Atraso: ${execState.delayDays} dias)` : ''}\nResponsável: ${item.assignee_name}\nEstimativa: ${item.estimate_hours}h\nInício: ${format(startDate, 'dd/MM/yyyy')}\nFim: ${format(endDate, 'dd/MM/yyyy')}\nDias Úteis: ${item.working_days}\n(Clique para editar)`
                               }
                             >
+                              {execState.isDelayedStart && (
+                                <AlertTriangle className="w-3 h-3 text-amber-200 mr-1 flex-shrink-0 animate-pulse" />
+                              )}
+                              {execState.status === 'started' && (
+                                <Play className="w-2.5 h-2.5 text-white/95 fill-current mr-1 flex-shrink-0" />
+                              )}
+                              {execState.status === 'completed' && (
+                                <Check className="w-3 h-3 text-white mr-1 flex-shrink-0" />
+                              )}
                               <span className="text-[10px] font-bold truncate">
                                 {isClientView
                                   ? item.issue_key
@@ -1915,7 +2144,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
 
           {/* Ordered Queue Table with Actions (Up, Down, Remove) */}
           <div className="bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
-            <div className="flex items-center justify-between gap-3 mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
               <div>
                 <h3 className="text-sm font-black text-slate-800 dark:text-white flex items-center gap-2">
                   <Layers className="w-4 h-4 text-emerald-500" />
@@ -1926,10 +2155,32 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                 </p>
               </div>
 
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-slate-500 font-semibold">
-                  {localItems.length} {localItems.length === 1 ? 'demanda no plano' : 'demandas no plano'}
-                </span>
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Indicadores de status da fila */}
+                <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                  <span className="px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold text-[11px]">
+                    Total: <strong>{localItems.length}</strong>
+                  </span>
+                  {executionStats.completed > 0 && (
+                    <span className="px-2 py-0.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40 font-bold text-[11px] flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                      <span>{executionStats.completed} {executionStats.completed === 1 ? 'concluída' : 'concluídas'}</span>
+                    </span>
+                  )}
+                  {executionStats.started > 0 && (
+                    <span className="px-2 py-0.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/40 font-bold text-[11px] flex items-center gap-1">
+                      <Play className="w-2.5 h-2.5 text-blue-500 fill-current" />
+                      <span>{executionStats.started} {executionStats.started === 1 ? 'iniciada' : 'iniciadas'}</span>
+                    </span>
+                  )}
+                  {executionStats.delayedNotStarted > 0 && (
+                    <span className="px-2.5 py-0.5 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800 font-bold text-[11px] flex items-center gap-1 shadow-2xs animate-pulse">
+                      <AlertTriangle className="w-3 h-3 text-rose-600 dark:text-rose-400" />
+                      <span>{executionStats.delayedNotStarted} {executionStats.delayedNotStarted === 1 ? 'atrasada por não início' : 'atrasadas por não início'}</span>
+                    </span>
+                  )}
+                </div>
+
                 {!isClientView && (
                   <button
                     type="button"
@@ -1943,6 +2194,21 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                 )}
               </div>
             </div>
+
+            {/* Banner de alerta visual se houver tarefas atrasadas por não início */}
+            {executionStats.delayedNotStarted > 0 && (
+              <div className="mb-4 px-3.5 py-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2 text-rose-700 dark:text-rose-300 font-medium">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400 flex-shrink-0 animate-pulse" />
+                  <span>
+                    <strong>{executionStats.delayedNotStarted} {executionStats.delayedNotStarted === 1 ? 'tarefa está atrasada' : 'tarefas estão atrasadas'}</strong> por não {executionStats.delayedNotStarted === 1 ? 'ter sido iniciada' : 'terem sido iniciadas'} (data planejada de início anterior a hoje).
+                  </span>
+                </div>
+                <span className="text-[11px] text-rose-600 dark:text-rose-400 font-bold whitespace-nowrap">
+                  Inicie as tarefas na lista abaixo ou reorganize a fila
+                </span>
+              </div>
+            )}
 
             {localItems.length === 0 ? (
               <p className="text-xs text-slate-400 py-4 text-center">Nenhuma demanda na fila de execução.</p>
@@ -2006,6 +2272,8 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                         }
                       }
 
+                      const execState = getTaskExecutionState(item);
+
                       return (
                         <tr
                           key={item.id}
@@ -2018,6 +2286,8 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                             !isClientView ? 'cursor-grab active:cursor-grabbing' : ''
                           } ${
                             isBlocked ? 'bg-red-50/40 dark:bg-red-950/20' : ''
+                          } ${
+                            execState.isDelayedStart ? 'border-l-4 border-l-rose-500 bg-rose-50/20 dark:bg-rose-950/15' : ''
                           } ${
                             draggedIndex === idx
                               ? 'opacity-35 bg-indigo-50/60 dark:bg-indigo-950/60 scale-[0.99] border-dashed border-2 border-indigo-400'
@@ -2096,12 +2366,156 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                               );
                             })()}
                           </td>
-                          <td className="py-3 px-3">
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusStyle}`}
-                            >
-                              {displayStatus}
-                            </span>
+                          <td className="py-3 px-3 relative" data-status-menu-container="true">
+                            <div className="flex items-center gap-1.5">
+                              {/* Botão Badge de Status */}
+                              {!isClientView ? (
+                                <button
+                                  type="button"
+                                  onMouseDown={(e) => e.stopPropagation()}
+                                  onClick={() => setOpenStatusMenuId(openStatusMenuId === item.id ? null : item.id)}
+                                  className={`group/status inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all cursor-pointer shadow-2xs active:scale-95 ${
+                                    execState.status === 'completed'
+                                      ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 hover:bg-emerald-100'
+                                      : execState.status === 'started'
+                                      ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700 hover:bg-blue-100'
+                                      : execState.isDelayedStart
+                                      ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800 hover:bg-rose-100'
+                                      : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-slate-200'
+                                  }`}
+                                  title={
+                                    execState.isDelayedStart
+                                      ? `Atrasada: deveria ter iniciado em ${format(parseISO(item.start_date), 'dd/MM/yyyy')} (${execState.delayDays}d de atraso por não ter sido iniciada). Clique para alterar status.`
+                                      : 'Clique para alterar status de execução da tarefa'
+                                  }
+                                >
+                                  {execState.status === 'completed' ? (
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+                                  ) : execState.status === 'started' ? (
+                                    <Play className="w-3 h-3 text-blue-600 dark:text-blue-400 fill-current flex-shrink-0" />
+                                  ) : execState.isDelayedStart ? (
+                                    <AlertTriangle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 flex-shrink-0 animate-pulse" />
+                                  ) : (
+                                    <Clock className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                                  )}
+                                  <span className="whitespace-nowrap">
+                                    {execState.status === 'completed'
+                                      ? 'Concluída'
+                                      : execState.status === 'started'
+                                      ? 'Iniciada'
+                                      : execState.isDelayedStart
+                                      ? 'Atrasada: não iniciada'
+                                      : 'Não Iniciada'}
+                                  </span>
+                                  <ChevronDown className="w-3 h-3 opacity-50 group-hover/status:opacity-100 transition-opacity ml-0.5" />
+                                </button>
+                              ) : (
+                                <span
+                                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                                    execState.status === 'completed'
+                                      ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700'
+                                      : execState.status === 'started'
+                                      ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
+                                      : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                                  }`}
+                                >
+                                  {execState.status === 'completed' ? 'Concluída' : execState.status === 'started' ? 'Iniciada' : 'Planejado'}
+                                </span>
+                              )}
+
+                              {/* Botões rápidos de 1 clique */}
+                              {!isClientView && (
+                                <div className="flex items-center gap-1">
+                                  {execState.status === 'not_started' && (
+                                    <button
+                                      type="button"
+                                      onMouseDown={(e) => e.stopPropagation()}
+                                      onClick={() => handleUpdateTaskExecutionStatus(item, 'started')}
+                                      className="px-2 py-0.5 rounded-lg bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95 shadow-2xs cursor-pointer"
+                                      title="Marcar rapidamente como Iniciada"
+                                    >
+                                      <Play className="w-2.5 h-2.5 fill-current" />
+                                      <span>Iniciar</span>
+                                    </button>
+                                  )}
+                                  {execState.status === 'started' && (
+                                    <button
+                                      type="button"
+                                      onMouseDown={(e) => e.stopPropagation()}
+                                      onClick={() => handleUpdateTaskExecutionStatus(item, 'completed')}
+                                      className="px-2 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95 shadow-2xs cursor-pointer"
+                                      title="Marcar rapidamente como Concluída"
+                                    >
+                                      <Check className="w-3 h-3" />
+                                      <span>Concluir</span>
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Menu Suspenso de Seleção de Status */}
+                              {!isClientView && openStatusMenuId === item.id && (
+                                <div
+                                  className="absolute left-3 top-full mt-1 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl p-1.5 z-30 animate-in fade-in zoom-in-95 duration-100"
+                                  onMouseDown={(e) => e.stopPropagation()}
+                                >
+                                  <div className="text-[10px] font-bold text-slate-400 px-2 py-1 uppercase tracking-wider">
+                                    Status de Execução
+                                  </div>
+
+                                  {/* Não Iniciada */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdateTaskExecutionStatus(item, 'not_started')}
+                                    className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                                      execState.status === 'not_started'
+                                        ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white font-bold'
+                                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                      <span>Não Iniciada</span>
+                                    </div>
+                                    {execState.status === 'not_started' && <Check className="w-3.5 h-3.5 text-slate-600 dark:text-slate-300" />}
+                                  </button>
+
+                                  {/* Iniciada */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdateTaskExecutionStatus(item, 'started')}
+                                    className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                                      execState.status === 'started'
+                                        ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-bold'
+                                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <Play className="w-3.5 h-3.5 text-blue-500 fill-current" />
+                                      <span>Iniciada (Em andamento)</span>
+                                    </div>
+                                    {execState.status === 'started' && <Check className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />}
+                                  </button>
+
+                                  {/* Concluída */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdateTaskExecutionStatus(item, 'completed')}
+                                    className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                                      execState.status === 'completed'
+                                        ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-bold'
+                                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                                      <span>Concluída</span>
+                                    </div>
+                                    {execState.status === 'completed' && <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           </td>
                           <td className="py-3 px-3 max-w-xs font-medium text-slate-800 dark:text-slate-200 truncate" title={item.summary}>
                             {item.summary}
@@ -2189,15 +2603,27 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                                   {format(parseISO(oldStartDate), 'dd/MM/yyyy')}
                                 </span>
                               )}
-                              <span
-                                className={`text-xs ${
-                                  oldStartDate
-                                    ? 'font-bold text-slate-800 dark:text-slate-100'
-                                    : 'text-slate-600 dark:text-slate-400'
-                                }`}
-                              >
-                                {format(parseISO(item.start_date), 'dd/MM/yyyy')}
-                              </span>
+                              {execState.isDelayedStart ? (
+                                <div className="flex flex-col">
+                                  <span className="inline-flex items-center gap-1 text-xs font-bold text-rose-600 dark:text-rose-400">
+                                    <AlertTriangle className="w-3 h-3 text-rose-500 flex-shrink-0 animate-pulse" />
+                                    <span>{format(parseISO(item.start_date), 'dd/MM/yyyy')}</span>
+                                  </span>
+                                  <span className="text-[10px] font-bold text-rose-500 dark:text-rose-400">
+                                    Atrasada ({execState.delayDays}d)
+                                  </span>
+                                </div>
+                              ) : (
+                                <span
+                                  className={`text-xs ${
+                                    oldStartDate
+                                      ? 'font-bold text-slate-800 dark:text-slate-100'
+                                      : 'text-slate-600 dark:text-slate-400'
+                                  }`}
+                                >
+                                  {format(parseISO(item.start_date), 'dd/MM/yyyy')}
+                                </span>
+                              )}
                             </div>
                           </td>
                           <td className="py-3 px-3">
@@ -2890,6 +3316,51 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                   </div>
                 </>
               )}
+
+              {/* Status de Execução no Plano */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Status de Execução no Plano
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditExecutionStatus('not_started')}
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      editExecutionStatus === 'not_started'
+                        ? 'border-slate-500 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm ring-1 ring-slate-400'
+                        : 'border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-900'
+                    }`}
+                  >
+                    <Clock className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Não Iniciada</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditExecutionStatus('started')}
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      editExecutionStatus === 'started'
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 shadow-sm ring-1 ring-blue-400'
+                        : 'border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-900'
+                    }`}
+                  >
+                    <Play className="w-3.5 h-3.5 text-blue-500 fill-current" />
+                    <span>Iniciada</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditExecutionStatus('completed')}
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      editExecutionStatus === 'completed'
+                        ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 shadow-sm ring-1 ring-emerald-400'
+                        : 'border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-900'
+                    }`}
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                    <span>Concluída</span>
+                  </button>
+                </div>
+              </div>
 
               {/* Estimativa em Horas (Obrigatório) */}
               <div>
