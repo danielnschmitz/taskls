@@ -71,6 +71,12 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
   const [sortField, setSortField] = useState<SortField>('quantidade_ativacoes');
   const [sortAsc, setSortAsc] = useState<boolean>(false);
 
+  // Controles da Listagem: Layouts e ERPs Desenvolvidos (Chave única: ERP + Layout)
+  const [developedSearchQuery, setDevelopedSearchQuery] = useState<string>('');
+  const [developedStatusFilter, setDevelopedStatusFilter] = useState<string>('all');
+  const [developedSortField, setDevelopedSortField] = useState<'erp' | 'layout' | 'status'>('erp');
+  const [developedSortAsc, setDevelopedSortAsc] = useState<boolean>(true);
+
   // Busca dados da API
   const fetchActivationsData = useCallback(
     async (isForceRefresh: boolean = false) => {
@@ -573,6 +579,324 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
       avgMonthly,
     };
   }, [analytics.byMonth, lineChartMetric]);
+
+  // --- SEÇÃO: Layouts e ERPs Desenvolvidos ---
+  // Avaliação e mapeamento de status com ranking de conclusão (1 a 9):
+  // 1. Aberto = Aberto
+  // 2. Pronto p/ fazer = Pronto p/ fazer
+  // 3. Desenvolvimento = Desenvolvimento
+  // 4. Teste de Aceitação = Em homologação
+  // 5. Deploy HML = Em homologação
+  // 6. Deploy = Homologação aprovada
+  // 7. Documentar = Produção assistida
+  // 8. Concluído = Em produção
+  // 9. Em produção = Em produção
+  const evaluateNeoStatus = useCallback((rawStatus: string): { mappedStatus: string; rank: number } | null => {
+    if (!rawStatus) return null;
+    const s = rawStatus
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+
+    // Exclusão explícita: Cancelado e Desativado
+    if (s === 'cancelado' || s === 'desativado') {
+      return null;
+    }
+
+    // 9. Em produção = Em produção
+    if (s === 'em producao') {
+      return { mappedStatus: 'Em produção', rank: 9 };
+    }
+
+    // 8. Concluído = Em produção
+    if (s === 'concluido') {
+      return { mappedStatus: 'Em produção', rank: 8 };
+    }
+
+    // 7. Documentar = Produção assistida (incluindo documentação)
+    if (s === 'documentar' || s === 'documentacao') {
+      return { mappedStatus: 'Produção assistida', rank: 7 };
+    }
+
+    // 6. Deploy = Homologação aprovada (incluindo deploy prd)
+    if (s === 'deploy' || s === 'deploy prd') {
+      return { mappedStatus: 'Homologação aprovada', rank: 6 };
+    }
+
+    // 5. Deploy HML = Em homologação
+    if (s === 'deploy hml') {
+      return { mappedStatus: 'Em homologação', rank: 5 };
+    }
+
+    // 4. Teste de Aceitação = Em homologação
+    if (s === 'teste de aceitacao') {
+      return { mappedStatus: 'Em homologação', rank: 4 };
+    }
+
+    // 3. Desenvolvimento = Desenvolvimento
+    if (s === 'desenvolvimento') {
+      return { mappedStatus: 'Desenvolvimento', rank: 3 };
+    }
+
+    // 2. Pronto p/ fazer = Pronto p/ fazer
+    if (s.startsWith('pronto p') || s.startsWith('pronto para')) {
+      return { mappedStatus: 'Pronto p/ fazer', rank: 2 };
+    }
+
+    // 1. Aberto = Aberto
+    if (s === 'aberto') {
+      return { mappedStatus: 'Aberto', rank: 1 };
+    }
+
+    return null;
+  }, []);
+
+  // Extração e desduplicação por chave única (ERP + Layout)
+  // Caso tenha mais de um registro com a mesma chave, exibe o que estiver mais perto de ser concluído
+  const developedErpLayoutItems = useMemo(() => {
+    if (!data?.issues) return [];
+
+    type UniqueItem = {
+      erp: string;
+      layout: string;
+      status: string;
+      rank: number;
+      cardsCount: number;
+      keys: string[];
+      urls: string[];
+      rawStatus: string;
+    };
+
+    const map = new Map<string, UniqueItem>();
+
+    for (const issue of data.issues) {
+      const evaluation = evaluateNeoStatus(issue.status);
+      if (!evaluation) continue;
+
+      const erp = (issue.erp || 'Sem ERP').trim();
+      let rawLayout = (issue.layout || '').trim();
+
+      // Regra: Nos casos que o layout estiver vazio, mas o Canal de distribuição for Varejo, exibir "Varejo" no lugar de layout
+      const normCanal = (issue.canal || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+
+      if (!rawLayout || rawLayout === '-') {
+        if (normCanal.includes('varejo')) {
+          rawLayout = 'Varejo';
+        }
+      }
+
+      const layout = rawLayout || '-';
+      const groupKey = `${erp.toLowerCase()}___${layout.toLowerCase()}`;
+
+      const existing = map.get(groupKey);
+      if (!existing) {
+        map.set(groupKey, {
+          erp: erp || 'Sem ERP',
+          layout: layout || '-',
+          status: evaluation.mappedStatus,
+          rank: evaluation.rank,
+          cardsCount: 1,
+          keys: [issue.key],
+          urls: [issue.url],
+          rawStatus: issue.status,
+        });
+      } else {
+        existing.cardsCount++;
+        existing.keys.push(issue.key);
+        existing.urls.push(issue.url);
+
+        // Se este card estiver mais próximo da conclusão (maior ranking), adota seu status
+        if (evaluation.rank > existing.rank) {
+          existing.status = evaluation.mappedStatus;
+          existing.rank = evaluation.rank;
+          existing.rawStatus = issue.status;
+        }
+      }
+    }
+
+    return Array.from(map.values());
+  }, [data, evaluateNeoStatus]);
+
+  // Contadores por status para os botões de filtro rápido
+  const developedStatusCounts = useMemo(() => {
+    let emProducao = 0;
+    let producaoAssistida = 0;
+    let homologacaoAprovada = 0;
+    let emHomologacao = 0;
+    let desenvolvimento = 0;
+    let prontoPFazer = 0;
+    let aberto = 0;
+
+    for (const item of developedErpLayoutItems) {
+      if (item.status === 'Em produção') emProducao++;
+      else if (item.status === 'Produção assistida') producaoAssistida++;
+      else if (item.status === 'Homologação aprovada') homologacaoAprovada++;
+      else if (item.status === 'Em homologação') emHomologacao++;
+      else if (item.status === 'Desenvolvimento') desenvolvimento++;
+      else if (item.status === 'Pronto p/ fazer') prontoPFazer++;
+      else if (item.status === 'Aberto') aberto++;
+    }
+
+    return {
+      total: developedErpLayoutItems.length,
+      emProducao,
+      producaoAssistida,
+      homologacaoAprovada,
+      emHomologacao,
+      desenvolvimento,
+      prontoPFazer,
+      aberto,
+    };
+  }, [developedErpLayoutItems]);
+
+  // Filtragem e ordenação da listagem única de ERP e Layout
+  const filteredAndSortedDevelopedItems = useMemo(() => {
+    const filtered = developedErpLayoutItems.filter((item) => {
+      if (developedStatusFilter !== 'all' && item.status !== developedStatusFilter) {
+        return false;
+      }
+
+      if (developedSearchQuery.trim()) {
+        const q = developedSearchQuery.toLowerCase().trim();
+        const matchErp = item.erp.toLowerCase().includes(q);
+        const matchLayout = item.layout.toLowerCase().includes(q);
+        const matchStatus = item.status.toLowerCase().includes(q);
+        if (!matchErp && !matchLayout && !matchStatus) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    return filtered.sort((a, b) => {
+      if (developedSortField === 'erp') {
+        const comp = a.erp.toLowerCase().localeCompare(b.erp.toLowerCase(), 'pt-BR');
+        return developedSortAsc ? comp : -comp;
+      } else if (developedSortField === 'layout') {
+        const comp = a.layout.toLowerCase().localeCompare(b.layout.toLowerCase(), 'pt-BR');
+        return developedSortAsc ? comp : -comp;
+      } else if (developedSortField === 'status') {
+        // Ordena por ranking de conclusão (1 a 9)
+        const rankDiff = a.rank - b.rank;
+        if (rankDiff !== 0) {
+          return developedSortAsc ? rankDiff : -rankDiff;
+        }
+        return a.erp.localeCompare(b.erp, 'pt-BR');
+      }
+
+      return 0;
+    });
+  }, [
+    developedErpLayoutItems,
+    developedStatusFilter,
+    developedSearchQuery,
+    developedSortField,
+    developedSortAsc,
+  ]);
+
+  const handleDevelopedSort = (field: 'erp' | 'layout' | 'status') => {
+    if (developedSortField === field) {
+      setDevelopedSortAsc(!developedSortAsc);
+    } else {
+      setDevelopedSortField(field);
+      setDevelopedSortAsc(true);
+    }
+  };
+
+  const handleExportDevelopedCsv = () => {
+    if (filteredAndSortedDevelopedItems.length === 0) {
+      onShowToast('Nenhum dado para exportar na listagem de layouts e ERPs', 'info');
+      return;
+    }
+
+    const headers = ['ERP', 'Layout', 'Status'];
+    const rows = filteredAndSortedDevelopedItems.map((item) => [
+      `"${(item.erp || '').replace(/"/g, '""')}"`,
+      `"${(item.layout || '-').replace(/"/g, '""')}"`,
+      `"${(item.status || '').replace(/"/g, '""')}"`,
+    ]);
+
+    const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map((r) => r.join(';'))].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute(
+      'download',
+      `layouts_e_erps_neogrid_${new Date().toISOString().substring(0, 10)}.csv`
+    );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    onShowToast('CSV de Layouts e ERPs exportado com sucesso!', 'success');
+  };
+
+  const renderStatusBadge = (status: string) => {
+    switch (status) {
+      case 'Em produção':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            Em produção
+          </span>
+        );
+      case 'Produção assistida':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30">
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-500" />
+            Produção assistida
+          </span>
+        );
+      case 'Homologação aprovada':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30">
+            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+            Homologação aprovada
+          </span>
+        );
+      case 'Em homologação':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+            Em homologação
+          </span>
+        );
+      case 'Desenvolvimento':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30">
+            <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+            Desenvolvimento
+          </span>
+        );
+      case 'Pronto p/ fazer':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30">
+            <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+            Pronto p/ fazer
+          </span>
+        );
+      case 'Aberto':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700">
+            <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+            Aberto
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+            {status}
+          </span>
+        );
+    }
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -1514,6 +1838,285 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
               })
             )}
           </div>
+        </div>
+      </div>
+
+      {/* SEÇÃO: Layouts e ERPs Desenvolvidos */}
+      <div id="section-developed-erp-layout" className="p-5 rounded-2xl bg-white dark:bg-[#0e1628]/90 border border-slate-200 dark:border-slate-800 shadow-xl space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="p-1.5 rounded-lg bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                <Layers className="w-4 h-4" />
+              </span>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                Layouts e ERPs Desenvolvidos
+              </h3>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                {filteredAndSortedDevelopedItems.length} registros únicos
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Projeto NEO &bull; Chave única (ERP + Layout) &bull; Exibindo status mais próximo da conclusão
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Campo de Busca Rápida */}
+            <div className="relative w-full sm:w-64">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+              <input
+                type="text"
+                placeholder="Filtrar ERP, layout ou status..."
+                value={developedSearchQuery}
+                onChange={(e) => setDevelopedSearchQuery(e.target.value)}
+                className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+              />
+              {developedSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setDevelopedSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white text-xs"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* Botão Exportar CSV */}
+            <button
+              type="button"
+              onClick={handleExportDevelopedCsv}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-md shadow-emerald-600/20 active:scale-95"
+              title="Exportar listagem com as colunas ERP, Layout e Status em CSV"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Exportar CSV</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Filtros Rápidos por Status Mapeado */}
+        <div className="flex flex-wrap items-center gap-1.5 pt-1">
+          <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mr-1 flex items-center gap-1">
+            <Filter className="w-3 h-3" />
+            Status:
+          </span>
+          <button
+            type="button"
+            onClick={() => setDevelopedStatusFilter('all')}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+              developedStatusFilter === 'all'
+                ? 'bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900 shadow-sm'
+                : 'bg-slate-100 dark:bg-slate-950 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
+            }`}
+          >
+            Todos ({developedStatusCounts.total})
+          </button>
+          <button
+            type="button"
+            onClick={() => setDevelopedStatusFilter('Em produção')}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              developedStatusFilter === 'Em produção'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 border border-emerald-500/20'
+            }`}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            Em produção ({developedStatusCounts.emProducao})
+          </button>
+          <button
+            type="button"
+            onClick={() => setDevelopedStatusFilter('Produção assistida')}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              developedStatusFilter === 'Produção assistida'
+                ? 'bg-cyan-600 text-white shadow-sm'
+                : 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 hover:bg-cyan-500/20 border border-cyan-500/20'
+            }`}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-500" />
+            Produção assistida ({developedStatusCounts.producaoAssistida})
+          </button>
+          <button
+            type="button"
+            onClick={() => setDevelopedStatusFilter('Homologação aprovada')}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              developedStatusFilter === 'Homologação aprovada'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/20 border border-indigo-500/20'
+            }`}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+            Homologação aprovada ({developedStatusCounts.homologacaoAprovada})
+          </button>
+          <button
+            type="button"
+            onClick={() => setDevelopedStatusFilter('Em homologação')}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              developedStatusFilter === 'Em homologação'
+                ? 'bg-amber-600 text-white shadow-sm'
+                : 'bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 border border-amber-500/20'
+            }`}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+            Em homologação ({developedStatusCounts.emHomologacao})
+          </button>
+          <button
+            type="button"
+            onClick={() => setDevelopedStatusFilter('Desenvolvimento')}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              developedStatusFilter === 'Desenvolvimento'
+                ? 'bg-purple-600 text-white shadow-sm'
+                : 'bg-purple-500/10 text-purple-700 dark:text-purple-300 hover:bg-purple-500/20 border border-purple-500/20'
+            }`}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+            Desenvolvimento ({developedStatusCounts.desenvolvimento})
+          </button>
+          <button
+            type="button"
+            onClick={() => setDevelopedStatusFilter('Pronto p/ fazer')}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              developedStatusFilter === 'Pronto p/ fazer'
+                ? 'bg-sky-600 text-white shadow-sm'
+                : 'bg-sky-500/10 text-sky-700 dark:text-sky-300 hover:bg-sky-500/20 border border-sky-500/20'
+            }`}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+            Pronto p/ fazer ({developedStatusCounts.prontoPFazer})
+          </button>
+          <button
+            type="button"
+            onClick={() => setDevelopedStatusFilter('Aberto')}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              developedStatusFilter === 'Aberto'
+                ? 'bg-slate-700 text-white shadow-sm'
+                : 'bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700'
+            }`}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+            Aberto ({developedStatusCounts.aberto})
+          </button>
+        </div>
+
+        {/* Tabela com Colunas Obrigatórias: "ERP", "Layout" e "Status" */}
+        <div className="overflow-x-auto max-h-[480px] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/60">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead className="sticky top-0 z-10">
+              <tr className="bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 select-none shadow-sm">
+                {/* Coluna 1: ERP */}
+                <th
+                  onClick={() => handleDevelopedSort('erp')}
+                  className="p-3 font-bold cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>ERP</span>
+                    {developedSortField === 'erp' && (
+                      developedSortAsc ? (
+                        <ArrowUp className="w-3 h-3 text-emerald-500" />
+                      ) : (
+                        <ArrowDown className="w-3 h-3 text-emerald-500" />
+                      )
+                    )}
+                  </div>
+                </th>
+
+                {/* Coluna 2: Layout */}
+                <th
+                  onClick={() => handleDevelopedSort('layout')}
+                  className="p-3 font-bold cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Layout</span>
+                    {developedSortField === 'layout' && (
+                      developedSortAsc ? (
+                        <ArrowUp className="w-3 h-3 text-emerald-500" />
+                      ) : (
+                        <ArrowDown className="w-3 h-3 text-emerald-500" />
+                      )
+                    )}
+                  </div>
+                </th>
+
+                {/* Coluna 3: Status */}
+                <th
+                  onClick={() => handleDevelopedSort('status')}
+                  className="p-3 font-bold cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Status</span>
+                    {developedSortField === 'status' && (
+                      developedSortAsc ? (
+                        <ArrowUp className="w-3 h-3 text-emerald-500" />
+                      ) : (
+                        <ArrowDown className="w-3 h-3 text-emerald-500" />
+                      )
+                    )}
+                  </div>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60 font-sans">
+              {filteredAndSortedDevelopedItems.length === 0 ? (
+                <tr>
+                  <td colSpan={3} className="py-8 text-center text-slate-500 italic">
+                    Nenhum ERP ou Layout encontrado para os critérios selecionados.
+                  </td>
+                </tr>
+              ) : (
+                filteredAndSortedDevelopedItems.map((row) => (
+                  <tr
+                    key={`${row.erp}-${row.layout}`}
+                    className="hover:bg-slate-100/70 dark:hover:bg-slate-900/60 transition-colors"
+                  >
+                    {/* Coluna 1: ERP */}
+                    <td className="p-3 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-900 dark:text-white text-xs">
+                          {row.erp}
+                        </span>
+                        {row.cardsCount > 1 ? (
+                          <span
+                            className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+                            title={`${row.cardsCount} cards no Jira: ${row.keys.join(', ')}`}
+                          >
+                            {row.cardsCount} cards
+                          </span>
+                        ) : row.keys.length > 0 && row.urls.length > 0 ? (
+                          <a
+                            href={row.urls[0]}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] font-mono text-slate-400 hover:text-indigo-500 transition-colors flex items-center gap-0.5 ml-1"
+                            title={`Abrir ${row.keys[0]} no Jira (${row.rawStatus})`}
+                          >
+                            <span>{row.keys[0]}</span>
+                            <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                        ) : null}
+                      </div>
+                    </td>
+
+                    {/* Coluna 2: Layout */}
+                    <td className="p-3 whitespace-nowrap">
+                      {row.layout && row.layout !== '-' ? (
+                        <span className="px-2 py-0.5 rounded-md font-mono text-xs font-semibold bg-purple-500/10 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-500/20">
+                          {row.layout}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 dark:text-slate-600 italic">-</span>
+                      )}
+                    </td>
+
+                    {/* Coluna 3: Status */}
+                    <td className="p-3 whitespace-nowrap">
+                      {renderStatusBadge(row.status)}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 

@@ -621,6 +621,114 @@ projectRoutes.get('/:projectKey/backlog', async (req: Request, res: Response): P
 });
 
 /**
+ * GET /api/projects/:projectKey/jira-issue/:issueKey - Busca os detalhes de uma issue específica no Jira
+ */
+projectRoutes.get('/:projectKey/jira-issue/:issueKey', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const projectKey = String(req.params.projectKey).trim().toUpperCase();
+    let issueKey = String(req.params.issueKey).trim().toUpperCase();
+
+    // Se for apenas numérico, prefixa com a chave do projeto
+    if (/^\d+$/.test(issueKey)) {
+      issueKey = `${projectKey}-${issueKey}`;
+    }
+
+    const config = await getJiraConfig();
+    if (!config.api_token || !config.domain || !config.email) {
+      res.status(400).json({ error: 'Configuração do Jira não encontrada ou incompleta.' });
+      return;
+    }
+
+    const host = config.domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    const industryField = config.custom_fields?.industry || 'customfield_10780';
+    const layoutField = config.custom_fields?.layout || 'customfield_10714';
+    const flaggedField = (config as any).custom_fields?.flagged || 'customfield_10021';
+    const canalField = 'customfield_10273';
+
+    const jql = `key = "${issueKey}"`;
+    const payload = {
+      jql,
+      fields: [
+        'key',
+        'summary',
+        'status',
+        'issuetype',
+        'priority',
+        'assignee',
+        'created',
+        'duedate',
+        'parent',
+        'project',
+        'timeoriginalestimate',
+        'aggregatetimeoriginalestimate',
+        flaggedField,
+        industryField,
+        layoutField,
+        canalField,
+      ],
+      maxResults: 1,
+    };
+
+    const searchRes = await fetch(`https://${host}/rest/api/3/search/jql`, {
+      method: 'POST',
+      headers: {
+        Authorization: getAuthHeader(config),
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!searchRes.ok) {
+      const errText = await searchRes.text();
+      res.status(searchRes.status).json({ error: `Erro na API do Jira: ${errText.substring(0, 100)}` });
+      return;
+    }
+
+    const data: any = await searchRes.json();
+    const issue = data.issues?.[0];
+
+    if (!issue) {
+      res.status(404).json({ error: `Demanda ${issueKey} não encontrada no Jira.` });
+      return;
+    }
+
+    const demand = parseSingleJiraIssue(issue, host, industryField, layoutField, flaggedField, canalField);
+    const f = issue.fields || {};
+
+    let estimateHours = 8;
+    const estSec = f.timeoriginalestimate || f.aggregatetimeoriginalestimate;
+    if (typeof estSec === 'number' && estSec > 0) {
+      estimateHours = Math.round((estSec / 3600) * 10) / 10;
+    }
+
+    res.json({
+      key: demand.key,
+      summary: demand.summary,
+      status: demand.displayStatus || demand.rawStatus,
+      rawStatus: demand.rawStatus,
+      displayStatus: demand.displayStatus,
+      assignee: demand.assignee?.displayName || (f.assignee?.displayName || f.assignee?.name || ''),
+      industry: demand.industry || null,
+      layout: demand.layout || null,
+      canal: demand.canal || null,
+      epic: demand.epic || null,
+      duedate: demand.duedate || null,
+      isBlocked: demand.isBlocked || false,
+      blockedReason: demand.blockedReason || null,
+      url: demand.url,
+      estimate_hours: estimateHours,
+      issuetype: f.issuetype?.name || 'Demanda',
+      priority: f.priority?.name || 'Média',
+      created: f.created,
+    });
+  } catch (err: any) {
+    console.error('[Projects API] Erro ao buscar issue no Jira:', err);
+    res.status(500).json({ error: err.message || 'Erro ao buscar tarefa no Jira.' });
+  }
+});
+
+/**
  * GET /api/projects/:projectKey/plan - Retorna os itens do plano salvos e agendados para o projeto
  */
 projectRoutes.get('/:projectKey/plan', async (req: Request, res: Response): Promise<void> => {

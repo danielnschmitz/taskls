@@ -42,12 +42,19 @@ import {
   Briefcase,
   GripVertical,
   Play,
+  Filter,
+  FilterX,
+  SlidersHorizontal,
+  CalendarRange,
 } from 'lucide-react';
 import {
   format,
   parseISO,
   differenceInCalendarDays,
   addDays,
+  subDays,
+  startOfMonth,
+  endOfMonth,
   isSameDay,
   isToday,
   startOfWeek,
@@ -240,6 +247,20 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
   const [localItems, setLocalItems] = useState<ScheduledPlanItem[]>([]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
+  // Filtros de Projeto Contínuo / Ongoing & Linha do Tempo
+  const [filterStatus, setFilterStatus] = useState<
+    'all' | 'pending' | 'started' | 'not_started' | 'completed'
+  >('all');
+  const [filterHideCompleted, setFilterHideCompleted] = useState<boolean>(false);
+  const [filterAssignee, setFilterAssignee] = useState<string>('all');
+  const [filterPeriod, setFilterPeriod] = useState<
+    'all' | 'current_window' | 'this_month' | 'next_30' | 'next_60' | 'custom'
+  >('all');
+  const [customStartDate, setCustomStartDate] = useState<string>('');
+  const [customEndDate, setCustomEndDate] = useState<string>('');
+  const [filterSearch, setFilterSearch] = useState<string>('');
+  const [isAligningToday, setIsAligningToday] = useState(false);
+
   // Map of stored server items for fast baseline comparison
   const serverItemMap = useMemo(() => {
     const map = new Map<string, ScheduledPlanItem>();
@@ -260,16 +281,21 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
   const [estimateHoursInput, setEstimateHoursInput] = useState<number>(8);
   const [assigneeInput, setAssigneeInput] = useState<string>('');
 
-  // Modal: Add Manual Task (Não Jira)
+  // Modal: Incluir Tarefa (Jira ou Tarefa Avulsa/Não Jira)
   const [isAddManualModalOpen, setIsAddManualModalOpen] = useState(false);
   const [manualKey, setManualKey] = useState('');
   const [manualSummary, setManualSummary] = useState('');
   const [manualAssignee, setManualAssignee] = useState('');
   const [manualEstimateHours, setManualEstimateHours] = useState<number>(8);
-  const [manualStatus, setManualStatus] = useState('Planejado');
+  const [manualExecutionStatus, setManualExecutionStatus] = useState<ExecutionStatus>('not_started');
   const [manualIndustry, setManualIndustry] = useState('');
   const [manualCanal, setManualCanal] = useState('');
-  const [manualPosition, setManualPosition] = useState<'end' | 'start'>('end');
+  const [manualPosition, setManualPosition] = useState<'end' | 'start' | 'custom'>('end');
+  const [manualCustomPosition, setManualCustomPosition] = useState<number>(1);
+  const [isSearchingJira, setIsSearchingJira] = useState(false);
+  const [jiraSearchFeedback, setJiraSearchFeedback] = useState<{ type: 'success' | 'warning' | 'error'; message: string } | null>(null);
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
+  const [manualJiraMetadata, setManualJiraMetadata] = useState<any | null>(null);
 
   // Modal: Edit Demand in Plan
   const [editingItem, setEditingItem] = useState<ScheduledPlanItem | null>(null);
@@ -604,14 +630,14 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   const handleDragStart = (e: React.DragEvent, index: number) => {
-    if (isClientView) return;
+    if (isClientView || hasActiveFilters) return;
     setDraggedIndex(index);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', String(index));
   };
 
   const handleDragOver = (e: React.DragEvent, index: number) => {
-    if (isClientView) return;
+    if (isClientView || hasActiveFilters) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     if (dragOverIndex !== index) {
@@ -625,7 +651,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
   };
 
   const handleDrop = (e: React.DragEvent, targetIndex: number) => {
-    if (isClientView) return;
+    if (isClientView || hasActiveFilters) return;
     e.preventDefault();
     if (draggedIndex === null || draggedIndex === targetIndex) {
       setDraggedIndex(null);
@@ -680,7 +706,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       id: `plan_${addingIssue.key}_${Date.now()}`,
       issue_key: addingIssue.key,
       summary: addingIssue.summary,
-      status: addingIssue.status,
+      status: 'Planejado',
       assignee_name: assigneeInput.trim(),
       estimate_hours: Number(estimateHoursInput),
       sort_order: localItems.length + 1, // Sempre no final da fila!
@@ -697,8 +723,9 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
         jira_assignee: addingIssue.assignee?.displayName || addingIssue.assignee?.name || assigneeInput.trim() || null,
         isBlocked: addingIssue.isBlocked,
         blockedReason: addingIssue.blockedReason,
-        rawStatus: addingIssue.rawStatus,
-        displayStatus: addingIssue.displayStatus,
+        rawStatus: addingIssue.rawStatus || addingIssue.status,
+        displayStatus: 'Planejado',
+        execution_status: 'not_started',
       },
     };
 
@@ -708,45 +735,216 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
     onShowToast(`Demanda ${addingIssue.key} incluída na última posição da fila do plano!`, 'success');
   };
 
-  // Open modal to add manual task (Não Jira)
+  // Open modal to add task (Jira ou Avulsa)
   const handleOpenAddManualModal = () => {
-    const prefix = activeProject?.key || 'EXT';
-    // Determina o próximo número de tarefa manual no plano
-    let maxNum = 0;
-    const regex = new RegExp(`^${prefix}[-_](?:EXT|AV|TASK)[-_]?(\\d+)`, 'i');
-    localItems.forEach((it) => {
-      const m = it.issue_key.match(regex);
-      if (m && m[1]) {
-        const n = parseInt(m[1], 10);
-        if (!isNaN(n) && n > maxNum) maxNum = n;
-      }
-    });
-    const nextNum = maxNum + 1;
-    const suggestedKey = `${prefix}-EXT-${String(nextNum).padStart(2, '0')}`;
-
-    setManualKey(suggestedKey);
+    setManualKey('');
     setManualSummary('');
     setManualAssignee(uniqueAssignees[0] || '');
     setManualEstimateHours(8);
-    setManualStatus('Planejado');
+    setManualExecutionStatus('not_started');
     setManualIndustry('');
     setManualCanal('');
     setManualPosition('end');
+    setManualCustomPosition(localItems.length + 1);
+    setIsSearchingJira(false);
+    setJiraSearchFeedback(null);
+    setDuplicateWarning(null);
+    setManualJiraMetadata(null);
     setIsAddManualModalOpen(true);
   };
 
-  // Confirm addition of manual task
-  const handleConfirmAddManual = (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanKey = manualKey.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
-    if (!cleanKey) {
-      onShowToast('Informe um código/chave válido para a tarefa.', 'error');
+  // Verificar se a tarefa já está no plano e alertar caso não esteja concluída
+  const checkDuplicateWarning = useCallback((keyInput: string) => {
+    const clean = keyInput.trim().toUpperCase();
+    if (!clean) {
+      setDuplicateWarning(null);
+      return;
+    }
+    const prefix = activeProject?.key || 'EXT';
+    let targetKey = clean;
+    if (/^\d+$/.test(clean)) {
+      targetKey = `${prefix}-${clean}`;
+    }
+    const existing = localItems.find((it) => it.issue_key.toUpperCase() === targetKey);
+    if (existing) {
+      const exec = getTaskExecutionState(existing);
+      if (exec.status !== 'completed') {
+        const statusLabel =
+          exec.status === 'started'
+            ? 'Iniciada (Em andamento)'
+            : exec.isDelayedStart
+            ? 'Atrasada: não iniciada'
+            : 'Não Iniciada / Planejado';
+        setDuplicateWarning(
+          `Atenção: A tarefa "${targetKey}" já consta no plano com status "${statusLabel}" (não concluída). Você pode prosseguir com a inclusão se desejar.`
+        );
+      } else {
+        setDuplicateWarning(null);
+      }
+    } else {
+      setDuplicateWarning(null);
+    }
+  }, [activeProject, localItems]);
+
+  // Buscar dados da tarefa no Jira para autopreenchimento
+  const handleFetchJiraIssue = async (keyInput: string) => {
+    const clean = keyInput.trim().toUpperCase();
+    if (!clean) {
+      setJiraSearchFeedback(null);
       return;
     }
 
-    if (localItems.some((it) => it.issue_key.toUpperCase() === cleanKey)) {
-      onShowToast(`Já existe uma demanda com a chave "${cleanKey}" no plano deste projeto.`, 'error');
-      return;
+    const prefix = activeProject?.key || 'EXT';
+    let fullKey = clean;
+    if (/^\d+$/.test(clean)) {
+      fullKey = `${prefix}-${clean}`;
+    }
+
+    setIsSearchingJira(true);
+    setJiraSearchFeedback(null);
+
+    try {
+      // 1. Tentar encontrar no backlog já carregado
+      let foundIssue: any = null;
+      if (backlogData?.groups) {
+        for (const g of backlogData.groups) {
+          const f = g.issues.find((iss) => iss.key.toUpperCase() === fullKey);
+          if (f) {
+            foundIssue = f;
+            break;
+          }
+        }
+      }
+
+      if (foundIssue) {
+        setManualSummary(foundIssue.summary || '');
+        if (foundIssue.assignee && foundIssue.assignee !== 'Não atribuído') {
+          setManualAssignee(foundIssue.assignee);
+        }
+        setManualExecutionStatus('not_started');
+        if (foundIssue.metadata?.industry) {
+          setManualIndustry(foundIssue.metadata.industry);
+        }
+        if (foundIssue.metadata?.canal) {
+          setManualCanal(foundIssue.metadata.canal);
+        }
+        setManualJiraMetadata({
+          epic: foundIssue.metadata?.epic || null,
+          layout: foundIssue.metadata?.layout || null,
+          canal: foundIssue.metadata?.canal || null,
+          industry: foundIssue.metadata?.industry || null,
+          duedate: foundIssue.metadata?.duedate || null,
+          isBlocked: foundIssue.metadata?.isBlocked || false,
+          blockedReason: foundIssue.metadata?.blockedReason || null,
+          url: foundIssue.url || `https://sysmiddle.atlassian.net/browse/${fullKey}`,
+          jira_assignee: foundIssue.assignee || null,
+          issuetype: foundIssue.issuetype || 'Demanda',
+          rawStatus: foundIssue.rawStatus || foundIssue.status || 'Planejado',
+        });
+        setJiraSearchFeedback({
+          type: 'success',
+          message: `Demanda ${fullKey} encontrada no Jira! Dados preenchidos automaticamente com status Não Iniciada.`,
+        });
+        return;
+      }
+
+      // 2. Buscar no endpoint do servidor
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(prefix)}/jira-issue/${encodeURIComponent(fullKey)}`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setManualSummary(data.summary || '');
+        if (data.assignee && data.assignee !== 'Não atribuído') {
+          setManualAssignee(data.assignee);
+        }
+        setManualExecutionStatus('not_started');
+        if (data.industry) {
+          setManualIndustry(data.industry);
+        }
+        if (data.canal) {
+          setManualCanal(data.canal);
+        }
+        if (data.estimate_hours && data.estimate_hours > 0) {
+          setManualEstimateHours(data.estimate_hours);
+        }
+        setManualJiraMetadata({
+          epic: data.epic || null,
+          layout: data.layout || null,
+          canal: data.canal || null,
+          industry: data.industry || null,
+          duedate: data.duedate || null,
+          isBlocked: data.isBlocked || false,
+          blockedReason: data.blockedReason || null,
+          url: data.url || `https://sysmiddle.atlassian.net/browse/${fullKey}`,
+          jira_assignee: data.assignee || null,
+          issuetype: data.issuetype || 'Demanda',
+          rawStatus: data.rawStatus || data.status || 'Planejado',
+        });
+        setJiraSearchFeedback({
+          type: 'success',
+          message: `Demanda ${data.key} encontrada no Jira! Dados preenchidos automaticamente com status Não Iniciada.`,
+        });
+      } else {
+        setJiraSearchFeedback({
+          type: 'warning',
+          message: `Demanda "${fullKey}" não localizada no Jira. Você pode preencher os campos manualmente.`,
+        });
+      }
+    } catch (err: any) {
+      console.warn('Erro ao buscar issue no Jira:', err);
+      setJiraSearchFeedback({
+        type: 'warning',
+        message: `Demanda "${fullKey}" não localizada no Jira. Você pode preencher manualmente.`,
+      });
+    } finally {
+      setIsSearchingJira(false);
+    }
+  };
+
+  // Efeito para debounce de busca e verificação de duplicidade quando a chave digitada mudar
+  useEffect(() => {
+    if (!isAddManualModalOpen) return;
+    const trimmed = manualKey.trim();
+    checkDuplicateWarning(trimmed);
+
+    if (/^\d+$/.test(trimmed) || /^[A-Z0-9]+-\d+$/i.test(trimmed)) {
+      const timer = setTimeout(() => {
+        handleFetchJiraIssue(trimmed);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [manualKey, isAddManualModalOpen, checkDuplicateWarning]);
+
+  // Confirm addition of task (Jira ou Avulsa)
+  const handleConfirmAddManual = (e: React.FormEvent) => {
+    e.preventDefault();
+    const rawKey = manualKey.trim();
+    const prefix = activeProject?.key || 'EXT';
+
+    let finalKey = '';
+    let isJira = false;
+
+    if (!rawKey) {
+      // Chave em branco: assumir tarefa que não está no Jira (avulsa)
+      let maxNum = 0;
+      const regex = new RegExp(`^${prefix}[-_](?:EXT|AV|TASK)[-_]?(\\d+)`, 'i');
+      localItems.forEach((it) => {
+        const m = it.issue_key.match(regex);
+        if (m && m[1]) {
+          const n = parseInt(m[1], 10);
+          if (!isNaN(n) && n > maxNum) maxNum = n;
+        }
+      });
+      const nextNum = maxNum + 1;
+      finalKey = `${prefix}-EXT-${String(nextNum).padStart(2, '0')}`;
+      isJira = false;
+    } else if (/^\d+$/.test(rawKey)) {
+      finalKey = `${prefix}-${rawKey}`;
+      isJira = true;
+    } else {
+      finalKey = rawKey.toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+      isJira = Boolean(manualJiraMetadata?.url || finalKey.startsWith(`${prefix}-`));
     }
 
     if (!manualSummary.trim()) {
@@ -764,42 +962,121 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       return;
     }
 
+    const uniqueId = isJira
+      ? `jira_${finalKey.toLowerCase()}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+      : `manual_${finalKey.toLowerCase()}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+
+    let initialStatus = 'Planejado';
+    let initialDisplayStatus = 'Planejado';
+    let startedAt: string | undefined = undefined;
+    let completedAt: string | undefined = undefined;
+
+    if (manualExecutionStatus === 'completed') {
+      initialStatus = 'Concluída';
+      initialDisplayStatus = 'Concluída';
+      completedAt = new Date().toISOString();
+    } else if (manualExecutionStatus === 'started') {
+      initialStatus = 'Iniciada';
+      initialDisplayStatus = 'Iniciada';
+      startedAt = new Date().toISOString();
+    } else {
+      initialStatus = 'Planejado';
+      initialDisplayStatus = 'Planejado';
+    }
+
     const newItem: PlanItemInput = {
-      id: `manual_${cleanKey.toLowerCase()}_${Date.now()}`,
-      issue_key: cleanKey,
+      id: uniqueId,
+      issue_key: finalKey,
       summary: manualSummary.trim(),
-      status: manualStatus.trim() || 'Planejado',
+      status: initialStatus,
       assignee_name: manualAssignee.trim(),
       estimate_hours: Number(manualEstimateHours),
-      sort_order: manualPosition === 'start' ? 1 : localItems.length + 1,
+      sort_order: 1,
       metadata: {
-        isManual: true,
-        isExternal: true,
-        source: 'manual',
+        isManual: !isJira,
+        isExternal: !isJira,
+        source: isJira ? 'jira' : 'manual',
         jira_assignee: manualAssignee.trim() || null,
-        issuetype: 'Tarefa Avulsa',
+        issuetype: isJira ? (manualJiraMetadata?.issuetype || 'Demanda') : 'Tarefa Avulsa',
         priority: 'Medium',
-        industry: manualIndustry.trim() || null,
-        canal: manualCanal.trim() || null,
-        displayStatus: manualStatus.trim() || 'Planejado',
-        rawStatus: manualStatus.trim() || 'Planejado',
+        industry: manualIndustry.trim() || manualJiraMetadata?.industry || null,
+        canal: manualCanal.trim() || manualJiraMetadata?.canal || null,
+        layout: manualJiraMetadata?.layout || null,
+        epic: manualJiraMetadata?.epic || null,
+        duedate: manualJiraMetadata?.duedate || null,
+        isBlocked: manualJiraMetadata?.isBlocked || false,
+        blockedReason: manualJiraMetadata?.blockedReason || null,
+        url: isJira ? (manualJiraMetadata?.url || `https://sysmiddle.atlassian.net/browse/${finalKey}`) : undefined,
+        displayStatus: initialDisplayStatus,
+        rawStatus: isJira ? (manualJiraMetadata?.rawStatus || 'Planejado') : initialStatus,
+        execution_status: manualExecutionStatus,
+        started_at: startedAt,
+        completed_at: completedAt,
         created: new Date().toISOString(),
       },
     };
 
-    let updatedList: PlanItemInput[] = [];
+    let updatedList = [...localItems];
+    let targetIndex = localItems.length;
+
     if (manualPosition === 'start') {
-      updatedList = [newItem, ...localItems];
-    } else {
-      updatedList = [...localItems, newItem];
+      targetIndex = 0;
+    } else if (manualPosition === 'end') {
+      targetIndex = localItems.length;
+    } else if (manualPosition === 'custom') {
+      const pos = Number(manualCustomPosition);
+      targetIndex = isNaN(pos) ? localItems.length : Math.max(0, Math.min(pos - 1, localItems.length));
     }
+
+    updatedList.splice(targetIndex, 0, newItem);
     updatedList.forEach((it, idx) => {
       it.sort_order = idx + 1;
     });
 
     applySchedule(updatedList);
     setIsAddManualModalOpen(false);
-    onShowToast(`Tarefa avulsa "${cleanKey}" incluída no plano com sucesso!`, 'success');
+    onShowToast(`Tarefa "${finalKey}" incluída na posição #${targetIndex + 1} da fila do plano!`, 'success');
+  };
+
+  // Limpar datas de histórico (datas traçadas / riscadas)
+  const handleClearHistoricalDates = async () => {
+    if (localItems.length === 0) return;
+
+    try {
+      setIsSavingPlan(true);
+
+      const itemsToSave = localItems.map((item) => {
+        const meta = { ...(item.metadata || {}) };
+        delete meta.previous_start_date;
+        delete meta.previous_end_date;
+        return {
+          ...item,
+          metadata: meta,
+        };
+      });
+
+      const res = await fetch(`/api/projects/${encodeURIComponent(selectedProjectKey)}/plan`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: itemsToSave }),
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || 'Erro ao limpar datas alteradas no servidor.');
+      }
+
+      const data = await res.json();
+      setServerItems(data.items);
+      setLocalItems(data.items);
+      setHasUnsavedChanges(false);
+      onShowToast('Datas de histórico (datas traçadas) apagadas com sucesso!', 'success');
+    } catch (err: any) {
+      console.error(err);
+      onShowToast(err.message || 'Erro ao limpar datas alteradas.', 'error');
+    } finally {
+      setIsSavingPlan(false);
+    }
   };
 
   // Open modal to edit plan item
@@ -1168,20 +1445,253 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
     return { started, completed, notStarted, delayedNotStarted };
   }, [localItems]);
 
+  // -------------------------------------------------------------
+  // FILTERING & ONGOING PROJECT LOGIC
+  // -------------------------------------------------------------
+  const periodWindow = useMemo<{ startDate: string; endDate: string } | null>(() => {
+    if (filterPeriod === 'all') return null;
+
+    const today = new Date();
+    if (filterPeriod === 'current_window') {
+      // Visão Atual: 15 dias corridos atrás até 45 dias corridos à frente
+      return {
+        startDate: format(subDays(today, 15), 'yyyy-MM-dd'),
+        endDate: format(addDays(today, 45), 'yyyy-MM-dd'),
+      };
+    }
+    if (filterPeriod === 'this_month') {
+      // Mês Atual
+      return {
+        startDate: format(startOfMonth(today), 'yyyy-MM-dd'),
+        endDate: format(endOfMonth(today), 'yyyy-MM-dd'),
+      };
+    }
+    if (filterPeriod === 'next_30') {
+      // Próximos 30 dias a partir de hoje
+      return {
+        startDate: format(today, 'yyyy-MM-dd'),
+        endDate: format(addDays(today, 30), 'yyyy-MM-dd'),
+      };
+    }
+    if (filterPeriod === 'next_60') {
+      // Próximos 60 dias a partir de hoje
+      return {
+        startDate: format(today, 'yyyy-MM-dd'),
+        endDate: format(addDays(today, 60), 'yyyy-MM-dd'),
+      };
+    }
+    if (filterPeriod === 'custom') {
+      if (customStartDate && customEndDate) {
+        return {
+          startDate: customStartDate <= customEndDate ? customStartDate : customEndDate,
+          endDate: customStartDate <= customEndDate ? customEndDate : customStartDate,
+        };
+      } else if (customStartDate) {
+        return {
+          startDate: customStartDate,
+          endDate: '2099-12-31',
+        };
+      } else if (customEndDate) {
+        return {
+          startDate: '2000-01-01',
+          endDate: customEndDate,
+        };
+      }
+    }
+    return null;
+  }, [filterPeriod, customStartDate, customEndDate]);
+
+  const hasActiveFilters = useMemo(() => {
+    return (
+      filterStatus !== 'all' ||
+      filterHideCompleted ||
+      filterAssignee !== 'all' ||
+      filterPeriod !== 'all' ||
+      Boolean(customStartDate) ||
+      Boolean(customEndDate) ||
+      filterSearch.trim() !== ''
+    );
+  }, [
+    filterStatus,
+    filterHideCompleted,
+    filterAssignee,
+    filterPeriod,
+    customStartDate,
+    customEndDate,
+    filterSearch,
+  ]);
+
+  const handleClearAllFilters = () => {
+    setFilterStatus('all');
+    setFilterHideCompleted(false);
+    setFilterAssignee('all');
+    setFilterPeriod('all');
+    setCustomStartDate('');
+    setCustomEndDate('');
+    setFilterSearch('');
+  };
+
+  // Dynamic Anchor Date: alinhar marco zero do plano com a data de hoje
+  const handleAlignPlanToToday = async () => {
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    if (settings.plan_start_date === todayStr) {
+      onShowToast(
+        `A data inicial do plano já está alinhada com hoje (${format(new Date(), 'dd/MM/yyyy')}).`,
+        'info'
+      );
+      return;
+    }
+
+    if (
+      !window.confirm(
+        `Deseja atualizar a data inicial do plano para hoje (${format(new Date(), 'dd/MM/yyyy')})?\n\nIsso recalculará o cronograma das demandas a partir de hoje sem alterar a ordem das tarefas.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setIsAligningToday(true);
+      const updatedSettings: ProjectSettings = {
+        ...settings,
+        plan_start_date: todayStr,
+      };
+
+      const res = await fetch(`/api/projects/${encodeURIComponent(selectedProjectKey)}/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedSettings),
+      });
+
+      if (!res.ok) throw new Error('Falha ao atualizar data inicial nas configurações.');
+      const savedSettings = await res.json();
+      setSettings(savedSettings);
+
+      const recalculated = calculatePlanSchedule(localItems, savedSettings);
+      setLocalItems(recalculated);
+      setServerItems(recalculated);
+      setHasUnsavedChanges(false);
+
+      onShowToast(
+        `Cronograma alinhado a partir de hoje (${format(new Date(), 'dd/MM/yyyy')}) com sucesso!`,
+        'success'
+      );
+    } catch (err: any) {
+      console.error(err);
+      onShowToast(err.message || 'Erro ao alinhar cronograma com hoje.', 'error');
+    } finally {
+      setIsAligningToday(false);
+    }
+  };
+
+  // Lista de itens filtrados para exibição no Gantt, Tabela e Exportações
+  const filteredPlanItems = useMemo(() => {
+    let result = displayPlanItems;
+
+    // 1. Ocultar Concluídas
+    if (filterHideCompleted) {
+      result = result.filter((it) => {
+        const exec = getTaskExecutionState(it);
+        return exec.status !== 'completed';
+      });
+    }
+
+    // 2. Filtro de Status
+    if (filterStatus !== 'all') {
+      result = result.filter((it) => {
+        const exec = getTaskExecutionState(it);
+        if (filterStatus === 'pending') {
+          return exec.status === 'not_started' || exec.status === 'started';
+        }
+        return exec.status === filterStatus;
+      });
+    }
+
+    // 3. Filtro por Executor
+    if (filterAssignee !== 'all') {
+      const cleanAssignee = filterAssignee.trim().toLowerCase();
+      result = result.filter(
+        (it) => it.assignee_name.trim().toLowerCase() === cleanAssignee
+      );
+    }
+
+    // 4. Filtro por Janela Temporal (intersecção com o período selecionado)
+    if (periodWindow) {
+      result = result.filter((it) => {
+        return it.start_date <= periodWindow.endDate && it.end_date >= periodWindow.startDate;
+      });
+    }
+
+    // 5. Busca textual rápida
+    if (filterSearch.trim()) {
+      const q = filterSearch.trim().toLowerCase();
+      result = result.filter((it) => {
+        const keyMatch = it.issue_key.toLowerCase().includes(q);
+        const sumMatch = it.summary.toLowerCase().includes(q);
+        const assigneeMatch = it.assignee_name.toLowerCase().includes(q);
+        const jiraAssigneeMatch = (it.metadata?.jira_assignee || '').toLowerCase().includes(q);
+        const indMatch = (it.metadata?.industry || '').toLowerCase().includes(q);
+        const canalMatch = (it.metadata?.canal || '').toLowerCase().includes(q);
+        const layoutMatch = (it.metadata?.layout || '').toLowerCase().includes(q);
+        const epicMatch = (
+          it.metadata?.epic?.summary ||
+          it.metadata?.epic?.name ||
+          it.metadata?.epic?.key ||
+          ''
+        )
+          .toLowerCase()
+          .includes(q);
+        return (
+          keyMatch ||
+          sumMatch ||
+          assigneeMatch ||
+          jiraAssigneeMatch ||
+          indMatch ||
+          canalMatch ||
+          layoutMatch ||
+          epicMatch
+        );
+      });
+    }
+
+    return result;
+  }, [
+    displayPlanItems,
+    filterHideCompleted,
+    filterStatus,
+    filterAssignee,
+    periodWindow,
+    filterSearch,
+  ]);
+
+  const filteredPlannedHours = useMemo(() => {
+    return Math.round(filteredPlanItems.reduce((acc, it) => acc + it.estimate_hours, 0) * 10) / 10;
+  }, [filteredPlanItems]);
+
   // Gantt Timeline Dates Calculation (Exclui sábados e domingos)
   const ganttTimelineDays = useMemo(() => {
-    if (displayPlanItems.length === 0) return [];
+    let minDateStr: string;
+    let maxDateStr: string;
 
-    let minDateStr = settings.plan_start_date || displayPlanItems[0].start_date;
-    let maxDateStr = displayPlanItems[0].end_date;
+    if (periodWindow) {
+      minDateStr = periodWindow.startDate;
+      maxDateStr = periodWindow.endDate;
+    } else {
+      if (filteredPlanItems.length === 0) return [];
 
-    for (const it of displayPlanItems) {
-      if (it.start_date < minDateStr) minDateStr = it.start_date;
-      if (it.end_date > maxDateStr) maxDateStr = it.end_date;
+      minDateStr = settings.plan_start_date || filteredPlanItems[0].start_date;
+      maxDateStr = filteredPlanItems[0].end_date;
+
+      for (const it of filteredPlanItems) {
+        if (it.start_date < minDateStr) minDateStr = it.start_date;
+        if (it.end_date > maxDateStr) maxDateStr = it.end_date;
+      }
     }
 
     const startDate = parseISO(minDateStr);
     const maxEnd = parseISO(maxDateStr);
+
+    if (startDate > maxEnd) return [];
 
     let curr = startDate;
     const days: Date[] = [];
@@ -1195,19 +1705,21 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       curr = addDays(curr, 1);
     }
 
-    // Adiciona 3 dias úteis de margem ao final para respirar
-    let bufferCount = 0;
-    while (bufferCount < 3) {
-      const dayOfWeek = curr.getDay();
-      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-        days.push(curr);
-        bufferCount++;
+    // Se não for janela fechada personalizada, adiciona 3 dias úteis de margem ao final para respirar
+    if (!periodWindow || filterPeriod === 'current_window') {
+      let bufferCount = 0;
+      while (bufferCount < 3) {
+        const dayOfWeek = curr.getDay();
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+          days.push(curr);
+          bufferCount++;
+        }
+        curr = addDays(curr, 1);
       }
-      curr = addDays(curr, 1);
     }
 
     return days;
-  }, [displayPlanItems, settings.plan_start_date]);
+  }, [filteredPlanItems, settings.plan_start_date, periodWindow, filterPeriod]);
 
   // Mapa de datas (YYYY-MM-DD) para o índice da coluna correspondente no Gantt
   const timelineDayIndexMap = useMemo(() => {
@@ -1344,7 +1856,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
   const handleExportExcel = () => {
     try {
       setIsExporting('excel');
-      const rows = displayPlanItems.map((item, idx) => {
+      const rows = filteredPlanItems.map((item, idx) => {
         const isManual = Boolean(item.metadata?.isManual || item.metadata?.isExternal);
         const rawUser = item.metadata?.jira_assignee || item.metadata?.assignee?.displayName || item.assignee_name || '';
         const userFirstName = (!rawUser || rawUser.toLowerCase().includes('não atribuído') || rawUser.toLowerCase().includes('nao atribuido'))
@@ -1584,7 +2096,9 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                 <Clock className="w-4 h-4 text-indigo-500" />
                 <div>
                   <span className="block text-[10px] text-slate-400 font-bold uppercase">Carga Total</span>
-                  <span className="text-xs font-black text-slate-800 dark:text-white">{totalPlannedHours}h</span>
+                  <span className="text-xs font-black text-slate-800 dark:text-white">
+                    {hasActiveFilters ? `${filteredPlannedHours}h (${totalPlannedHours}h)` : `${totalPlannedHours}h`}
+                  </span>
                 </div>
               </div>
             )}
@@ -1593,7 +2107,9 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
               <Layers className="w-4 h-4 text-emerald-500" />
               <div>
                 <span className="block text-[10px] text-slate-400 font-bold uppercase">Demandas</span>
-                <span className="text-xs font-black text-slate-800 dark:text-white">{localItems.length}</span>
+                <span className="text-xs font-black text-slate-800 dark:text-white">
+                  {hasActiveFilters ? `${filteredPlanItems.length} de ${localItems.length}` : localItems.length}
+                </span>
               </div>
             </div>
 
@@ -1853,6 +2369,206 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       {/* -------------------------------------------------------- */}
       {activeTab === 'gantt' && (
         <div className="space-y-6">
+          {/* Toolbar de Filtros do Cronograma (Projetos Contínuos / Ongoing) */}
+          <div className="bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800/80">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400">
+                    <SlidersHorizontal className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
+                      <span>Filtros do Cronograma</span>
+                      <span className="text-[10px] font-normal text-slate-400 dark:text-slate-500">
+                        (Projeto Contínuo)
+                      </span>
+                    </h3>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold">
+                    Exibindo <strong>{filteredPlanItems.length}</strong> de <strong>{localItems.length}</strong> demandas
+                  </span>
+
+                  {hasActiveFilters && (
+                    <button
+                      type="button"
+                      onClick={handleClearAllFilters}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 border border-rose-200 dark:border-rose-900/50 transition-colors cursor-pointer"
+                      title="Limpar todos os filtros ativos"
+                    >
+                      <FilterX className="w-3.5 h-3.5" />
+                      <span>Limpar Filtros</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Botão Alinhar Início com Hoje (Dynamic Anchor Date) */}
+                {!isClientView && (
+                  <button
+                    type="button"
+                    onClick={handleAlignPlanToToday}
+                    disabled={isAligningToday}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 text-xs font-bold border border-indigo-200 dark:border-indigo-500/30 transition-all shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer"
+                    title={`Recalcular cronograma das demandas pendentes tendo a data de hoje (${format(new Date(), 'dd/MM/yyyy')}) como marco zero inicial do plano`}
+                  >
+                    {isAligningToday ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600" />
+                    ) : (
+                      <CalendarDays className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                    )}
+                    <span>Alinhar Início com Hoje</span>
+                  </button>
+                )}
+
+                {/* Toggle Rápido: Ocultar Concluídas */}
+                <button
+                  type="button"
+                  onClick={() => setFilterHideCompleted((prev) => !prev)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                    filterHideCompleted
+                      ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 shadow-sm'
+                      : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700'
+                  }`}
+                  title="Ocultar demandas que já foram marcadas como Concluídas"
+                >
+                  {filterHideCompleted ? (
+                    <EyeOff className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                  ) : (
+                    <Eye className="w-3.5 h-3.5 text-slate-400" />
+                  )}
+                  <span>Ocultar Concluídas</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Linha de Controles: Busca, Status, Executor e Janela Temporal */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* Busca Textual */}
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={filterSearch}
+                  onChange={(e) => setFilterSearch(e.target.value)}
+                  placeholder="Buscar chave, resumo, layout..."
+                  className="w-full pl-8 pr-7 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-xs text-slate-800 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                />
+                {filterSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setFilterSearch('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Filtro de Status */}
+              <div>
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value as any)}
+                  className={`w-full px-3 py-1.5 rounded-xl border text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/50 cursor-pointer ${
+                    filterStatus !== 'all'
+                      ? 'bg-indigo-50 dark:bg-indigo-950/50 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 font-bold'
+                      : 'bg-slate-50 dark:bg-slate-950 border-slate-300 dark:border-slate-700 text-slate-800 dark:text-white'
+                  }`}
+                >
+                  <option value="all">Status: Todos</option>
+                  <option value="pending">Status: Pendentes (Não Iniciada + Iniciada)</option>
+                  <option value="not_started">Status: Apenas Não Iniciadas</option>
+                  <option value="started">Status: Apenas Iniciadas</option>
+                  <option value="completed">Status: Apenas Concluídas</option>
+                </select>
+              </div>
+
+              {/* Filtro de Executor */}
+              <div>
+                <select
+                  value={filterAssignee}
+                  onChange={(e) => setFilterAssignee(e.target.value)}
+                  className={`w-full px-3 py-1.5 rounded-xl border text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/50 cursor-pointer ${
+                    filterAssignee !== 'all'
+                      ? 'bg-indigo-50 dark:bg-indigo-950/50 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 font-bold'
+                      : 'bg-slate-50 dark:bg-slate-950 border-slate-300 dark:border-slate-700 text-slate-800 dark:text-white'
+                  }`}
+                >
+                  <option value="all">Executor: Todos</option>
+                  {uniqueAssignees.map((name) => (
+                    <option key={`filter-assignee-${name}`} value={name}>
+                      Executor: {name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Filtro de Janela Temporal / Período Móvel */}
+              <div>
+                <select
+                  value={filterPeriod}
+                  onChange={(e) => setFilterPeriod(e.target.value as any)}
+                  className={`w-full px-3 py-1.5 rounded-xl border text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/50 cursor-pointer ${
+                    filterPeriod !== 'all'
+                      ? 'bg-indigo-50 dark:bg-indigo-950/50 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 font-bold'
+                      : 'bg-slate-50 dark:bg-slate-950 border-slate-300 dark:border-slate-700 text-slate-800 dark:text-white'
+                  }`}
+                >
+                  <option value="all">Período: Todo o Cronograma</option>
+                  <option value="current_window">Período: Visão Atual (-15d / +45d)</option>
+                  <option value="this_month">Período: Mês Atual</option>
+                  <option value="next_30">Período: Próximos 30 Dias</option>
+                  <option value="next_60">Período: Próximos 60 Dias</option>
+                  <option value="custom">Período: Personalizado...</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Inputs de Data Personalizada se selecionado "Personalizado..." */}
+            {filterPeriod === 'custom' && (
+              <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-100 dark:border-slate-800/80 animate-in fade-in duration-150">
+                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                  Definir Janela Personalizada:
+                </span>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-slate-500">De:</label>
+                  <input
+                    type="date"
+                    value={customStartDate}
+                    onChange={(e) => setCustomStartDate(e.target.value)}
+                    className="px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-slate-500">Até:</label>
+                  <input
+                    type="date"
+                    value={customEndDate}
+                    onChange={(e) => setCustomEndDate(e.target.value)}
+                    className="px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                  />
+                </div>
+                {(customStartDate || customEndDate) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomStartDate('');
+                      setCustomEndDate('');
+                    }}
+                    className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 underline cursor-pointer"
+                  >
+                    Resetar Datas
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Gantt Interactive Chart Canvas */}
           <div
             ref={ganttContainerRef}
@@ -1920,6 +2636,28 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                   </button>
                 </div>
               </div>
+            ) : filteredPlanItems.length === 0 ? (
+              <div className="py-14 text-center flex flex-col items-center justify-center">
+                <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 mb-3">
+                  <Filter className="w-6 h-6" />
+                </div>
+                <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                  Nenhuma demanda corresponde aos filtros aplicados.
+                </h3>
+                <p className="text-xs text-slate-400 max-w-sm mt-1">
+                  Verifique os filtros de status, executor, período ou termo de busca.
+                </p>
+                <div className="mt-4">
+                  <button
+                    type="button"
+                    onClick={handleClearAllFilters}
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-md shadow-indigo-600/20 flex items-center gap-1.5"
+                  >
+                    <FilterX className="w-3.5 h-3.5" />
+                    <span>Limpar Filtros</span>
+                  </button>
+                </div>
+              </div>
             ) : (
               <div className="overflow-x-auto pb-4 custom-scrollbar">
                 <div className="min-w-[900px]">
@@ -1970,7 +2708,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
 
                   {/* Gantt Rows */}
                   <div className="space-y-2">
-                    {displayPlanItems.map((item, idx) => {
+                    {filteredPlanItems.map((item, idx) => {
                       const color = assigneeColorMap.get(item.assignee_name.trim()) || ASSIGNEE_COLORS[0];
                       const execState = getTaskExecutionState(item);
                       const startDate = parseISO(item.start_date);
@@ -2022,8 +2760,11 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                           <div className="w-64 flex-shrink-0 pr-3 pl-2 flex items-center justify-between min-w-0">
                             <div className="min-w-0">
                               <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="text-[10px] font-mono font-bold text-slate-400">
-                                  #{idx + 1}
+                                <span
+                                  className="text-[10px] font-mono font-bold text-slate-400"
+                                  title={`Posição #${item.sort_order} na fila de execução`}
+                                >
+                                  #{item.sort_order}
                                 </span>
                                 {item.metadata?.isManual || item.metadata?.isExternal ? (
                                   <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 truncate">
@@ -2151,7 +2892,9 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                   <span>Fila de Execução das Demandas</span>
                 </h3>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Arraste as demandas ou use as flechas para reordenar a fila e recalcular o cronograma automaticamente.
+                  {hasActiveFilters
+                    ? 'Filtros ativos. A reordenação manual por arraste e solte está pausada para preservar a ordem global da fila.'
+                    : 'Arraste as demandas ou use as flechas para reordenar a fila e recalcular o cronograma automaticamente.'}
                 </p>
               </div>
 
@@ -2182,15 +2925,30 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                 </div>
 
                 {!isClientView && (
-                  <button
-                    type="button"
-                    onClick={handleOpenAddManualModal}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-sm shadow-emerald-600/30 transition-all active:scale-95"
-                    title="Adicionar tarefa avulsa que não está no Jira diretamente ao cronograma"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>+ Tarefa Avulsa (Não Jira)</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {localItems.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleClearHistoricalDates}
+                        disabled={isSavingPlan}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold border border-slate-300 dark:border-slate-700 transition-all active:scale-95 disabled:opacity-50"
+                        title="Apagar datas de histórico (remove as datas traçadas/riscadas da listagem)"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Limpar Datas Alteradas</span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={handleOpenAddManualModal}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-sm shadow-emerald-600/30 transition-all active:scale-95"
+                      title="Incluir tarefa do Jira ou tarefa avulsa diretamente ao cronograma"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Incluir Tarefa</span>
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -2212,6 +2970,22 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
 
             {localItems.length === 0 ? (
               <p className="text-xs text-slate-400 py-4 text-center">Nenhuma demanda na fila de execução.</p>
+            ) : filteredPlanItems.length === 0 ? (
+              <div className="py-12 text-center flex flex-col items-center justify-center">
+                <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 mb-2">
+                  <Filter className="w-6 h-6" />
+                </div>
+                <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Nenhuma demanda corresponde aos filtros aplicados.
+                </h3>
+                <button
+                  type="button"
+                  onClick={handleClearAllFilters}
+                  className="mt-3 px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 text-xs font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors cursor-pointer"
+                >
+                  Limpar Filtros
+                </button>
+              </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
@@ -2233,7 +3007,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-                    {displayPlanItems.map((item, idx) => {
+                    {filteredPlanItems.map((item, idx) => {
                       const color = assigneeColorMap.get(item.assignee_name.trim()) || ASSIGNEE_COLORS[0];
                       const isBlocked = Boolean(item.metadata?.isBlocked);
                       const displayStatus = item.metadata?.displayStatus || item.status || 'Planejado';
@@ -2277,21 +3051,21 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                       return (
                         <tr
                           key={item.id}
-                          draggable={!isClientView}
+                          draggable={!isClientView && !hasActiveFilters}
                           onDragStart={(e) => handleDragStart(e, idx)}
                           onDragOver={(e) => handleDragOver(e, idx)}
                           onDragEnd={handleDragEnd}
                           onDrop={(e) => handleDrop(e, idx)}
                           className={`transition-all group ${
-                            !isClientView ? 'cursor-grab active:cursor-grabbing' : ''
+                            !isClientView && !hasActiveFilters ? 'cursor-grab active:cursor-grabbing' : ''
                           } ${
                             isBlocked ? 'bg-red-50/40 dark:bg-red-950/20' : ''
                           } ${
                             execState.isDelayedStart ? 'border-l-4 border-l-rose-500 bg-rose-50/20 dark:bg-rose-950/15' : ''
                           } ${
-                            draggedIndex === idx
+                            draggedIndex === idx && !hasActiveFilters
                               ? 'opacity-35 bg-indigo-50/60 dark:bg-indigo-950/60 scale-[0.99] border-dashed border-2 border-indigo-400'
-                              : dragOverIndex === idx
+                              : dragOverIndex === idx && !hasActiveFilters
                               ? 'bg-indigo-50/80 dark:bg-indigo-950/70 border-t-2 border-indigo-600 dark:border-indigo-400 shadow-sm'
                               : 'hover:bg-slate-50/70 dark:hover:bg-slate-800/40'
                           }`}
@@ -2300,13 +3074,21 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                             <div className="flex items-center gap-1.5">
                               {!isClientView && (
                                 <span
-                                  className="text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 p-0.5 rounded transition-colors"
-                                  title="Clique e arraste para reordenar"
+                                  className={`p-0.5 rounded transition-colors ${
+                                    hasActiveFilters
+                                      ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed'
+                                      : 'text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400'
+                                  }`}
+                                  title={
+                                    hasActiveFilters
+                                      ? 'Reordenação desabilitada enquanto filtros estiverem ativos'
+                                      : 'Clique e arraste para reordenar'
+                                  }
                                 >
                                   <GripVertical className="w-3.5 h-3.5" />
                                 </span>
                               )}
-                              <span>#{idx + 1}</span>
+                              <span title={`Posição #${item.sort_order} na fila de execução`}>#{item.sort_order}</span>
                             </div>
                           </td>
                           <td className="py-3 px-3">
@@ -2679,26 +3461,47 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                                   <Pencil className="w-3.5 h-3.5" />
                                 </button>
                               )}
-                              <button
-                                type="button"
-                                onMouseDown={(e) => e.stopPropagation()}
-                                onClick={() => handleMoveUp(idx)}
-                                disabled={idx === 0}
-                                className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-all"
-                                title="Mover para cima na fila"
-                              >
-                                <ArrowUp className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onMouseDown={(e) => e.stopPropagation()}
-                                onClick={() => handleMoveDown(idx)}
-                                disabled={idx === localItems.length - 1}
-                                className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-all"
-                                title="Mover para baixo na fila"
-                              >
-                                <ArrowDown className="w-3.5 h-3.5" />
-                              </button>
+                              {(() => {
+                                const origIdx = localItems.findIndex(
+                                  (it) => it.id === item.id || it.issue_key === item.issue_key
+                                );
+                                return (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onMouseDown={(e) => e.stopPropagation()}
+                                      onClick={() => handleMoveUp(origIdx)}
+                                      disabled={hasActiveFilters || origIdx <= 0}
+                                      className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-all"
+                                      title={
+                                        hasActiveFilters
+                                          ? 'Limpe os filtros para reordenar a fila'
+                                          : 'Mover para cima na fila'
+                                      }
+                                    >
+                                      <ArrowUp className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onMouseDown={(e) => e.stopPropagation()}
+                                      onClick={() => handleMoveDown(origIdx)}
+                                      disabled={
+                                        hasActiveFilters ||
+                                        origIdx < 0 ||
+                                        origIdx >= localItems.length - 1
+                                      }
+                                      className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-all"
+                                      title={
+                                        hasActiveFilters
+                                          ? 'Limpe os filtros para reordenar a fila'
+                                          : 'Mover para baixo na fila'
+                                      }
+                                    >
+                                      <ArrowDown className="w-3.5 h-3.5" />
+                                    </button>
+                                  </>
+                                );
+                              })()}
                               <button
                                 type="button"
                                 onMouseDown={(e) => e.stopPropagation()}
@@ -3026,7 +3829,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       )}
 
       {/* -------------------------------------------------------- */}
-      {/* MODAL: ADD MANUAL TASK (Tarefa fora do Jira)             */}
+      {/* MODAL: INCLUIR TAREFA (Jira ou Tarefa Avulsa/Não Jira)   */}
       {/* -------------------------------------------------------- */}
       {isAddManualModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 dark:bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
@@ -3045,30 +3848,92 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
               </div>
               <div>
                 <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                  Adicionar Tarefa Avulsa (Não Jira)
+                  Incluir Tarefa no Plano
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Inclua reuniões, alinhamentos, homologações ou tarefas internas no cronograma.
+                  Informe o código para buscar no Jira ou deixe em branco para criar uma tarefa avulsa.
                 </p>
               </div>
             </div>
+
+            {/* Alerta de duplicidade de tarefa Jira não concluída */}
+            {duplicateWarning && (
+              <div className="mb-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700/60 text-amber-800 dark:text-amber-200 text-xs flex items-start gap-2.5 shadow-sm">
+                <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="font-semibold">{duplicateWarning}</p>
+                  <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-0.5">
+                    Você pode prosseguir com a inclusão normalmente se desejar adicionar uma nova ocorrência na fila.
+                  </p>
+                </div>
+              </div>
+            )}
 
             <form onSubmit={handleConfirmAddManual} className="space-y-4">
               {/* Código / Chave e Status */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Código / Chave <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={manualKey}
-                    onChange={(e) => setManualKey(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ''))}
-                    placeholder="Ex: NEO-EXT-01"
-                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-mono font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                  />
-                  <p className="text-[10px] text-slate-400 mt-1">Identificador único no plano.</p>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Código / Chave
+                    </label>
+                    <span className="text-[9px] font-semibold px-1.5 py-0.2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                      {manualKey.trim() === ''
+                        ? 'Não Jira (Avulsa)'
+                        : /^\d+$/.test(manualKey.trim())
+                        ? `Jira (${activeProject?.key || 'EXT'}-${manualKey.trim()})`
+                        : 'Jira'}
+                    </span>
+                  </div>
+                  <div className="relative flex items-center">
+                    <input
+                      type="text"
+                      value={manualKey}
+                      onChange={(e) => setManualKey(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ''))}
+                      onBlur={() => {
+                        if (manualKey.trim()) handleFetchJiraIssue(manualKey.trim());
+                      }}
+                      placeholder="Em branco p/ avulsa ou nº (ex: 123)"
+                      className="w-full pr-20 pl-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-mono font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                    />
+                    <div className="absolute right-1.5 flex items-center gap-1">
+                      {isSearchingJira ? (
+                        <span className="flex items-center gap-1 px-2 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold">
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          <span>Buscando...</span>
+                        </span>
+                      ) : manualKey.trim() ? (
+                        <button
+                          type="button"
+                          onClick={() => handleFetchJiraIssue(manualKey.trim())}
+                          className="px-2 py-1 rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer"
+                          title="Buscar dados no Jira agora"
+                        >
+                          <Search className="w-3 h-3" />
+                          <span>Buscar</span>
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                  {jiraSearchFeedback && (
+                    <div
+                      className={`mt-1.5 flex items-center gap-1.5 text-[11px] font-medium ${
+                        jiraSearchFeedback.type === 'success'
+                          ? 'text-emerald-600 dark:text-emerald-400'
+                          : 'text-amber-600 dark:text-amber-400'
+                      }`}
+                    >
+                      {jiraSearchFeedback.type === 'success' ? (
+                        <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+                      ) : (
+                        <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                      )}
+                      <span>{jiraSearchFeedback.message}</span>
+                    </div>
+                  )}
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Deixe em branco para tarefa avulsa, ou informe o número para buscar no Jira ({activeProject?.key || 'EXT'}).
+                  </p>
                 </div>
 
                 <div>
@@ -3076,15 +3941,15 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                     Status Inicial
                   </label>
                   <select
-                    value={manualStatus}
-                    onChange={(e) => setManualStatus(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                    value={manualExecutionStatus}
+                    onChange={(e) => setManualExecutionStatus(e.target.value as ExecutionStatus)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/50 cursor-pointer"
                   >
-                    <option value="Planejado">Planejado</option>
-                    <option value="A Fazer">A Fazer</option>
-                    <option value="Em Andamento">Em Andamento</option>
-                    <option value="Pendente">Pendente</option>
+                    <option value="not_started">Não Iniciada</option>
+                    <option value="started">Iniciada</option>
+                    <option value="completed">Concluída</option>
                   </select>
+                  <p className="text-[10px] text-slate-400 mt-1">Status de execução na fila.</p>
                 </div>
               </div>
 
@@ -3178,35 +4043,76 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                 </div>
               </div>
 
-              {/* Posição na Fila */}
+              {/* Posição na Fila de Execução */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                   Posição na Fila de Execução
                 </label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => setManualPosition('end')}
-                    className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all text-center ${
+                    className={`py-2 px-2 rounded-xl border text-xs font-bold transition-all text-center flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
                       manualPosition === 'end'
                         ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 shadow-sm'
                         : 'border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-400'
                     }`}
                   >
-                    Final da Fila (Padrão)
+                    <span>Final da Fila</span>
+                    <span className="text-[10px] opacity-70 font-normal">#{localItems.length + 1}</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setManualPosition('start')}
-                    className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all text-center ${
+                    className={`py-2 px-2 rounded-xl border text-xs font-bold transition-all text-center flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
                       manualPosition === 'start'
                         ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 shadow-sm'
                         : 'border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-400'
                     }`}
                   >
-                    Início da Fila (Prioridade)
+                    <span>Início da Fila</span>
+                    <span className="text-[10px] opacity-70 font-normal">#1 (Prioridade)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setManualPosition('custom');
+                      if (!manualCustomPosition || manualCustomPosition < 1) {
+                        setManualCustomPosition(Math.max(1, Math.min(localItems.length + 1, 2)));
+                      }
+                    }}
+                    className={`py-2 px-2 rounded-xl border text-xs font-bold transition-all text-center flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
+                      manualPosition === 'custom'
+                        ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 shadow-sm'
+                        : 'border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-400'
+                    }`}
+                  >
+                    <span>Posição</span>
+                    <span className="text-[10px] opacity-70 font-normal">#{manualCustomPosition || 1}</span>
                   </button>
                 </div>
+
+                {manualPosition === 'custom' && (
+                  <div className="mt-2.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 animate-in fade-in duration-150">
+                    <span className="text-xs text-slate-600 dark:text-slate-400 font-medium">
+                      Posição desejada na fila (1 a {localItems.length + 1}):
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-bold text-slate-400">#</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={localItems.length + 1}
+                        value={manualCustomPosition}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value, 10);
+                          setManualCustomPosition(isNaN(val) ? 1 : Math.max(1, Math.min(localItems.length + 1, val)));
+                        }}
+                        className="w-20 px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-bold text-center focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Action Buttons */}
@@ -3214,16 +4120,16 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                 <button
                   type="button"
                   onClick={() => setIsAddManualModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-all"
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-all cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/30 transition-all active:scale-95"
+                  className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/30 transition-all active:scale-95 cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>Adicionar ao Plano</span>
+                  <span>Incluir no Plano</span>
                 </button>
               </div>
             </form>
@@ -3673,7 +4579,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       <ProjectPdfExportTemplate
         containerRef={pdfExportContainerRef}
         projectName={activeProject?.name || selectedProjectKey}
-        items={displayPlanItems}
+        items={filteredPlanItems}
         settings={settings}
         holidaySet={holidaySet}
         isClientView={isClientView}

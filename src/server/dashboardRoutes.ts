@@ -447,6 +447,19 @@ function extractOptionString(val: any): string | null {
   return null;
 }
 
+function extractLayoutString(val: any): string | null {
+  if (!val) return null;
+  if (typeof val === 'string') return val.trim();
+  if (typeof val === 'number') return String(val).trim();
+  if (Array.isArray(val)) {
+    const parts = val
+      .map((item) => extractOptionString(item) || (typeof item === 'string' ? item.trim() : null))
+      .filter(Boolean);
+    return parts.length > 0 ? parts.join(', ') : null;
+  }
+  return extractOptionString(val) || (typeof val === 'object' ? null : String(val).trim());
+}
+
 /**
  * GET /api/dashboards/jira-neo-ativacoes
  * Retorna dados analíticos de quantidade de ativações do projeto Neogrid (NEO)
@@ -593,7 +606,7 @@ dashboardRoutes.get('/jira-neo-ativacoes', async (req: Request, res: Response): 
       const tipo_ativacao = extractOptionString(f[NEO_CUSTOM_FIELDS.tipo_ativacao]);
 
       // Layout, Setor, Analista
-      const layout = f[NEO_CUSTOM_FIELDS.layout] ? String(f[NEO_CUSTOM_FIELDS.layout]).trim() : null;
+      const layout = extractLayoutString(f[NEO_CUSTOM_FIELDS.layout]);
       const setor = f[NEO_CUSTOM_FIELDS.setor] ? String(f[NEO_CUSTOM_FIELDS.setor]).trim() : null;
       const analista_responsavel = f[NEO_CUSTOM_FIELDS.analista] ? String(f[NEO_CUSTOM_FIELDS.analista]).trim() : null;
 
