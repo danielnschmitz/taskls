@@ -18,6 +18,10 @@ import {
   Moon,
   Info,
   Scale,
+  Package,
+  Receipt,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -25,12 +29,28 @@ import { useAuth } from '../contexts/AuthContext';
 // Chaves do localStorage para manter no cache do navegador
 const STORAGE_KEY_PRINTER_POWER = 'taskls_calc3d_printer_power';
 const STORAGE_KEY_KWH_PRICE = 'taskls_calc3d_kwh_price';
+const STORAGE_KEY_TAX_PERCENT = 'taskls_calc3d_tax_percent';
+
+// Opções pré-definidas para compor os custos adicionais
+const ADDITIONAL_COST_OPTIONS = [
+  'Acessórios (Argola de Chaveiro, Imã, Cordão)',
+  'Embalagem Individual',
+  'Embalagem Final',
+  'Papelaria',
+  'Material de Acabamento',
+  'Outro',
+] as const;
 
 interface CalculationResult {
   filamentCost: number;
   energyCost: number;
   laborCost: number;
   totalCost: number;
+  profitAmount: number;
+  baseSalePrice: number;
+  additionalCost: number;
+  priceBeforeTax: number;
+  taxAmount: number;
   finalPrice: number;
   calculated: boolean;
 }
@@ -64,9 +84,20 @@ export const Calculator3DPage: React.FC<Calculator3DPageProps> = ({ onNavigateHo
   // 4. Margem de Lucro (%)
   const [profitMargin, setProfitMargin] = useState<string>('50');
 
+  // 5. Custos Adicionais (valor único + lista de composição)
+  const [additionalCost, setAdditionalCost] = useState<string>('');
+  const [additionalCostItems, setAdditionalCostItems] = useState<string[]>([]);
+  const [additionalCostOtherText, setAdditionalCostOtherText] = useState<string>('');
+
+  // 6. Alíquota de Imposto (%) - salva no localStorage para persistência de alíquota do negócio
+  const [taxPercent, setTaxPercent] = useState<string>(() => {
+    return localStorage.getItem(STORAGE_KEY_TAX_PERCENT) || '';
+  });
+
   // Estado do cálculo e erros de validação
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedSummary, setCopiedSummary] = useState(false);
   const [hasCalculated, setHasCalculated] = useState(false);
 
   // Armazena no cache do navegador quando o consumo da impressora é alterado
@@ -95,6 +126,30 @@ export const Calculator3DPage: React.FC<Calculator3DPageProps> = ({ onNavigateHo
     }
   };
 
+  // Armazena no cache do navegador quando o % de imposto é alterado
+  const handleTaxPercentChange = (value: string) => {
+    setTaxPercent(value);
+    localStorage.setItem(STORAGE_KEY_TAX_PERCENT, value);
+    if (errors.taxPercent) {
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next.taxPercent;
+        return next;
+      });
+    }
+  };
+
+  // Alterna a seleção de itens de custos adicionais
+  const handleToggleAdditionalItem = (option: string) => {
+    setAdditionalCostItems((prev) => {
+      if (prev.includes(option)) {
+        return prev.filter((item) => item !== option);
+      } else {
+        return [...prev, option];
+      }
+    });
+  };
+
   // Helpers para conversão numérica (suporta formato brasileiro com vírgula e ponto)
   const parsePtBrNumber = (val: string): number => {
     if (!val) return NaN;
@@ -111,6 +166,16 @@ export const Calculator3DPage: React.FC<Calculator3DPageProps> = ({ onNavigateHo
       maximumFractionDigits: 2,
     }).format(val || 0);
   };
+
+  // Rótulos formatados dos itens de composição dos custos adicionais selecionados
+  const selectedCompositionLabels = useMemo(() => {
+    return additionalCostItems.map((item) => {
+      if (item === 'Outro' && additionalCostOtherText.trim()) {
+        return `Outro (${additionalCostOtherText.trim()})`;
+      }
+      return item;
+    });
+  }, [additionalCostItems, additionalCostOtherText]);
 
   // Alterna o modo da mão de obra garantindo exclusividade mútua estrita
   const handleSelectLaborMode = (mode: 'hourly' | 'total') => {
@@ -204,11 +269,25 @@ export const Calculator3DPage: React.FC<Calculator3DPageProps> = ({ onNavigateHo
       newErrors.profitMargin = 'Informe uma margem de lucro válida (0% a 1000%)';
     }
 
+    if (additionalCost.trim()) {
+      const addCost = parsePtBrNumber(additionalCost);
+      if (isNaN(addCost) || addCost < 0) {
+        newErrors.additionalCost = 'Informe um valor válido para os custos adicionais';
+      }
+    }
+
+    if (taxPercent.trim()) {
+      const taxNum = parsePtBrNumber(taxPercent);
+      if (isNaN(taxNum) || taxNum < 0 || taxNum > 100) {
+        newErrors.taxPercent = 'Informe uma alíquota válida de imposto (0% a 100%)';
+      }
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  // Motor de cálculo conforme calculo3d.com.br
+  // Motor de cálculo com Custos de Produção, Lucro, Custos Adicionais e Impostos
   const calculation: CalculationResult = useMemo(() => {
     const fPrice = parsePtBrNumber(filamentPrice) || 0;
     const fQty = parsePtBrNumber(filamentQty) || 0;
@@ -216,6 +295,8 @@ export const Calculator3DPage: React.FC<Calculator3DPageProps> = ({ onNavigateHo
     const pTime = parsePtBrNumber(printTime) || 0;
     const kwh = parsePtBrNumber(kwhPrice) || 0;
     const pMargin = parsePtBrNumber(profitMargin) || 0;
+    const addCost = parsePtBrNumber(additionalCost) || 0;
+    const taxRate = parsePtBrNumber(taxPercent) || 0;
 
     // 1. Custo do Filamento: (Preço * Quantidade) / 1000
     const filamentCost = (fPrice * fQty) / 1000;
@@ -235,16 +316,33 @@ export const Calculator3DPage: React.FC<Calculator3DPageProps> = ({ onNavigateHo
     // 4. Custo Total de Produção
     const totalCost = filamentCost + energyCost + laborCost;
 
-    // 5. Preço Final de Venda com Lucro
-    const finalPrice = totalCost * (1 + pMargin / 100);
+    // 5. Lucro sobre a produção
+    const profitAmount = totalCost * (pMargin / 100);
+    const baseSalePrice = totalCost + profitAmount;
+
+    // 6. Preço de venda com custos adicionais adicionados
+    // Regra: "Esse valor deverá ser adicionado ao 'Preço de venda recomendado'"
+    const priceBeforeTax = baseSalePrice + addCost;
+
+    // 7. Imposto sobre o Preço de Venda Recomendado
+    // Regra: "Deverá também permitir incluir um % de imposto, que deverá ser calculado sobre o 'Preço de venda recomendado' e adicionado nesse mesmo preço."
+    const taxAmount = priceBeforeTax * (taxRate / 100);
+
+    // 8. Preço Final de Venda Recomendado
+    const finalPrice = priceBeforeTax + taxAmount;
 
     return {
       filamentCost,
       energyCost,
       laborCost,
       totalCost,
+      profitAmount,
+      baseSalePrice,
+      additionalCost: addCost,
+      priceBeforeTax,
+      taxAmount,
       finalPrice,
-      calculated: totalCost > 0,
+      calculated: totalCost > 0 || addCost > 0,
     };
   }, [
     filamentPrice,
@@ -256,6 +354,8 @@ export const Calculator3DPage: React.FC<Calculator3DPageProps> = ({ onNavigateHo
     laborCostHourly,
     laborCostTotal,
     profitMargin,
+    additionalCost,
+    taxPercent,
   ]);
 
   const handleCalculate = (e: React.FormEvent) => {
@@ -274,6 +374,36 @@ export const Calculator3DPage: React.FC<Calculator3DPageProps> = ({ onNavigateHo
     navigator.clipboard.writeText(url).then(() => {
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2500);
+    });
+  };
+
+  const handleCopySummary = () => {
+    const lines: string[] = [
+      '🖨️ *Orçamento de Impressão 3D*',
+      `• Custo do Filamento: ${formatCurrency(calculation.filamentCost)}`,
+      `• Custo de Energia: ${formatCurrency(calculation.energyCost)}`,
+      `• Mão de Obra: ${formatCurrency(calculation.laborCost)}`,
+      `• Custo Total de Produção (peça 3D): ${formatCurrency(calculation.totalCost)}`,
+      `• Margem de Lucro (${profitMargin || '0'}%): + ${formatCurrency(calculation.profitAmount)}`,
+    ];
+
+    if (calculation.additionalCost > 0) {
+      const compText = selectedCompositionLabels.length > 0 
+        ? ` (${selectedCompositionLabels.join(', ')})` 
+        : '';
+      lines.push(`• Custos Adicionais: + ${formatCurrency(calculation.additionalCost)}${compText}`);
+    }
+
+    if (calculation.taxAmount > 0) {
+      lines.push(`• Imposto sobre a Venda (${taxPercent}%): + ${formatCurrency(calculation.taxAmount)}`);
+    }
+
+    lines.push('──────────────────────────────');
+    lines.push(`💰 *Preço de Venda Recomendado: ${formatCurrency(calculation.finalPrice)}*`);
+
+    navigator.clipboard.writeText(lines.join('\n')).then(() => {
+      setCopiedSummary(true);
+      setTimeout(() => setCopiedSummary(false), 2500);
     });
   };
 
@@ -777,6 +907,208 @@ export const Calculator3DPage: React.FC<Calculator3DPageProps> = ({ onNavigateHo
               </div>
             </section>
 
+            {/* SEÇÃO 4: CUSTOS ADICIONAIS E IMPOSTOS */}
+            <section aria-labelledby="section-additional-costs">
+              <div className="flex items-center space-x-3 mb-4 pb-2 border-b border-slate-700/60">
+                <div className="w-8 h-8 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center font-bold">
+                  <Package className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 id="section-additional-costs" className="text-base font-bold text-white">
+                    Custos Adicionais e Impostos
+                  </h2>
+                  <p className="text-[11px] text-slate-400">
+                    Acessórios, embalagens, acabamentos e alíquota de impostos sobre a venda
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-5">
+                {/* Inputs de Valor Único e Alíquota de Imposto em Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  {/* Valor dos Custos Adicionais */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1.5" htmlFor="additional-cost">
+                      Valor dos custos adicionais (R$)
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                        R$
+                      </span>
+                      <input
+                        id="additional-cost"
+                        type="text"
+                        inputMode="decimal"
+                        value={additionalCost}
+                        onChange={(e) => {
+                          setAdditionalCost(e.target.value);
+                          if (errors.additionalCost) {
+                            setErrors((prev) => {
+                              const n = { ...prev };
+                              delete n.additionalCost;
+                              return n;
+                            });
+                          }
+                        }}
+                        placeholder="Ex: 15,00"
+                        className={`w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-900 border ${
+                          errors.additionalCost
+                            ? 'border-rose-500 ring-1 ring-rose-500'
+                            : 'border-slate-700 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500'
+                        } text-white text-xs font-bold focus:outline-none transition-all`}
+                      />
+                    </div>
+                    <span className="text-[11px] text-slate-400 mt-1 block">
+                      Valor único adicionado ao preço de venda recomendado
+                    </span>
+                    {errors.additionalCost && (
+                      <span className="text-[11px] text-rose-400 mt-1 block font-medium">
+                        {errors.additionalCost}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Alíquota de Imposto (%) */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-bold text-slate-300" htmlFor="tax-percent">
+                        Alíquota de imposto (%)
+                      </label>
+                      <span
+                        className="text-[9px] font-bold text-cyan-400 bg-cyan-500/10 px-1 rounded border border-cyan-500/20"
+                        title="Valor salvo no cache do navegador"
+                      >
+                        Auto-salvo
+                      </span>
+                    </div>
+                    <div className="relative">
+                      <input
+                        id="tax-percent"
+                        type="text"
+                        inputMode="decimal"
+                        value={taxPercent}
+                        onChange={(e) => handleTaxPercentChange(e.target.value)}
+                        placeholder="Ex: 6"
+                        className={`w-full pl-3 pr-9 py-2.5 rounded-xl bg-slate-900 border ${
+                          errors.taxPercent
+                            ? 'border-rose-500 ring-1 ring-rose-500'
+                            : 'border-slate-700 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500'
+                        } text-white text-xs font-bold focus:outline-none transition-all`}
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                        %
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-slate-400 mt-1 block">
+                      Calculado sobre o preço de venda e somado ao preço final
+                    </span>
+                    {errors.taxPercent && (
+                      <span className="text-[11px] text-rose-400 mt-1 block font-medium">
+                        {errors.taxPercent}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Composição do Custo Adicional (Listbox Interativa) */}
+                <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-700/80 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pb-2 border-b border-slate-800">
+                    <div>
+                      <span className="text-xs font-bold text-slate-200 block">
+                        O que compõe esse valor de custos adicionais?
+                      </span>
+                      <span className="text-[11px] text-slate-400">
+                        Selecione as opções que compõem o valor informado acima
+                      </span>
+                    </div>
+                    {additionalCostItems.length > 0 && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-cyan-400 bg-cyan-950/60 border border-cyan-800/60 px-2 py-0.5 rounded-full">
+                          {additionalCostItems.length} {additionalCostItems.length === 1 ? 'item selecionado' : 'itens selecionados'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAdditionalCostItems([]);
+                            setAdditionalCostOtherText('');
+                          }}
+                          className="text-[10px] text-slate-400 hover:text-slate-200 underline transition-colors"
+                        >
+                          Limpar
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Listbox com as opções */}
+                  <div
+                    role="listbox"
+                    aria-multiselectable="true"
+                    aria-label="Opções que compõem o custo adicional"
+                    className="grid grid-cols-1 sm:grid-cols-2 gap-2"
+                  >
+                    {ADDITIONAL_COST_OPTIONS.map((option) => {
+                      const isSelected = additionalCostItems.includes(option);
+                      return (
+                        <div
+                          key={option}
+                          role="option"
+                          aria-selected={isSelected}
+                          tabIndex={0}
+                          onClick={() => handleToggleAdditionalItem(option)}
+                          onKeyDown={(e) => {
+                            if (e.key === ' ' || e.key === 'Enter') {
+                              e.preventDefault();
+                              handleToggleAdditionalItem(option);
+                            }
+                          }}
+                          className={`flex items-start gap-3 p-2.5 rounded-lg border text-xs cursor-pointer select-none transition-all ${
+                            isSelected
+                              ? 'bg-cyan-950/30 border-cyan-500/60 text-white shadow-sm'
+                              : 'bg-slate-900/50 border-slate-800/80 text-slate-300 hover:bg-slate-900 hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="mt-0.5 flex-shrink-0">
+                            {isSelected ? (
+                              <CheckSquare className="w-4 h-4 text-cyan-400" />
+                            ) : (
+                              <Square className="w-4 h-4 text-slate-500" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <span className={`block font-medium ${isSelected ? 'text-white' : 'text-slate-300'}`}>
+                              {option}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Campo de Texto para a opção 'Outro' quando selecionada */}
+                  {additionalCostItems.includes('Outro') && (
+                    <div className="pt-2 border-t border-slate-800/80">
+                      <label
+                        className="block text-xs font-bold text-cyan-300 mb-1.5"
+                        htmlFor="additional-other-text"
+                      >
+                        Descreva o outro custo adicional <span className="text-cyan-400">*</span>
+                      </label>
+                      <input
+                        id="additional-other-text"
+                        type="text"
+                        value={additionalCostOtherText}
+                        onChange={(e) => setAdditionalCostOtherText(e.target.value)}
+                        placeholder="Ex: Fita de cetim decorativa, tag metálica gravada a laser, adesivo personalizado..."
+                        className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-cyan-500/50 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 text-white text-xs font-medium focus:outline-none transition-all placeholder:text-slate-500"
+                        autoFocus
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
+
             {/* BOTÃO CALCULAR */}
             <div className="pt-2">
               <button
@@ -790,19 +1122,41 @@ export const Calculator3DPage: React.FC<Calculator3DPageProps> = ({ onNavigateHo
             </div>
           </form>
 
-          {/* SEÇÃO DE RESULTADOS (Estrutura idêntica à calculo3d.com.br) */}
+          {/* SEÇÃO DE RESULTADOS */}
           <div
             id="calc3d-result-card"
             className="border-t border-slate-700 bg-slate-950/70 p-6 sm:p-8 space-y-5"
           >
-            <div className="flex items-center space-x-3 mb-2">
-              <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
-                <Sparkles className="w-5 h-5" />
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+              <div className="flex items-center space-x-3">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Resultado do Cálculo</h3>
+                  <p className="text-xs text-slate-400">Detalhamento dos custos operacionais, adicionais e preço final sugerido</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-lg font-bold text-white">Resultado do Cálculo</h3>
-                <p className="text-xs text-slate-400">Detalhamento dos custos operacionais e preço final sugerido</p>
-              </div>
+
+              {/* Botão de Copiar Resumo / Orçamento */}
+              <button
+                type="button"
+                onClick={handleCopySummary}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-700 transition-all shadow-sm active:scale-95 self-start sm:self-auto"
+                title="Copiar resumo do orçamento formatado para a área de transferência"
+              >
+                {copiedSummary ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="text-emerald-400 font-bold">Copiado!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5 text-indigo-400" />
+                    <span className="hidden sm:inline">Copiar Orçamento</span>
+                  </>
+                )}
+              </button>
             </div>
 
             <div className="space-y-3">
@@ -837,11 +1191,70 @@ export const Calculator3DPage: React.FC<Calculator3DPageProps> = ({ onNavigateHo
 
               {/* Custo Total de Produção */}
               <div className="flex justify-between items-center py-3 border-t-2 border-b border-slate-700/80 text-sm sm:text-base">
-                <span className="text-white font-bold">Custo total de produção</span>
+                <span className="text-white font-bold">Custo total de produção (peça 3D)</span>
                 <span className="font-mono font-black text-indigo-300">
                   {formatCurrency(calculation.totalCost)}
                 </span>
               </div>
+
+              {/* Margem de Lucro */}
+              <div className="flex justify-between items-center py-2.5 border-b border-slate-800 text-xs sm:text-sm">
+                <span className="text-slate-300 font-medium">Margem de lucro ({profitMargin || '0'}%)</span>
+                <span className="font-mono font-bold text-emerald-400">
+                  + {formatCurrency(calculation.profitAmount)}
+                </span>
+              </div>
+
+              {/* Custos Adicionais (se informado) */}
+              {calculation.additionalCost > 0 && (
+                <div className="py-2.5 border-b border-slate-800 text-xs sm:text-sm space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-300 font-medium flex items-center gap-1.5">
+                      <Package className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Custos adicionais</span>
+                    </span>
+                    <span className="font-mono font-bold text-cyan-300">
+                      + {formatCurrency(calculation.additionalCost)}
+                    </span>
+                  </div>
+
+                  {selectedCompositionLabels.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-0.5">
+                      {selectedCompositionLabels.map((lbl, idx) => (
+                        <span
+                          key={idx}
+                          className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-cyan-950/60 text-cyan-300 border border-cyan-800/60"
+                        >
+                          {lbl}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Subtotal antes dos Impostos (quando há imposto ou adicionais) */}
+              {(calculation.taxAmount > 0 || calculation.additionalCost > 0) && (
+                <div className="flex justify-between items-center py-2 border-b border-slate-800/80 text-xs text-slate-400">
+                  <span>Subtotal recomendado (produção + lucro + adicionais)</span>
+                  <span className="font-mono font-semibold text-slate-300">
+                    {formatCurrency(calculation.priceBeforeTax)}
+                  </span>
+                </div>
+              )}
+
+              {/* Imposto sobre a Venda (se informado) */}
+              {calculation.taxAmount > 0 && (
+                <div className="flex justify-between items-center py-2.5 border-b border-slate-800 text-xs sm:text-sm">
+                  <span className="text-slate-300 font-medium flex items-center gap-1.5">
+                    <Receipt className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Imposto sobre a venda ({taxPercent}%)</span>
+                  </span>
+                  <span className="font-mono font-bold text-amber-300">
+                    + {formatCurrency(calculation.taxAmount)}
+                  </span>
+                </div>
+              )}
 
               {/* Preço de Venda com Lucro (Destaque Esmeralda) */}
               <div className="bg-gradient-to-r from-emerald-950/40 via-emerald-900/30 to-teal-950/40 border border-emerald-500/40 rounded-2xl p-4 sm:p-5 shadow-lg shadow-emerald-950/20 mt-4">
@@ -852,6 +1265,8 @@ export const Calculator3DPage: React.FC<Calculator3DPageProps> = ({ onNavigateHo
                     </span>
                     <span className="text-xs text-emerald-200/80">
                       Com margem de lucro de {profitMargin || '0'}%
+                      {calculation.additionalCost > 0 ? ` + adicionais (${formatCurrency(calculation.additionalCost)})` : ''}
+                      {calculation.taxAmount > 0 ? ` + imposto (${taxPercent}%)` : ''}
                     </span>
                   </div>
                   <span className="text-2xl sm:text-3xl font-black font-mono text-emerald-400 tracking-tight">

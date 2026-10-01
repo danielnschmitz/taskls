@@ -203,7 +203,7 @@ export const ProjectPdfExportTemplate: React.FC<ProjectPdfExportTemplateProps> =
         return (
           <div
             key={`table-page-${pageIdx}`}
-            className="pdf-export-slide"
+            className="pdf-export-slide pdf-table-slide"
             style={{
               width: 1024,
               height: 576,
@@ -565,7 +565,7 @@ export const ProjectPdfExportTemplate: React.FC<ProjectPdfExportTemplateProps> =
         return (
           <div
             key={`gantt-page-${gIdx}`}
-            className="pdf-export-slide"
+            className="pdf-export-slide pdf-gantt-slide"
             style={{
               width: 1024,
               height: 576,

@@ -1029,33 +1029,45 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
   // -------------------------------------------------------------
 
   const handleExportJpg = async () => {
-    if (!ganttContainerRef.current) return;
     try {
       setIsExporting('jpg');
-      const isDark = resolvedTheme === 'dark';
-      const bgColor = isDark ? '#0c1222' : '#ffffff';
+      await new Promise((r) => setTimeout(r, 200));
 
-      const dataUrl = await toJpeg(ganttContainerRef.current, {
-        quality: 0.95,
-        pixelRatio: 2,
-        backgroundColor: bgColor,
-        filter: (node) => {
-          if (node instanceof HTMLElement && node.getAttribute('data-export-ignore') === 'true') {
-            return false;
-          }
-          return true;
-        },
-      });
+      const container = pdfExportContainerRef.current;
+      if (!container) {
+        throw new Error('Contêiner de exportação não encontrado.');
+      }
+
+      const ganttSlides = container.querySelectorAll<HTMLElement>('.pdf-gantt-slide');
+      if (ganttSlides.length === 0) {
+        throw new Error('Nenhum slide de Gantt encontrado para exportar.');
+      }
 
       const projCleanName = (activeProject?.name || selectedProjectKey).toLowerCase().replace(/\s+/g, '-');
-      const link = document.createElement('a');
-      link.download = `cronograma-gantt-${projCleanName}_${format(new Date(), 'yyyy-MM-dd')}.jpg`;
-      link.href = dataUrl;
-      link.click();
-      onShowToast('Imagem JPG do Gantt exportada com sucesso!', 'success');
-    } catch (err) {
-      console.error(err);
-      onShowToast('Falha ao exportar imagem do Gantt.', 'error');
+      const dateStr = format(new Date(), 'yyyy-MM-dd');
+
+      for (let i = 0; i < ganttSlides.length; i++) {
+        const slideEl = ganttSlides[i];
+        const dataUrl = await toJpeg(slideEl, {
+          quality: 0.98,
+          pixelRatio: 2.5,
+          backgroundColor: '#ffffff',
+          width: 1024,
+          height: 576,
+          cacheBust: true,
+        });
+
+        const link = document.createElement('a');
+        const suffix = ganttSlides.length > 1 ? `_parte${i + 1}` : '';
+        link.download = `cronograma-gantt-${projCleanName}${suffix}_${dateStr}.jpg`;
+        link.href = dataUrl;
+        link.click();
+      }
+
+      onShowToast('Imagem JPG do Gantt exportada com sucesso no padrão SysMiddle!', 'success');
+    } catch (err: any) {
+      console.error('[JPG Export] Erro ao exportar:', err);
+      onShowToast('Falha ao exportar imagem do Gantt: ' + (err.message || ''), 'error');
     } finally {
       setIsExporting(null);
     }
