@@ -418,6 +418,17 @@ export interface ProjectSettings {
   holidays: ProjectHoliday[];
   client_hours_markup_percent?: number;
   client_delivery_buffer_days?: number;
+  issue_types?: string[];
+}
+
+export interface ProjectRecord {
+  id: string;
+  key: string;
+  name: string;
+  description?: string | null;
+  settings?: ProjectSettings;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface PlanItemInput {

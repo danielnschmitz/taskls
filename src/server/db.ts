@@ -2,7 +2,7 @@ import { Pool } from 'pg';
 import dotenv from 'dotenv';
 import path from 'path';
 import crypto from 'crypto';
-import { DEFAULT_PROJECT_SETTINGS } from './projectScheduling';
+import { DEFAULT_PROJECT_SETTINGS, DEFAULT_BRAZILIAN_HOLIDAYS } from './projectScheduling';
 
 // Load .env from project root
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
@@ -257,20 +257,65 @@ export async function initDatabase(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_plan_items_order ON project_plan_items(project_key, sort_order ASC);
       CREATE INDEX IF NOT EXISTS idx_plan_items_issue_key ON project_plan_items(issue_key);
 
+      -- Módulo de Gestão de Projetos: Cadastro de Projetos
+      CREATE TABLE IF NOT EXISTS projects (
+        id VARCHAR(36) PRIMARY KEY,
+        key VARCHAR(20) UNIQUE NOT NULL,
+        name VARCHAR(100) NOT NULL,
+        description TEXT,
+        settings JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_projects_key ON projects(key);
+
+      -- Seed do projeto inicial 'NEO' caso não exista
+      INSERT INTO projects (id, key, name, description, settings)
+      VALUES (
+        'proj_neo',
+        'NEO',
+        'Neogrid',
+        'Projeto de Ativações e Tarefas Neogrid',
+        '{"delivered_users": ["Neogrid"], "work_hours_per_day": 8, "client_hours_markup_percent": 0, "client_delivery_buffer_days": 1, "issue_types": ["Ativação", "Tarefa"]}'::jsonb
+      ) ON CONFLICT (key) DO NOTHING;
+
       -- Atualizar módulos permitidos para incluir 'projects'
       ALTER TABLE users ALTER COLUMN allowed_modules SET DEFAULT ARRAY['tasks', 'cards', 'health', 'dashboards', 'projects']::TEXT[];
       UPDATE users SET allowed_modules = array_append(allowed_modules, 'projects')
       WHERE allowed_modules IS NOT NULL AND NOT ('projects' = ANY(allowed_modules));
     `);
 
-    // Seed de Configurações Iniciais de Gestão de Projetos
-    const projSettingsCheck = await client.query(`SELECT value FROM app_settings WHERE key = 'project_management_settings'`);
-    if (projSettingsCheck.rows.length === 0) {
+    // Seed de Feriados Globais de Gestão de Projetos
+    const globalHolidaysCheck = await client.query(`SELECT value FROM app_settings WHERE key = 'project_global_holidays'`);
+    if (globalHolidaysCheck.rows.length === 0) {
+      const legacySettings = await client.query(`SELECT value FROM app_settings WHERE key = 'project_management_settings'`);
+      const existingHolidays = legacySettings.rows.length > 0 && Array.isArray(legacySettings.rows[0].value?.holidays)
+        ? legacySettings.rows[0].value.holidays
+        : DEFAULT_BRAZILIAN_HOLIDAYS;
+
       await client.query(
-        `INSERT INTO app_settings (key, value) VALUES ('project_management_settings', $1) ON CONFLICT (key) DO NOTHING`,
-        [JSON.stringify(DEFAULT_PROJECT_SETTINGS)]
+        `INSERT INTO app_settings (key, value) VALUES ('project_global_holidays', $1) ON CONFLICT (key) DO NOTHING`,
+        [JSON.stringify(existingHolidays)]
       );
-      console.log('[DB] Configurações padrão de Gestão de Projetos e feriados carregadas.');
+      console.log('[DB] Feriados globais compartilhados carregados.');
+    }
+
+    // Sincronizar configurações do projeto NEO com o legado se necessário
+    const legacyCheck = await client.query(`SELECT value FROM app_settings WHERE key = 'project_management_settings'`);
+    if (legacyCheck.rows.length > 0) {
+      const legVal = legacyCheck.rows[0].value;
+      const neoSettings = {
+        delivered_users: legVal.delivered_users || ['Neogrid'],
+        work_hours_per_day: Number(legVal.work_hours_per_day) || 8,
+        plan_start_date: legVal.plan_start_date || new Date().toISOString().split('T')[0],
+        client_hours_markup_percent: Number(legVal.client_hours_markup_percent) || 0,
+        client_delivery_buffer_days: legVal.client_delivery_buffer_days !== undefined ? Number(legVal.client_delivery_buffer_days) : 1,
+        issue_types: legVal.issue_types || ['Ativação', 'Tarefa'],
+      };
+      await client.query(
+        `UPDATE projects SET settings = $1 WHERE UPPER(key) = 'NEO' AND (settings IS NULL OR settings = '{}'::jsonb)`,
+        [JSON.stringify(neoSettings)]
+      );
     }
 
     // Seed de Usuário Administrador Inicial (se não houver nenhum)

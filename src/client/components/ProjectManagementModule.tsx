@@ -36,6 +36,10 @@ import {
   EyeOff,
   Pencil,
   Radio,
+  FolderPlus,
+  Globe,
+  Briefcase,
+  GripVertical,
 } from 'lucide-react';
 import {
   format,
@@ -53,6 +57,7 @@ import jsPDF from 'jspdf';
 import * as XLSX from 'xlsx';
 
 import {
+  ProjectRecord,
   ProjectSettings,
   ProjectHoliday,
   PlanItemInput,
@@ -95,6 +100,32 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
   // Navigation tab
   const [activeTab, setActiveTab] = useState<'gantt' | 'backlog' | 'settings'>('gantt');
 
+  // Projects Management state
+  const [projects, setProjects] = useState<ProjectRecord[]>([]);
+  const [selectedProjectKey, setSelectedProjectKey] = useState<string>(() => {
+    return localStorage.getItem('taskls_selected_project_key') || 'NEO';
+  });
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false);
+  const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
+
+  // Modais de Criação e Edição de Projeto
+  const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
+  const [newProjectKey, setNewProjectKey] = useState('');
+  const [newProjectName, setNewProjectName] = useState('');
+  const [newProjectDesc, setNewProjectDesc] = useState('');
+  const [isCreatingProject, setIsCreatingProject] = useState(false);
+
+  const [editingProjectModal, setEditingProjectModal] = useState<ProjectRecord | null>(null);
+  const [editProjectName, setEditProjectName] = useState('');
+  const [editProjectDesc, setEditProjectDesc] = useState('');
+  const [isSavingProjectInfo, setIsSavingProjectInfo] = useState(false);
+  const [isDeletingProject, setIsDeletingProject] = useState(false);
+
+  // Active project helper
+  const activeProject = useMemo(() => {
+    return projects.find((p) => p.key === selectedProjectKey) || projects[0] || null;
+  }, [projects, selectedProjectKey]);
+
   // Loading states
   const [isLoadingPlan, setIsLoadingPlan] = useState(true);
   const [isLoadingBacklog, setIsLoadingBacklog] = useState(false);
@@ -109,6 +140,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
     holidays: [],
     client_hours_markup_percent: 0,
     client_delivery_buffer_days: 1,
+    issue_types: ['Ativação', 'Tarefa'],
   });
 
   // Stored / Server Plan vs Live Local Plan
@@ -131,15 +163,30 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
   const [openAccordions, setOpenAccordions] = useState<Record<string, boolean>>({});
   const [backlogSearch, setBacklogSearch] = useState('');
 
-  // Modal: Add Demand to Plan
+  // Modal: Add Demand to Plan (do Jira)
   const [addingIssue, setAddingIssue] = useState<ProjectBacklogIssue | null>(null);
   const [estimateHoursInput, setEstimateHoursInput] = useState<number>(8);
   const [assigneeInput, setAssigneeInput] = useState<string>('');
+
+  // Modal: Add Manual Task (Não Jira)
+  const [isAddManualModalOpen, setIsAddManualModalOpen] = useState(false);
+  const [manualKey, setManualKey] = useState('');
+  const [manualSummary, setManualSummary] = useState('');
+  const [manualAssignee, setManualAssignee] = useState('');
+  const [manualEstimateHours, setManualEstimateHours] = useState<number>(8);
+  const [manualStatus, setManualStatus] = useState('Planejado');
+  const [manualIndustry, setManualIndustry] = useState('');
+  const [manualCanal, setManualCanal] = useState('');
+  const [manualPosition, setManualPosition] = useState<'end' | 'start'>('end');
 
   // Modal: Edit Demand in Plan
   const [editingItem, setEditingItem] = useState<ScheduledPlanItem | null>(null);
   const [editEstimateHours, setEditEstimateHours] = useState<number>(8);
   const [editAssignee, setEditAssignee] = useState<string>('');
+  const [editSummary, setEditSummary] = useState<string>('');
+  const [editStatus, setEditStatus] = useState<string>('Planejado');
+  const [editIndustry, setEditIndustry] = useState<string>('');
+  const [editCanal, setEditCanal] = useState<string>('');
 
   // Modo de visualização alternativo
   const [isClientView, setIsClientView] = useState(false);
@@ -167,11 +214,37 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
     return new Set((settings.holidays || []).map((h) => h.date.trim()));
   }, [settings.holidays]);
 
-  // 1. Fetch initial settings and plan
-  const loadPlanAndSettings = useCallback(async () => {
+  // 0. Fetch projects list
+  const loadProjects = useCallback(async () => {
+    try {
+      setIsLoadingProjects(true);
+      const res = await fetch('/api/projects');
+      if (!res.ok) throw new Error('Falha ao carregar lista de projetos.');
+      const data: ProjectRecord[] = await res.json();
+      setProjects(data);
+      if (data.length > 0 && !data.some((p) => p.key === selectedProjectKey)) {
+        const fallbackKey = data[0].key;
+        setSelectedProjectKey(fallbackKey);
+        localStorage.setItem('taskls_selected_project_key', fallbackKey);
+      }
+    } catch (err: any) {
+      console.error(err);
+      onShowToast(err.message || 'Erro ao carregar lista de projetos.', 'error');
+    } finally {
+      setIsLoadingProjects(false);
+    }
+  }, [selectedProjectKey, onShowToast]);
+
+  useEffect(() => {
+    loadProjects();
+  }, [loadProjects]);
+
+  // 1. Fetch settings and plan for active project
+  const loadPlanAndSettings = useCallback(async (projectKey: string) => {
+    if (!projectKey) return;
     try {
       setIsLoadingPlan(true);
-      const res = await fetch('/api/projects/neo/plan');
+      const res = await fetch(`/api/projects/${encodeURIComponent(projectKey)}/plan`);
       if (!res.ok) throw new Error('Falha ao carregar plano de projeto.');
       const data: ProjectPlanResponse = await res.json();
       setSettings(data.settings);
@@ -187,14 +260,17 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
   }, [onShowToast]);
 
   useEffect(() => {
-    loadPlanAndSettings();
-  }, [loadPlanAndSettings]);
+    if (selectedProjectKey) {
+      loadPlanAndSettings(selectedProjectKey);
+    }
+  }, [selectedProjectKey, loadPlanAndSettings]);
 
-  // 2. Fetch Backlog from Jira
-  const loadBacklog = useCallback(async () => {
+  // 2. Fetch Backlog from Jira for active project
+  const loadBacklog = useCallback(async (projectKey: string) => {
+    if (!projectKey) return;
     try {
       setIsLoadingBacklog(true);
-      const res = await fetch('/api/projects/neo/backlog');
+      const res = await fetch(`/api/projects/${encodeURIComponent(projectKey)}/backlog`);
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
         throw new Error(errJson.error || 'Falha ao buscar backlog do Jira.');
@@ -217,10 +293,165 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
   }, [onShowToast]);
 
   useEffect(() => {
-    if (activeTab === 'backlog' && !backlogData && !isLoadingBacklog) {
-      loadBacklog();
+    if (
+      activeTab === 'backlog' &&
+      selectedProjectKey &&
+      (!backlogData || backlogData.project !== selectedProjectKey) &&
+      !isLoadingBacklog
+    ) {
+      loadBacklog(selectedProjectKey);
     }
-  }, [activeTab, backlogData, isLoadingBacklog, loadBacklog]);
+  }, [activeTab, selectedProjectKey, backlogData, isLoadingBacklog, loadBacklog]);
+
+  // Switch project handler with unsaved changes verification
+  const handleSwitchProject = (newKey: string) => {
+    if (newKey === selectedProjectKey) {
+      setIsProjectDropdownOpen(false);
+      return;
+    }
+    if (hasUnsavedChanges) {
+      if (
+        !window.confirm(
+          'Existem alterações não salvas no plano deste projeto. Ao alternar de projeto, essas alterações serão descartadas. Deseja continuar?'
+        )
+      ) {
+        setIsProjectDropdownOpen(false);
+        return;
+      }
+    }
+    setIsProjectDropdownOpen(false);
+    setSelectedProjectKey(newKey);
+    localStorage.setItem('taskls_selected_project_key', newKey);
+    setBacklogData(null);
+  };
+
+  // Create new project
+  const handleCreateProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanKey = newProjectKey.trim().toUpperCase();
+    const cleanName = newProjectName.trim();
+    if (!cleanKey || !cleanName) {
+      onShowToast('Informe a chave/sigla e o nome do projeto.', 'error');
+      return;
+    }
+
+    try {
+      setIsCreatingProject(true);
+      const res = await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          key: cleanKey,
+          name: cleanName,
+          description: newProjectDesc.trim() || undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || 'Falha ao cadastrar projeto.');
+      }
+
+      const json = await res.json();
+      const created: ProjectRecord = json.project || json;
+      setProjects((prev) => [...prev, created]);
+      setSelectedProjectKey(created.key);
+      localStorage.setItem('taskls_selected_project_key', created.key);
+      setBacklogData(null);
+      setIsNewProjectModalOpen(false);
+      setNewProjectKey('');
+      setNewProjectName('');
+      setNewProjectDesc('');
+      onShowToast(`Projeto "${created.name}" cadastrado com sucesso!`, 'success');
+    } catch (err: any) {
+      console.error(err);
+      onShowToast(err.message || 'Erro ao cadastrar projeto.', 'error');
+    } finally {
+      setIsCreatingProject(false);
+    }
+  };
+
+  // Open edit project modal
+  const handleOpenEditProject = () => {
+    if (!activeProject) return;
+    setEditingProjectModal(activeProject);
+    setEditProjectName(activeProject.name);
+    setEditProjectDesc(activeProject.description || '');
+  };
+
+  // Update project details
+  const handleUpdateProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProjectModal) return;
+    try {
+      setIsSavingProjectInfo(true);
+      const res = await fetch(`/api/projects/${encodeURIComponent(editingProjectModal.key)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editProjectName.trim(),
+          description: editProjectDesc.trim(),
+        }),
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || 'Falha ao atualizar projeto.');
+      }
+
+      const json = await res.json();
+      const updated: ProjectRecord = json.project || json;
+      setProjects((prev) => prev.map((p) => (p.key === updated.key ? updated : p)));
+      setEditingProjectModal(null);
+      onShowToast(`Projeto "${updated.name}" atualizado com sucesso!`, 'success');
+    } catch (err: any) {
+      console.error(err);
+      onShowToast(err.message || 'Erro ao atualizar projeto.', 'error');
+    } finally {
+      setIsSavingProjectInfo(false);
+    }
+  };
+
+  // Delete project
+  const handleDeleteProject = async (projectToDelete: ProjectRecord) => {
+    if (projects.length <= 1) {
+      onShowToast('Não é possível excluir o único projeto restante do sistema.', 'error');
+      return;
+    }
+    if (
+      !window.confirm(
+        `Tem certeza que deseja excluir o projeto "${projectToDelete.name}" (${projectToDelete.key})? Todas as demandas salvas no plano deste projeto serão permanentemente removidas.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setIsDeletingProject(true);
+      const res = await fetch(`/api/projects/${encodeURIComponent(projectToDelete.key)}`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || 'Falha ao excluir projeto.');
+      }
+
+      const remaining = projects.filter((p) => p.key !== projectToDelete.key);
+      setProjects(remaining);
+      setEditingProjectModal(null);
+      const nextKey = remaining[0]?.key || 'NEO';
+      setSelectedProjectKey(nextKey);
+      localStorage.setItem('taskls_selected_project_key', nextKey);
+      setBacklogData(null);
+      onShowToast(`Projeto "${projectToDelete.name}" excluído com sucesso.`, 'info');
+    } catch (err: any) {
+      console.error(err);
+      onShowToast(err.message || 'Erro ao excluir projeto.', 'error');
+    } finally {
+      setIsDeletingProject(false);
+    }
+  };
 
   // Helper to recalculate local items whenever list order or settings change
   const applySchedule = useCallback(
@@ -256,6 +487,52 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       it.sort_order = idx + 1;
     });
     applySchedule(reordered);
+  };
+
+  // Drag and Drop reordering state
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    if (isClientView) return;
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(index));
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    if (isClientView) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverIndex !== index) {
+      setDragOverIndex(index);
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetIndex: number) => {
+    if (isClientView) return;
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === targetIndex) {
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+
+    const reordered = [...localItems];
+    const [movedItem] = reordered.splice(draggedIndex, 1);
+    reordered.splice(targetIndex, 0, movedItem);
+    reordered.forEach((it, idx) => {
+      it.sort_order = idx + 1;
+    });
+
+    applySchedule(reordered);
+    setDraggedIndex(null);
+    setDragOverIndex(null);
   };
 
   const handleRemoveFromPlan = (itemToRemove: ScheduledPlanItem) => {
@@ -320,12 +597,109 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
     onShowToast(`Demanda ${addingIssue.key} incluída na última posição da fila do plano!`, 'success');
   };
 
+  // Open modal to add manual task (Não Jira)
+  const handleOpenAddManualModal = () => {
+    const prefix = activeProject?.key || 'EXT';
+    // Determina o próximo número de tarefa manual no plano
+    let maxNum = 0;
+    const regex = new RegExp(`^${prefix}[-_](?:EXT|AV|TASK)[-_]?(\\d+)`, 'i');
+    localItems.forEach((it) => {
+      const m = it.issue_key.match(regex);
+      if (m && m[1]) {
+        const n = parseInt(m[1], 10);
+        if (!isNaN(n) && n > maxNum) maxNum = n;
+      }
+    });
+    const nextNum = maxNum + 1;
+    const suggestedKey = `${prefix}-EXT-${String(nextNum).padStart(2, '0')}`;
+
+    setManualKey(suggestedKey);
+    setManualSummary('');
+    setManualAssignee(uniqueAssignees[0] || '');
+    setManualEstimateHours(8);
+    setManualStatus('Planejado');
+    setManualIndustry('');
+    setManualCanal('');
+    setManualPosition('end');
+    setIsAddManualModalOpen(true);
+  };
+
+  // Confirm addition of manual task
+  const handleConfirmAddManual = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanKey = manualKey.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+    if (!cleanKey) {
+      onShowToast('Informe um código/chave válido para a tarefa.', 'error');
+      return;
+    }
+
+    if (localItems.some((it) => it.issue_key.toUpperCase() === cleanKey)) {
+      onShowToast(`Já existe uma demanda com a chave "${cleanKey}" no plano deste projeto.`, 'error');
+      return;
+    }
+
+    if (!manualSummary.trim()) {
+      onShowToast('Informe o resumo / título da demanda.', 'error');
+      return;
+    }
+
+    if (!manualAssignee.trim()) {
+      onShowToast('Informe quem irá executar a demanda.', 'error');
+      return;
+    }
+
+    if (!manualEstimateHours || manualEstimateHours <= 0) {
+      onShowToast('Informe uma estimativa de horas válida (maior que 0).', 'error');
+      return;
+    }
+
+    const newItem: PlanItemInput = {
+      id: `manual_${cleanKey.toLowerCase()}_${Date.now()}`,
+      issue_key: cleanKey,
+      summary: manualSummary.trim(),
+      status: manualStatus.trim() || 'Planejado',
+      assignee_name: manualAssignee.trim(),
+      estimate_hours: Number(manualEstimateHours),
+      sort_order: manualPosition === 'start' ? 1 : localItems.length + 1,
+      metadata: {
+        isManual: true,
+        isExternal: true,
+        source: 'manual',
+        issuetype: 'Tarefa Avulsa',
+        priority: 'Medium',
+        industry: manualIndustry.trim() || null,
+        canal: manualCanal.trim() || null,
+        displayStatus: manualStatus.trim() || 'Planejado',
+        rawStatus: manualStatus.trim() || 'Planejado',
+        created: new Date().toISOString(),
+      },
+    };
+
+    let updatedList: PlanItemInput[] = [];
+    if (manualPosition === 'start') {
+      updatedList = [newItem, ...localItems];
+    } else {
+      updatedList = [...localItems, newItem];
+    }
+    updatedList.forEach((it, idx) => {
+      it.sort_order = idx + 1;
+    });
+
+    applySchedule(updatedList);
+    setIsAddManualModalOpen(false);
+    onShowToast(`Tarefa avulsa "${cleanKey}" incluída no plano com sucesso!`, 'success');
+  };
+
   // Open modal to edit plan item
   const handleOpenEditModal = (item: ScheduledPlanItem) => {
     const baseItem = localItems.find((i) => i.id === item.id || i.issue_key === item.issue_key) || item;
     setEditingItem(baseItem);
     setEditEstimateHours(baseItem.estimate_hours);
     setEditAssignee(baseItem.assignee_name);
+    setEditSummary(baseItem.summary);
+    setEditStatus(baseItem.status || 'Planejado');
+    setEditIndustry(baseItem.metadata?.industry || '');
+    setEditCanal(baseItem.metadata?.canal || '');
   };
 
   // Confirm edit of plan item
@@ -343,12 +717,30 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       return;
     }
 
+    const isManual = Boolean(editingItem.metadata?.isManual || editingItem.metadata?.isExternal);
+    if (isManual && !editSummary.trim()) {
+      onShowToast('Informe o resumo / título da demanda.', 'error');
+      return;
+    }
+
     const updatedList = localItems.map((item) => {
       if (item.id === editingItem.id || item.issue_key === editingItem.issue_key) {
+        const newMeta = { ...(item.metadata || {}) };
+        if (isManual) {
+          if (editIndustry.trim()) newMeta.industry = editIndustry.trim();
+          else delete newMeta.industry;
+          if (editCanal.trim()) newMeta.canal = editCanal.trim();
+          else delete newMeta.canal;
+          newMeta.displayStatus = editStatus.trim() || 'Planejado';
+          newMeta.rawStatus = editStatus.trim() || 'Planejado';
+        }
         return {
           ...item,
+          summary: isManual ? editSummary.trim() : item.summary,
+          status: isManual ? (editStatus.trim() || 'Planejado') : item.status,
           estimate_hours: Number(editEstimateHours),
           assignee_name: editAssignee.trim(),
+          metadata: newMeta,
         };
       }
       return item;
@@ -368,7 +760,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       key: editingItem.issue_key,
       summary: editingItem.summary,
       duedate: meta.duedate || '',
-      project: meta.project || { key: 'NEO', name: 'Neogrid' },
+      project: meta.project || { key: activeProject?.key || 'NEO', name: activeProject?.name || 'Neogrid' },
       rawStatus: meta.rawStatus || editingItem.status || '',
       displayStatus: meta.displayStatus || editingItem.status || 'Planejado',
       assignee: editAssignee ? { displayName: editAssignee } : null,
@@ -379,7 +771,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       blockedReason: meta.blockedReason || null,
       url: meta.url || `https://sysmiddle.atlassian.net/browse/${editingItem.issue_key}`,
     };
-  }, [editingItem, editAssignee]);
+  }, [editingItem, editAssignee, activeProject]);
 
   // Save changes to database
   const handleSavePlan = async () => {
@@ -409,7 +801,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
         };
       });
 
-      const res = await fetch('/api/projects/neo/plan', {
+      const res = await fetch(`/api/projects/${encodeURIComponent(selectedProjectKey)}/plan`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ items: itemsToSave }),
@@ -426,7 +818,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       setHasUnsavedChanges(false);
       onShowToast('Plano de projeto salvo com sucesso!', 'success');
       // Invalidate backlog cache so added demands disappear from backlog
-      loadBacklog();
+      loadBacklog(selectedProjectKey);
     } catch (err: any) {
       console.error(err);
       onShowToast(err.message || 'Falha ao salvar plano de projeto.', 'error');
@@ -653,8 +1045,9 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
         },
       });
 
+      const projCleanName = (activeProject?.name || selectedProjectKey).toLowerCase().replace(/\s+/g, '-');
       const link = document.createElement('a');
-      link.download = `cronograma-gantt-neogrid_${format(new Date(), 'yyyy-MM-dd')}.jpg`;
+      link.download = `cronograma-gantt-${projCleanName}_${format(new Date(), 'yyyy-MM-dd')}.jpg`;
       link.href = dataUrl;
       link.click();
       onShowToast('Imagem JPG do Gantt exportada com sucesso!', 'success');
@@ -697,7 +1090,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(16);
       doc.setTextColor(30, 41, 59);
-      doc.text('Plano de Projeto & Cronograma', 14, 16);
+      doc.text(`Plano de Projeto & Cronograma · ${activeProject?.name || selectedProjectKey}`, 14, 16);
 
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
@@ -889,7 +1282,8 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
         }
       }
 
-      doc.save(`relatorio-plano-neogrid_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+      const projCleanName = (activeProject?.name || selectedProjectKey).toLowerCase().replace(/\s+/g, '-');
+      doc.save(`relatorio-plano-${projCleanName}_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
       onShowToast('Relatório PDF exportado com sucesso!', 'success');
     } catch (err) {
       console.error(err);
@@ -909,9 +1303,10 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
     try {
       setIsExporting('excel');
       const rows = displayPlanItems.map((item, idx) => {
+        const isManual = Boolean(item.metadata?.isManual || item.metadata?.isExternal);
         const row: any = {
           Ordem: idx + 1,
-          'Chave Jira': item.issue_key,
+          'Chave / Código': item.issue_key,
           'Resumo da Demanda': item.summary,
           'Indústria': item.metadata?.industry || '-',
           'Canal de Distribuição': item.metadata?.canal || '-',
@@ -923,7 +1318,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
         }
         row['Data Início'] = item.start_date;
         row['Data Fim'] = item.end_date;
-        row['Link Jira'] = item.metadata?.url || `https://sysmiddle.atlassian.net/browse/${item.issue_key}`;
+        row['Link Jira'] = isManual ? '-' : (item.metadata?.url || `https://sysmiddle.atlassian.net/browse/${item.issue_key}`);
         return row;
       });
 
@@ -956,10 +1351,12 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
             { wch: 45 }, // Link Jira
           ];
 
+      const projCleanName = (activeProject?.name || selectedProjectKey).toLowerCase().replace(/\s+/g, '-');
+      const sheetName = `Plano ${activeProject?.name || selectedProjectKey}`.substring(0, 31);
       const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Plano Neogrid');
+      XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
 
-      XLSX.writeFile(workbook, `cronograma-plano-neogrid_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+      XLSX.writeFile(workbook, `cronograma-plano-${projCleanName}_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
       onShowToast('Planilha Excel exportada com sucesso!', 'success');
     } catch (err) {
       console.error(err);
@@ -1026,16 +1423,106 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
               <FolderKanban className="w-6 h-6" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-black text-slate-800 dark:text-white tracking-tight">
-                  Gestão de Projetos · Neogrid
-                </h1>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-500/20 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30">
-                  PROJETO NEO
-                </span>
+              <div className="flex flex-wrap items-center gap-2.5">
+                {/* Project Selector Dropdown */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsProjectDropdownOpen((prev) => !prev)}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700/80 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white transition-all shadow-sm active:scale-95 text-left"
+                    title="Alternar entre projetos cadastrados"
+                  >
+                    <Briefcase className="w-4 h-4 text-indigo-500 flex-shrink-0" />
+                    <div className="flex items-center gap-1.5">
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20">
+                        {activeProject?.key || selectedProjectKey}
+                      </span>
+                      <span className="text-sm font-black tracking-tight text-slate-800 dark:text-white truncate max-w-[200px]">
+                        {activeProject?.name || 'Carregando...'}
+                      </span>
+                    </div>
+                    <ChevronDown className="w-3.5 h-3.5 text-slate-400 ml-0.5" />
+                  </button>
+
+                  {/* Dropdown Menu */}
+                  {isProjectDropdownOpen && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-30"
+                        onClick={() => setIsProjectDropdownOpen(false)}
+                      />
+                      <div className="absolute left-0 top-full mt-2 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-40 p-2 space-y-1 animate-in fade-in zoom-in-95 duration-150">
+                        <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Selecione o Projeto Ativo
+                        </div>
+                        <div className="max-h-60 overflow-y-auto space-y-0.5 custom-scrollbar">
+                          {projects.map((p) => {
+                            const isSelected = p.key === selectedProjectKey;
+                            return (
+                              <button
+                                key={p.key}
+                                type="button"
+                                onClick={() => handleSwitchProject(p.key)}
+                                className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-left transition-all ${
+                                  isSelected
+                                    ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-bold border border-indigo-200 dark:border-indigo-500/30'
+                                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/70'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2 truncate">
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                                    {p.key}
+                                  </span>
+                                  <span className="text-xs truncate">{p.name}</span>
+                                </div>
+                                {isSelected && <Check className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 flex-shrink-0" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsProjectDropdownOpen(false);
+                              setIsNewProjectModalOpen(true);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors"
+                          >
+                            <FolderPlus className="w-4 h-4" />
+                            <span>+ Cadastrar Novo Projeto</span>
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Edit Active Project Button */}
+                <button
+                  type="button"
+                  onClick={handleOpenEditProject}
+                  className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-300 dark:border-slate-700 transition-all shadow-sm active:scale-95"
+                  title="Editar dados deste projeto ou excluí-lo"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+
+                {/* New Project Quick Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsNewProjectModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 text-xs font-bold border border-indigo-200 dark:border-indigo-500/30 transition-all shadow-sm active:scale-95"
+                  title="Cadastrar um novo projeto no módulo"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Novo Projeto</span>
+                </button>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Capacidade produtiva, fila sequencial/paralela e cronograma Gantt com recálculo automático.
+
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                {activeProject?.description || 'Capacidade produtiva, fila sequencial/paralela e cronograma Gantt com recálculo automático.'}
               </p>
             </div>
           </div>
@@ -1109,7 +1596,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
               }`}
             >
               <FolderKanban className="w-3.5 h-3.5" />
-              <span>Backlog Neogrid</span>
+              <span>Backlog {activeProject?.name || activeProject?.key || 'Jira'}</span>
               {backlogData && (
                 <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500/20 text-amber-700 dark:text-amber-300">
                   {actualBacklogCount}
@@ -1292,14 +1779,23 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                   Nenhuma demanda adicionada ao plano ainda.
                 </h3>
                 <p className="text-xs text-slate-400 max-w-sm mt-1">
-                  Acesse a aba <strong>Backlog Neogrid</strong> para selecionar atividades e definir a estimativa de horas e responsável.
+                  Acesse a aba <strong>Backlog {activeProject?.name || activeProject?.key || 'Jira'}</strong> para selecionar atividades e definir a estimativa de horas e responsável.
                 </p>
-                <button
-                  onClick={() => setActiveTab('backlog')}
-                  className="mt-4 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-md shadow-indigo-600/20"
-                >
-                  Ver Backlog Neogrid
-                </button>
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                  <button
+                    onClick={() => setActiveTab('backlog')}
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-md shadow-indigo-600/20"
+                  >
+                    Ver Backlog {activeProject?.name || activeProject?.key || 'Jira'}
+                  </button>
+                  <button
+                    onClick={handleOpenAddManualModal}
+                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-md shadow-emerald-600/20 flex items-center gap-1.5"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ Criar Tarefa Avulsa</span>
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="overflow-x-auto pb-4 custom-scrollbar">
@@ -1405,14 +1901,20 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                                 <span className="text-[10px] font-mono font-bold text-slate-400">
                                   #{idx + 1}
                                 </span>
-                                <a
-                                  href={item.metadata?.url || `https://sysmiddle.atlassian.net/browse/${item.issue_key}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-xs font-black text-indigo-600 dark:text-indigo-400 hover:underline truncate"
-                                >
-                                  {item.issue_key}
-                                </a>
+                                {item.metadata?.isManual || item.metadata?.isExternal ? (
+                                  <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 truncate">
+                                    {item.issue_key}
+                                  </span>
+                                ) : (
+                                  <a
+                                    href={item.metadata?.url || `https://sysmiddle.atlassian.net/browse/${item.issue_key}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs font-black text-indigo-600 dark:text-indigo-400 hover:underline truncate"
+                                  >
+                                    {item.issue_key}
+                                  </a>
+                                )}
                                 {!isClientView && (
                                   <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
                                     {item.estimate_hours}h
@@ -1487,13 +1989,26 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                   <span>Fila de Execução das Demandas</span>
                 </h3>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Reordene as atividades para recalcular automaticamente as datas de início e fim da equipe.
+                  Arraste as demandas ou use as flechas para reordenar a fila e recalcular o cronograma automaticamente.
                 </p>
               </div>
 
-              <span className="text-xs text-slate-500 font-semibold">
-                {localItems.length} {localItems.length === 1 ? 'demanda no plano' : 'demandas no plano'}
-              </span>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-slate-500 font-semibold">
+                  {localItems.length} {localItems.length === 1 ? 'demanda no plano' : 'demandas no plano'}
+                </span>
+                {!isClientView && (
+                  <button
+                    type="button"
+                    onClick={handleOpenAddManualModal}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-sm shadow-emerald-600/30 transition-all active:scale-95"
+                    title="Adicionar tarefa avulsa que não está no Jira diretamente ao cronograma"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ Tarefa Avulsa (Não Jira)</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             {localItems.length === 0 ? (
@@ -1560,28 +2075,62 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                       return (
                         <tr
                           key={item.id}
-                          className={`hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors group ${
+                          draggable={!isClientView}
+                          onDragStart={(e) => handleDragStart(e, idx)}
+                          onDragOver={(e) => handleDragOver(e, idx)}
+                          onDragEnd={handleDragEnd}
+                          onDrop={(e) => handleDrop(e, idx)}
+                          className={`transition-all group ${
+                            !isClientView ? 'cursor-grab active:cursor-grabbing' : ''
+                          } ${
                             isBlocked ? 'bg-red-50/40 dark:bg-red-950/20' : ''
+                          } ${
+                            draggedIndex === idx
+                              ? 'opacity-35 bg-indigo-50/60 dark:bg-indigo-950/60 scale-[0.99] border-dashed border-2 border-indigo-400'
+                              : dragOverIndex === idx
+                              ? 'bg-indigo-50/80 dark:bg-indigo-950/70 border-t-2 border-indigo-600 dark:border-indigo-400 shadow-sm'
+                              : 'hover:bg-slate-50/70 dark:hover:bg-slate-800/40'
                           }`}
                         >
-                          <td className="py-3 px-3 font-mono font-bold text-slate-500">
-                            #{idx + 1}
+                          <td className="py-3 px-3 font-mono font-bold text-slate-500 whitespace-nowrap">
+                            <div className="flex items-center gap-1.5">
+                              {!isClientView && (
+                                <span
+                                  className="text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 p-0.5 rounded transition-colors"
+                                  title="Clique e arraste para reordenar"
+                                >
+                                  <GripVertical className="w-3.5 h-3.5" />
+                                </span>
+                              )}
+                              <span>#{idx + 1}</span>
+                            </div>
                           </td>
                           <td className="py-3 px-3">
                             <div className="flex items-center gap-1.5 min-w-0">
-                              <a
-                                href={item.metadata?.url || `https://sysmiddle.atlassian.net/browse/${item.issue_key}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className={`font-black hover:underline flex items-center gap-1 ${
-                                  isBlocked
-                                    ? 'text-red-600 dark:text-red-400'
-                                    : 'text-indigo-600 dark:text-indigo-400'
-                                }`}
-                              >
-                                <span>{item.issue_key}</span>
-                                <ExternalLink className="w-3 h-3 opacity-60 group-hover:opacity-100 flex-shrink-0" />
-                              </a>
+                              {item.metadata?.isManual || item.metadata?.isExternal ? (
+                                <span className="font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                                  <span>{item.issue_key}</span>
+                                  <span className="px-1.5 py-0.2 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[9px] font-bold border border-emerald-200 dark:border-emerald-700/40">
+                                    Manual
+                                  </span>
+                                </span>
+                              ) : (
+                                <a
+                                  href={item.metadata?.url || `https://sysmiddle.atlassian.net/browse/${item.issue_key}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  draggable={false}
+                                  onMouseDown={(e) => e.stopPropagation()}
+                                  className={`font-black hover:underline flex items-center gap-1 ${
+                                    isBlocked
+                                      ? 'text-red-600 dark:text-red-400'
+                                      : 'text-indigo-600 dark:text-indigo-400'
+                                  }`}
+                                >
+                                  <span>{item.issue_key}</span>
+                                  <ExternalLink className="w-3 h-3 opacity-60 group-hover:opacity-100 flex-shrink-0" />
+                                </a>
+                              )}
                               {isBlocked && (
                                 <span
                                   className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-300 text-[9px] font-bold flex-shrink-0"
@@ -1649,6 +2198,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                             <td className="py-3 px-3">
                               <button
                                 type="button"
+                                onMouseDown={(e) => e.stopPropagation()}
                                 onClick={() => handleOpenEditModal(item)}
                                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold border ${color.lightBg} ${color.text} ${color.border} hover:opacity-80 transition-opacity text-left cursor-pointer group/assignee`}
                                 title="Clique para alterar executor ou horas"
@@ -1663,6 +2213,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                             <td className="py-3 px-3">
                               <button
                                 type="button"
+                                onMouseDown={(e) => e.stopPropagation()}
                                 onClick={() => handleOpenEditModal(item)}
                                 className="font-bold text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors inline-flex items-center gap-1 group/hours cursor-pointer text-left"
                                 title="Clique para alterar estimativa de horas ou executor"
@@ -1739,6 +2290,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                               {!isClientView && (
                                 <button
                                   type="button"
+                                  onMouseDown={(e) => e.stopPropagation()}
                                   onClick={() => handleOpenEditModal(item)}
                                   className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all mr-1"
                                   title="Editar estimativa de horas e executor"
@@ -1748,6 +2300,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                               )}
                               <button
                                 type="button"
+                                onMouseDown={(e) => e.stopPropagation()}
                                 onClick={() => handleMoveUp(idx)}
                                 disabled={idx === 0}
                                 className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-all"
@@ -1757,6 +2310,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                               </button>
                               <button
                                 type="button"
+                                onMouseDown={(e) => e.stopPropagation()}
                                 onClick={() => handleMoveDown(idx)}
                                 disabled={idx === localItems.length - 1}
                                 className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-all"
@@ -1766,6 +2320,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                               </button>
                               <button
                                 type="button"
+                                onMouseDown={(e) => e.stopPropagation()}
                                 onClick={() => handleRemoveFromPlan(item)}
                                 className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-all ml-1"
                                 title="Remover do plano e retornar ao backlog"
@@ -1805,11 +2360,26 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
               </div>
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30">
                 <Check className="w-3 h-3 text-indigo-500" />
-                <span>Tipos: Ativação & Tarefa (sem Épicos)</span>
+                <span>
+                  Tipos:{' '}
+                  {settings.issue_types && settings.issue_types.length > 0
+                    ? settings.issue_types.join(' & ')
+                    : 'Todos os tipos (sem Épicos)'}
+                </span>
               </span>
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleOpenAddManualModal}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 dark:text-emerald-300 text-xs font-bold border border-emerald-200 dark:border-emerald-500/30 transition-all shadow-sm active:scale-95"
+                title="Incluir tarefa manual/externa diretamente no plano deste projeto"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Tarefa Avulsa</span>
+              </button>
+
               <button
                 type="button"
                 onClick={handleExpandAll}
@@ -1828,7 +2398,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
 
               <button
                 type="button"
-                onClick={loadBacklog}
+                onClick={() => loadBacklog(selectedProjectKey)}
                 disabled={isLoadingBacklog}
                 className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 transition-all disabled:opacity-50"
                 title="Sincronizar com o Jira agora"
@@ -1842,7 +2412,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
           {isLoadingBacklog ? (
             <div className="py-20 flex flex-col items-center justify-center gap-2">
               <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
-              <p className="text-xs text-slate-400 font-semibold">Carregando backlog do Jira (Projeto NEO)...</p>
+              <p className="text-xs text-slate-400 font-semibold">Carregando backlog do Jira (Projeto {activeProject?.name || selectedProjectKey})...</p>
             </div>
           ) : filteredBacklogGroups.length === 0 ? (
             <div className="py-16 text-center bg-white dark:bg-slate-900/80 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 flex flex-col items-center justify-center">
@@ -1853,7 +2423,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                 Nenhuma demanda pendente encontrada no backlog!
               </h3>
               <p className="text-xs text-slate-500 max-w-sm mt-1">
-                Todas as atividades do projeto Neogrid estão com usuário de entrega ou já foram incluídas no plano.
+                Todas as atividades do projeto {activeProject?.name || selectedProjectKey} estão com usuário de entrega ou já foram incluídas no plano.
               </p>
             </div>
           ) : (
@@ -1926,9 +2496,10 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       {activeTab === 'settings' && (
         <ProjectSettingsPanel
           settings={settings}
+          activeProject={activeProject}
           onSaveSettings={async (updated) => {
             try {
-              const res = await fetch('/api/projects/settings', {
+              const res = await fetch(`/api/projects/${encodeURIComponent(selectedProjectKey)}/settings`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(updated),
@@ -1938,6 +2509,8 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
               setSettings(saved);
               // Recalcula o plano local também
               applySchedule(localItems);
+              // Invalida o backlog para recarregar se os issue_types foram alterados
+              setBacklogData(null);
               onShowToast('Configurações salvas e cronograma recalculado!', 'success');
             } catch (err: any) {
               console.error(err);
@@ -2072,7 +2645,213 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       )}
 
       {/* -------------------------------------------------------- */}
-      {/* MODAL: EDIT DEMAND IN PLAN (Editar Horas + Executor)     */}
+      {/* MODAL: ADD MANUAL TASK (Tarefa fora do Jira)             */}
+      {/* -------------------------------------------------------- */}
+      {isAddManualModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 dark:bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-[#0e1424] border border-slate-200 dark:border-emerald-900/60 rounded-2xl w-full max-w-lg p-6 shadow-2xl relative text-slate-800 dark:text-slate-200">
+            <button
+              type="button"
+              onClick={() => setIsAddManualModalOpen(false)}
+              className="absolute top-4 right-4 p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-600/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center border border-emerald-200 dark:border-emerald-500/30">
+                <Plus className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  Adicionar Tarefa Avulsa (Não Jira)
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Inclua reuniões, alinhamentos, homologações ou tarefas internas no cronograma.
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleConfirmAddManual} className="space-y-4">
+              {/* Código / Chave e Status */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Código / Chave <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={manualKey}
+                    onChange={(e) => setManualKey(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ''))}
+                    placeholder="Ex: NEO-EXT-01"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-mono font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">Identificador único no plano.</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Status Inicial
+                  </label>
+                  <select
+                    value={manualStatus}
+                    onChange={(e) => setManualStatus(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                  >
+                    <option value="Planejado">Planejado</option>
+                    <option value="A Fazer">A Fazer</option>
+                    <option value="Em Andamento">Em Andamento</option>
+                    <option value="Pendente">Pendente</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Título / Resumo da Demanda (Obrigatório) */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Resumo / Título da Demanda <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={manualSummary}
+                  onChange={(e) => setManualSummary(e.target.value)}
+                  placeholder="Ex: Reunião de kick-off, Homologação com cliente, Validação técnica..."
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                />
+              </div>
+
+              {/* Responsável e Estimativa */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Quem irá executá-la? <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <Users className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      required
+                      value={manualAssignee}
+                      onChange={(e) => setManualAssignee(e.target.value)}
+                      placeholder="Nome do responsável"
+                      list="available-assignees-list"
+                      className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Estimativa (Horas) <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <Clock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="number"
+                      min="0.5"
+                      step="0.5"
+                      required
+                      value={manualEstimateHours}
+                      onChange={(e) => setManualEstimateHours(parseFloat(e.target.value) || 0)}
+                      placeholder="Ex: 8"
+                      className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Indústria e Canal (Opcionais) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Indústria (Opcional)
+                  </label>
+                  <div className="relative">
+                    <Building2 className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={manualIndustry}
+                      onChange={(e) => setManualIndustry(e.target.value)}
+                      placeholder="Ex: Varejo, Alimentícia"
+                      className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Canal de Distribuição (Opcional)
+                  </label>
+                  <div className="relative">
+                    <Radio className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={manualCanal}
+                      onChange={(e) => setManualCanal(e.target.value)}
+                      placeholder="Ex: Direto, Distribuidor"
+                      className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Posição na Fila */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Posição na Fila de Execução
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setManualPosition('end')}
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all text-center ${
+                      manualPosition === 'end'
+                        ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 shadow-sm'
+                        : 'border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-400'
+                    }`}
+                  >
+                    Final da Fila (Padrão)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setManualPosition('start')}
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all text-center ${
+                      manualPosition === 'start'
+                        ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 shadow-sm'
+                        : 'border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-400'
+                    }`}
+                  >
+                    Início da Fila (Prioridade)
+                  </button>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsAddManualModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/30 transition-all active:scale-95"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Adicionar ao Plano</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* -------------------------------------------------------- */}
+      {/* MODAL: EDIT DEMAND IN PLAN (Editar Horas, Executor, etc)  */}
       {/* -------------------------------------------------------- */}
       {editingItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 dark:bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
@@ -2094,19 +2873,69 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                   Editar Demanda do Plano
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Altere a estimativa de horas ou o executor da demanda no plano.
+                  {editingItem.metadata?.isManual || editingItem.metadata?.isExternal
+                    ? 'Altere os dados da tarefa avulsa no cronograma.'
+                    : 'Altere a estimativa de horas ou o executor da demanda no plano.'}
                 </p>
               </div>
             </div>
 
             {/* Target Issue Details Card */}
-            {editingDemand && (
+            {editingDemand && !editingItem.metadata?.isManual && !editingItem.metadata?.isExternal ? (
               <div className="mb-5">
                 <JiraCard demand={editingDemand} showDueDateBadge={true} />
+              </div>
+            ) : (
+              <div className="mb-5 p-3.5 rounded-xl border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/40 dark:bg-emerald-950/30">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="font-mono font-bold text-xs text-emerald-700 dark:text-emerald-300">
+                    {editingItem?.issue_key}
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 uppercase">
+                    Tarefa Avulsa (Não Jira)
+                  </span>
+                </div>
+                <div className="text-xs text-slate-700 dark:text-slate-300 font-medium">
+                  {editingItem?.summary}
+                </div>
               </div>
             )}
 
             <form onSubmit={handleConfirmEdit} className="space-y-4">
+              {/* Para tarefas manuais: Resumo e Status */}
+              {(editingItem.metadata?.isManual || editingItem.metadata?.isExternal) && (
+                <>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Resumo / Título da Demanda <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={editSummary}
+                      onChange={(e) => setEditSummary(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Status da Demanda
+                    </label>
+                    <select
+                      value={editStatus}
+                      onChange={(e) => setEditStatus(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                    >
+                      <option value="Planejado">Planejado</option>
+                      <option value="A Fazer">A Fazer</option>
+                      <option value="Em Andamento">Em Andamento</option>
+                      <option value="Pendente">Pendente</option>
+                    </select>
+                  </div>
+                </>
+              )}
+
               {/* Estimativa em Horas (Obrigatório) */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
@@ -2152,6 +2981,36 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                 </p>
               </div>
 
+              {/* Para tarefas manuais: Indústria e Canal */}
+              {(editingItem.metadata?.isManual || editingItem.metadata?.isExternal) && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Indústria (Opcional)
+                    </label>
+                    <input
+                      type="text"
+                      value={editIndustry}
+                      onChange={(e) => setEditIndustry(e.target.value)}
+                      placeholder="Ex: Varejo"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Canal (Opcional)
+                    </label>
+                    <input
+                      type="text"
+                      value={editCanal}
+                      onChange={(e) => setEditCanal(e.target.value)}
+                      placeholder="Ex: Direto"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Action Buttons */}
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
                 <button
@@ -2173,6 +3032,216 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
           </div>
         </div>
       )}
+
+      {/* -------------------------------------------------------- */}
+      {/* MODAL: CREATE NEW PROJECT                                */}
+      {/* -------------------------------------------------------- */}
+      {isNewProjectModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 dark:bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-[#0e1424] border border-slate-200 dark:border-indigo-900/60 rounded-2xl w-full max-w-md p-6 shadow-2xl relative text-slate-800 dark:text-slate-200">
+            <button
+              type="button"
+              onClick={() => setIsNewProjectModalOpen(false)}
+              className="absolute top-4 right-4 p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-600/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center border border-indigo-200 dark:border-indigo-500/30">
+                <FolderPlus className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  Cadastrar Novo Projeto
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Crie um contexto exclusivo para plano, backlog e metas.
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleCreateProject} className="space-y-4">
+              {/* Sigla / Chave do Projeto */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Chave / Sigla Jira <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  maxLength={10}
+                  value={newProjectKey}
+                  onChange={(e) => setNewProjectKey(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ''))}
+                  placeholder="Ex: NEO, PORTAL, CRM"
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-mono font-bold uppercase focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Chave do projeto no Jira (ex: NEO). O backlog buscará as demandas via JQL desse projeto.
+                </p>
+              </div>
+
+              {/* Nome do Projeto */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Nome do Projeto <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newProjectName}
+                  onChange={(e) => setNewProjectName(e.target.value)}
+                  placeholder="Ex: Neogrid, Portal do Cliente"
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                />
+              </div>
+
+              {/* Descrição do Projeto */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Descrição (Opcional)
+                </label>
+                <textarea
+                  rows={2}
+                  value={newProjectDesc}
+                  onChange={(e) => setNewProjectDesc(e.target.value)}
+                  placeholder="Breve descrição do escopo ou equipe..."
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                />
+              </div>
+
+              <div className="p-3 rounded-xl bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50 text-[11px] text-indigo-700 dark:text-indigo-300 space-y-1">
+                <span className="font-bold block">✨ Contexto Isolado:</span>
+                <span>Ao cadastrar o projeto, seu plano Gantt, backlog e parâmetros de jornada serão independentes. Apenas os feriados nacionais serão globais.</span>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsNewProjectModalOpen(false)}
+                  disabled={isCreatingProject}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingProject}
+                  className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition-all active:scale-95 disabled:opacity-50"
+                >
+                  {isCreatingProject ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  <span>Cadastrar Projeto</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* -------------------------------------------------------- */}
+      {/* MODAL: EDIT / MANAGE PROJECT                             */}
+      {/* -------------------------------------------------------- */}
+      {editingProjectModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 dark:bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-[#0e1424] border border-slate-200 dark:border-indigo-900/60 rounded-2xl w-full max-w-md p-6 shadow-2xl relative text-slate-800 dark:text-slate-200">
+            <button
+              type="button"
+              onClick={() => setEditingProjectModal(null)}
+              className="absolute top-4 right-4 p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-600/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center border border-indigo-200 dark:border-indigo-500/30">
+                <Pencil className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  Editar Projeto · {editingProjectModal.key}
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Atualize o nome e descrição ou remova o projeto.
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleUpdateProject} className="space-y-4">
+              {/* Sigla / Chave do Projeto (fixa) */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Chave Jira
+                </label>
+                <div className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-mono font-bold text-slate-500">
+                  {editingProjectModal.key}
+                </div>
+              </div>
+
+              {/* Nome do Projeto */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Nome do Projeto <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editProjectName}
+                  onChange={(e) => setEditProjectName(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                />
+              </div>
+
+              {/* Descrição do Projeto */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Descrição
+                </label>
+                <textarea
+                  rows={2}
+                  value={editProjectDesc}
+                  onChange={(e) => setEditProjectDesc(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => handleDeleteProject(editingProjectModal)}
+                  disabled={isDeletingProject || projects.length <= 1}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  title={projects.length <= 1 ? 'Não é possível excluir o único projeto restante' : 'Excluir projeto e seus itens'}
+                >
+                  {isDeletingProject ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  <span>Excluir Projeto</span>
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingProjectModal(null)}
+                    disabled={isSavingProjectInfo}
+                    className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-all"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingProjectInfo}
+                    className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition-all active:scale-95 disabled:opacity-50"
+                  >
+                    {isSavingProjectInfo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    <span>Salvar</span>
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -2183,17 +3252,20 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
 
 interface ProjectSettingsPanelProps {
   settings: ProjectSettings;
+  activeProject: ProjectRecord | null;
   onSaveSettings: (settings: ProjectSettings) => Promise<void>;
   onResetHolidays: () => Promise<void>;
 }
 
 const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
   settings,
+  activeProject,
   onSaveSettings,
   onResetHolidays,
 }) => {
   const [formData, setFormData] = useState<ProjectSettings>(settings);
   const [newDeliveredUser, setNewDeliveredUser] = useState('');
+  const [newIssueType, setNewIssueType] = useState('');
   const [newHolidayDate, setNewHolidayDate] = useState('');
   const [newHolidayName, setNewHolidayName] = useState('');
   const [holidaySearch, setHolidaySearch] = useState('');
@@ -2220,6 +3292,31 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
     setFormData((prev) => ({
       ...prev,
       delivered_users: prev.delivered_users.filter((u) => u !== name),
+    }));
+  };
+
+  // Add / Remove Issue Types
+  const handleAddIssueType = (customType?: string) => {
+    const typeToAdd = (customType !== undefined ? customType : newIssueType).trim();
+    if (!typeToAdd) return;
+    const currentTypes = formData.issue_types || [];
+    if (!currentTypes.some((t) => t.toLowerCase() === typeToAdd.toLowerCase())) {
+      setFormData((prev) => ({
+        ...prev,
+        issue_types: [...(prev.issue_types || []), typeToAdd],
+      }));
+    }
+    if (customType === undefined) {
+      setNewIssueType('');
+    }
+  };
+
+  const handleRemoveIssueType = (typeToRemove: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      issue_types: (prev.issue_types || []).filter(
+        (t) => t.toLowerCase() !== typeToRemove.toLowerCase()
+      ),
     }));
   };
 
@@ -2264,21 +3361,26 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
 
   return (
     <div className="bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-6">
-      <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4 gap-3">
         <div>
-          <h2 className="text-base font-black text-slate-800 dark:text-white flex items-center gap-2">
-            <SettingsIcon className="w-5 h-5 text-indigo-500" />
-            <span>Configurações do Módulo de Gestão de Projetos</span>
-          </h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Critérios de conclusão, parâmetros de jornada diária e calendário de feriados.
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-black text-slate-800 dark:text-white flex items-center gap-2">
+              <SettingsIcon className="w-5 h-5 text-indigo-500" />
+              <span>Configurações · {activeProject?.name || 'Projeto'}</span>
+            </h2>
+            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20">
+              PROJETO {activeProject?.key || ''}
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            As configurações abaixo (exceto feriados) pertencem exclusivamente a este projeto.
           </p>
         </div>
 
         <button
           onClick={handleSave}
           disabled={isSaving}
-          className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-600/30 transition-all active:scale-95 disabled:opacity-50"
+          className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-600/30 transition-all active:scale-95 disabled:opacity-50 self-start sm:self-auto"
         >
           {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           <span>Salvar Configurações</span>
@@ -2286,15 +3388,116 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* 1. Usuários de Atividade Concluída */}
+        {/* 1. Tipos de Cards Considerados no Backlog */}
         <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 space-y-3">
-          <div>
-            <h3 className="text-xs font-bold text-slate-800 dark:text-white">
-              Usuários de Conclusão / Entrega
-            </h3>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              Demandas atribuídas a esses usuários são consideradas entregues e saem do backlog.
-            </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-xs font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Tipos de Cards Considerados no Backlog</span>
+              </h3>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Filtra quais tipos de demandas (issuetypes do Jira) são consideradas neste projeto.
+              </p>
+            </div>
+            <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 uppercase">
+              Por Projeto
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5 min-h-[38px] p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700">
+            {formData.issue_types && formData.issue_types.length > 0 ? (
+              formData.issue_types.map((type) => (
+                <span
+                  key={type}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-xs font-bold border border-emerald-200 dark:border-emerald-500/30"
+                >
+                  <span>{type}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveIssueType(type)}
+                    className="hover:text-rose-500 transition-colors"
+                    title={`Remover tipo "${type}"`}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))
+            ) : (
+              <span className="text-[11px] italic text-slate-400 px-1">
+                Nenhum tipo específico selecionado (todas as demandas serão consideradas, exceto Épicos e Subtarefas).
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={newIssueType}
+              onChange={(e) => setNewIssueType(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleAddIssueType();
+                }
+              }}
+              placeholder="Digite o tipo (ex: Ativação, Tarefa, Bug)..."
+              className="flex-1 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs text-slate-800 dark:text-white"
+            />
+            <button
+              type="button"
+              onClick={() => handleAddIssueType()}
+              className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 transition-colors"
+            >
+              Adicionar
+            </button>
+          </div>
+
+          {/* Sugestões Rápidas */}
+          <div className="pt-1">
+            <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1.5">
+              Sugestões rápidas:
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {['Ativação', 'Tarefa', 'Task', 'Bug', 'História', 'Story'].map((sug) => {
+                const isSelected = (formData.issue_types || []).some(
+                  (t) => t.toLowerCase() === sug.toLowerCase()
+                );
+                return (
+                  <button
+                    key={sug}
+                    type="button"
+                    disabled={isSelected}
+                    onClick={() => handleAddIssueType(sug)}
+                    className={`text-[11px] px-2 py-0.5 rounded-md font-medium transition-all ${
+                      isSelected
+                        ? 'opacity-40 cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-400'
+                        : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-700/40'
+                    }`}
+                  >
+                    + {sug}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* 2. Usuários de Atividade Concluída */}
+        <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-xs font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Usuários de Conclusão / Entrega</span>
+              </h3>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Demandas atribuídas a esses usuários saem do backlog deste projeto.
+              </p>
+            </div>
+            <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 uppercase">
+              Por Projeto
+            </span>
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5 min-h-[38px] p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700">
@@ -2326,7 +3529,7 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                   handleAddUser();
                 }
               }}
-              placeholder="Adicionar nome de usuário (ex: Neogrid)..."
+              placeholder={`Adicionar usuário de entrega (${activeProject?.name || 'este projeto'})...`}
               className="flex-1 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs text-slate-800 dark:text-white"
             />
             <button
@@ -2339,21 +3542,27 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
           </div>
         </div>
 
-        {/* 2. Parâmetros de Cálculo da Jornada */}
-        <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 space-y-4">
-          <div>
-            <h3 className="text-xs font-bold text-slate-800 dark:text-white">
-              Parâmetros da Jornada de Trabalho
-            </h3>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              Define a capacidade produtiva diária por pessoa e a data de corte inicial do plano.
-            </p>
+        {/* 3. Parâmetros de Cálculo da Jornada */}
+        <div className="md:col-span-2 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-xs font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Parâmetros da Jornada de Trabalho</span>
+              </h3>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Capacidade produtiva diária e parâmetros de cálculo para este projeto.
+              </p>
+            </div>
+            <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 uppercase">
+              Por Projeto
+            </span>
           </div>
 
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
               <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Horas Trabalhadas por Dia (Horas Úteis)
+                Horas por Dia (Úteis)
               </label>
               <input
                 type="number"
@@ -2368,11 +3577,12 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                 }
                 className="w-full px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-white"
               />
+              <p className="text-[10px] text-slate-400 mt-1">Horas úteis produtivas/dia.</p>
             </div>
 
             <div>
               <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Data Base de Início do Planejamento
+                Data Base de Início
               </label>
               <input
                 type="date"
@@ -2385,11 +3595,12 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                 }
                 className="w-full px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-white"
               />
+              <p className="text-[10px] text-slate-400 mt-1">Data que inicia a 1ª tarefa.</p>
             </div>
 
             <div>
               <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Acréscimo de Horas na Visão do Cliente (%)
+                Acréscimo de Horas (%)
               </label>
               <div className="relative">
                 <input
@@ -2412,13 +3623,13 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                 </span>
               </div>
               <p className="text-[10px] text-slate-400 mt-1">
-                Percentual adicionado automaticamente à quantidade de horas informada das demandas quando a visão do cliente estiver ativa (ex: 20%). Deixe 0 para não aplicar acréscimo.
+                Margem no modo cliente.
               </p>
             </div>
 
             <div>
               <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Dias Úteis Adicionais na Visão do Cliente
+                Buffer de Entrega (Dias)
               </label>
               <div className="relative">
                 <input
@@ -2441,7 +3652,7 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                 </span>
               </div>
               <p className="text-[10px] text-slate-400 mt-1">
-                Quantidade de dias úteis adicionados à data de entrega de cada demanda na visão do cliente (padrão: 1 dia útil). Deixe 0 para não estender a data de entrega.
+                Dias extras no modo cliente.
               </p>
             </div>
           </div>
@@ -2449,25 +3660,31 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
       </div>
 
       {/* 3. Gestão de Feriados e Dias Não Trabalhados */}
-      <div className="p-5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 space-y-4">
+      <div className="p-5 rounded-2xl border-2 border-dashed border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/20 dark:bg-indigo-950/20 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h3 className="text-xs font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
-              <Calendar className="w-4 h-4 text-rose-500" />
-              <span>Feriados Nacionais e Dias Não Trabalhados ({formData.holidays.length})</span>
-            </h3>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              Essas datas são puladas automaticamente pelo motor de cronograma durante o cálculo das atividades.
+            <div className="flex items-center gap-2">
+              <h3 className="text-xs font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
+                <Globe className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                <span>Feriados Nacionais e Dias Não Trabalhados ({formData.holidays.length})</span>
+              </h3>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700/50">
+                <Globe className="w-3 h-3" />
+                <span>Global · Compartilhado entre todos os projetos</span>
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+              Esta é a única configuração compartilhada da plataforma. As datas cadastradas aqui afetam o cronograma de todos os projetos cadastrados.
             </p>
           </div>
 
           <button
             type="button"
             onClick={onResetHolidays}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 dark:text-rose-300 dark:border-rose-500/30 text-xs font-bold transition-all shadow-sm self-start sm:self-auto"
-            title="Recarrega a lista padrão com todos os feriados nacionais de 2026 a 2028"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 dark:bg-slate-800 dark:hover:bg-slate-750 dark:text-slate-200 dark:border-slate-700 text-xs font-bold transition-all shadow-sm self-start sm:self-auto"
+            title="Recarrega a lista padrão com todos os feriados nacionais de 2026 a 2028 para todos os projetos"
           >
-            <RotateCcw className="w-3.5 h-3.5" />
+            <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
             <span>Restaurar Feriados Padrões (2026-2028)</span>
           </button>
         </div>
