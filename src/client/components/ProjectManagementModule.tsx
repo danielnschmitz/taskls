@@ -640,8 +640,17 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
   };
 
   const handleExportPdf = async () => {
+    let restoredTab: 'gantt' | 'backlog' | 'settings' | null = null;
     try {
       setIsExporting('pdf');
+
+      // Se não estiver na aba do Gantt, alterna temporariamente para montar o container no DOM
+      if (activeTab !== 'gantt') {
+        restoredTab = activeTab;
+        setActiveTab('gantt');
+        await new Promise((r) => setTimeout(r, 200));
+      }
+
       const doc = new jsPDF({
         orientation: 'landscape',
         unit: 'mm',
@@ -770,12 +779,87 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
         y += 7;
       });
 
+      // Captura e inclusão do cronograma Gantt abaixo da lista de demandas
+      if (ganttContainerRef.current) {
+        try {
+          const isDark = resolvedTheme === 'dark';
+          const bgColor = isDark ? '#0c1222' : '#ffffff';
+
+          const scrollEl = ganttContainerRef.current.querySelector('.overflow-x-auto') as HTMLElement | null;
+          const innerContent = scrollEl?.firstElementChild as HTMLElement | null;
+          const fullContentWidth = innerContent ? innerContent.scrollWidth : 0;
+          const targetWidth = Math.max(
+            ganttContainerRef.current.offsetWidth || 1000,
+            fullContentWidth + 48
+          );
+
+          const ganttDataUrl = await toJpeg(ganttContainerRef.current, {
+            quality: 0.95,
+            pixelRatio: 2,
+            backgroundColor: bgColor,
+            width: targetWidth,
+            style: {
+              width: `${targetWidth}px`,
+              maxWidth: 'none',
+            },
+            filter: (node) => {
+              if (node instanceof HTMLElement && node.getAttribute('data-export-ignore') === 'true') {
+                return false;
+              }
+              return true;
+            },
+          });
+
+          // Obter dimensões reais da imagem gerada
+          const img = new window.Image();
+          img.src = ganttDataUrl;
+          await new Promise<void>((resolve, reject) => {
+            img.onload = () => resolve();
+            img.onerror = (e) => reject(e);
+          });
+
+          const imgWidth = img.naturalWidth || img.width || 1200;
+          const imgHeight = img.naturalHeight || img.height || 400;
+          const aspectRatio = imgHeight / imgWidth;
+
+          // Espaço utilizável na página A4 Paisagem (297 x 210 mm)
+          // Margens padrão: x = 14 a 283 (largura utilizável = 269 mm), y máx = 196 mm
+          const pageWidth = 269;
+          const maxPageHeight = 182; // 196 - 14
+
+          let pdfGanttWidth = pageWidth;
+          let pdfGanttHeight = pdfGanttWidth * aspectRatio;
+
+          const remainingHeightOnPage = 196 - (y + 8);
+
+          // Se couber na mesma página abaixo da lista (com folga e altura mínima de 40mm)
+          if (pdfGanttHeight <= remainingHeightOnPage && remainingHeightOnPage >= 40) {
+            const ganttY = y + 8;
+            doc.addImage(ganttDataUrl, 'JPEG', 14, ganttY, pdfGanttWidth, pdfGanttHeight);
+          } else {
+            // Caso contrário, adiciona uma nova página dedicada ao Gantt
+            doc.addPage('a4', 'landscape');
+            if (pdfGanttHeight > maxPageHeight) {
+              pdfGanttHeight = maxPageHeight;
+              pdfGanttWidth = pdfGanttHeight / aspectRatio;
+            }
+            const ganttX = 14 + (pageWidth - pdfGanttWidth) / 2;
+            doc.addImage(ganttDataUrl, 'JPEG', ganttX, 14, pdfGanttWidth, pdfGanttHeight);
+          }
+        } catch (ganttErr) {
+          console.error('[PDF Export] Erro ao renderizar Gantt no PDF:', ganttErr);
+        }
+      }
+
       doc.save(`relatorio-plano-neogrid_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
       onShowToast('Relatório PDF exportado com sucesso!', 'success');
     } catch (err) {
       console.error(err);
       onShowToast('Falha ao exportar PDF do plano.', 'error');
     } finally {
+      if (restoredTab !== null) {
+        setActiveTab(restoredTab);
+      }
       setIsExporting(null);
     }
   };
