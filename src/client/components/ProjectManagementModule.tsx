@@ -668,6 +668,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
 
   const handleExportPdf = async () => {
     let restoredTab: 'gantt' | 'backlog' | 'settings' | null = null;
+    const wasDark = document.documentElement.classList.contains('dark');
     try {
       setIsExporting('pdf');
 
@@ -676,6 +677,12 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
         restoredTab = activeTab;
         setActiveTab('gantt');
         await new Promise((r) => setTimeout(r, 200));
+      }
+
+      // O Gantt no PDF deve ser sempre exportado no modo claro: desativa temporariamente o tema escuro
+      if (wasDark) {
+        document.documentElement.classList.remove('dark');
+        await new Promise((r) => setTimeout(r, 120));
       }
 
       const doc = new jsPDF({
@@ -809,8 +816,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       // Captura e inclusão do cronograma Gantt abaixo da lista de demandas
       if (ganttContainerRef.current) {
         try {
-          const isDark = resolvedTheme === 'dark';
-          const bgColor = isDark ? '#0c1222' : '#ffffff';
+          const bgColor = '#ffffff';
 
           const scrollEl = ganttContainerRef.current.querySelector('.overflow-x-auto') as HTMLElement | null;
           const innerContent = scrollEl?.firstElementChild as HTMLElement | null;
@@ -889,6 +895,9 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       console.error(err);
       onShowToast('Falha ao exportar PDF do plano.', 'error');
     } finally {
+      if (wasDark) {
+        document.documentElement.classList.add('dark');
+      }
       if (restoredTab !== null) {
         setActiveTab(restoredTab);
       }
