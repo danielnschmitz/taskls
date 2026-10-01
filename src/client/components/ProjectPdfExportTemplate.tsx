@@ -776,8 +776,6 @@ export const ProjectPdfExportTemplate: React.FC<ProjectPdfExportTemplateProps> =
                     endDM = item.end_date;
                   }
 
-                  const barLabel = item.metadata?.industry || item.summary;
-
                   return (
                     <div
                       key={item.id || item.issue_key}
@@ -844,27 +842,13 @@ export const ProjectPdfExportTemplate: React.FC<ProjectPdfExportTemplateProps> =
                             borderRadius: 6,
                             display: 'flex',
                             alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: '0 8px',
+                            justifyContent: 'flex-end',
+                            padding: '0 5px',
                             boxSizing: 'border-box',
                             boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
                             zIndex: 2,
                           }}
                         >
-                          <span
-                            style={{
-                              color: '#ffffff',
-                              fontWeight: 700,
-                              fontSize: 9.5,
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              marginRight: 6,
-                            }}
-                          >
-                            {barLabel}
-                          </span>
-
                           <span
                             style={{
                               backgroundColor: '#ffffff',
