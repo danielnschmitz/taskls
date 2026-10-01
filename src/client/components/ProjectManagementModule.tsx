@@ -580,7 +580,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
     return maxDateStr;
   }, [displayPlanItems]);
 
-  // Gantt Timeline Dates Calculation
+  // Gantt Timeline Dates Calculation (Exclui sábados e domingos)
   const ganttTimelineDays = useMemo(() => {
     if (displayPlanItems.length === 0) return [];
 
@@ -593,15 +593,42 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
     }
 
     const startDate = parseISO(minDateStr);
-    const endDate = addDays(parseISO(maxDateStr), 5); // buffer de 5 dias
-    const totalDays = differenceInCalendarDays(endDate, startDate) + 1;
+    const maxEnd = parseISO(maxDateStr);
 
+    let curr = startDate;
     const days: Date[] = [];
-    for (let i = 0; i < totalDays; i++) {
-      days.push(addDays(startDate, i));
+
+    // Itera dia a dia incluindo apenas dias de semana (segunda a sexta)
+    while (curr <= maxEnd) {
+      const dayOfWeek = curr.getDay();
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) { // 0 = Domingo, 6 = Sábado
+        days.push(curr);
+      }
+      curr = addDays(curr, 1);
     }
+
+    // Adiciona 3 dias úteis de margem ao final para respirar
+    let bufferCount = 0;
+    while (bufferCount < 3) {
+      const dayOfWeek = curr.getDay();
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+        days.push(curr);
+        bufferCount++;
+      }
+      curr = addDays(curr, 1);
+    }
+
     return days;
   }, [displayPlanItems, settings.plan_start_date]);
+
+  // Mapa de datas (YYYY-MM-DD) para o índice da coluna correspondente no Gantt
+  const timelineDayIndexMap = useMemo(() => {
+    const map = new Map<string, number>();
+    ganttTimelineDays.forEach((d, idx) => {
+      map.set(format(d, 'yyyy-MM-dd'), idx);
+    });
+    return map;
+  }, [ganttTimelineDays]);
 
   // -------------------------------------------------------------
   // EXPORT FUNCTIONS: JPG, PDF, EXCEL
@@ -803,8 +830,13 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
               maxWidth: 'none',
             },
             filter: (node) => {
-              if (node instanceof HTMLElement && node.getAttribute('data-export-ignore') === 'true') {
-                return false;
+              if (node instanceof HTMLElement) {
+                if (node.getAttribute('data-export-ignore') === 'true') {
+                  return false;
+                }
+                if (node.getAttribute('data-gantt-header') === 'true') {
+                  return false;
+                }
               }
               return true;
             },
@@ -1207,7 +1239,10 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
             ref={ganttContainerRef}
             className="bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm overflow-hidden"
           >
-            <div className="flex items-center justify-between gap-3 mb-4">
+            <div
+              data-gantt-header="true"
+              className="flex items-center justify-between gap-3 mb-4"
+            >
               <div>
                 <h2 className="text-sm font-black text-slate-800 dark:text-white flex items-center gap-2">
                   <BarChart2 className="w-4 h-4 text-indigo-500" />
@@ -1268,16 +1303,17 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                     <div className="flex-1 flex">
                       {ganttTimelineDays.map((day, idx) => {
                         const dayStr = format(day, 'yyyy-MM-dd');
-                        const isWknd = !isWorkingDay(day, holidaySet);
+                        const isHoliday = holidaySet.has(dayStr);
                         const isTod = isToday(day);
-                        const isFirstOfMonth = day.getDate() === 1 || idx === 0;
+                        const isFirstOfMonth = idx === 0 || day.getMonth() !== ganttTimelineDays[idx - 1].getMonth();
 
                         return (
                           <div
                             key={dayStr}
                             className={`flex-1 min-w-[32px] text-center border-l border-slate-100 dark:border-slate-800/60 ${
-                              isWknd ? 'bg-slate-100/60 dark:bg-slate-950/40 text-slate-400' : ''
+                              isHoliday ? 'bg-slate-100/60 dark:bg-slate-950/40 text-slate-400' : ''
                             } ${isTod ? 'bg-indigo-500/10 dark:bg-indigo-500/20 font-bold' : ''}`}
+                            title={isHoliday ? `Feriado: ${dayStr}` : undefined}
                           >
                             <span className="block text-[9px] uppercase text-slate-400 dark:text-slate-500">
                               {format(day, 'EEE', { locale: ptBR }).substring(0, 3)}
@@ -1286,7 +1322,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                               className={`block text-[11px] font-bold ${
                                 isTod
                                   ? 'text-indigo-600 dark:text-indigo-400'
-                                  : isWknd
+                                  : isHoliday
                                   ? 'text-slate-400'
                                   : 'text-slate-700 dark:text-slate-300'
                               }`}
@@ -1311,14 +1347,42 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                       const startDate = parseISO(item.start_date);
                       const endDate = parseISO(item.end_date);
 
-                      // Calculate column offsets
-                      const timelineStart = ganttTimelineDays[0];
-                      const startOffset = Math.max(0, differenceInCalendarDays(startDate, timelineStart));
-                      const durationDays = Math.max(1, differenceInCalendarDays(endDate, startDate) + 1);
-                      const totalTimelineDays = ganttTimelineDays.length;
+                      // Calcula posições das colunas úteis (sem sábados e domingos)
+                      const totalTimelineDays = ganttTimelineDays.length || 1;
 
-                      const leftPercent = (startOffset / totalTimelineDays) * 100;
-                      const widthPercent = (durationDays / totalTimelineDays) * 100;
+                      let sIdx = timelineDayIndexMap.get(item.start_date);
+                      if (sIdx === undefined) {
+                        const sDate = parseISO(item.start_date);
+                        if (ganttTimelineDays.length > 0 && sDate < ganttTimelineDays[0]) {
+                          sIdx = 0;
+                        } else {
+                          sIdx = ganttTimelineDays.findIndex((d) => d >= sDate);
+                          if (sIdx === -1) sIdx = Math.max(0, totalTimelineDays - 1);
+                        }
+                      }
+
+                      let eIdx = timelineDayIndexMap.get(item.end_date);
+                      if (eIdx === undefined) {
+                        const eDate = parseISO(item.end_date);
+                        if (ganttTimelineDays.length > 0 && eDate > ganttTimelineDays[ganttTimelineDays.length - 1]) {
+                          eIdx = totalTimelineDays - 1;
+                        } else {
+                          let found = -1;
+                          for (let i = ganttTimelineDays.length - 1; i >= 0; i--) {
+                            if (ganttTimelineDays[i] <= eDate) {
+                              found = i;
+                              break;
+                            }
+                          }
+                          eIdx = found >= 0 ? found : sIdx;
+                        }
+                      }
+
+                      if (eIdx < sIdx) eIdx = sIdx;
+
+                      const leftPercent = (sIdx / totalTimelineDays) * 100;
+                      const durationCols = eIdx - sIdx + 1;
+                      const widthPercent = (durationCols / totalTimelineDays) * 100;
 
                       return (
                         <div
@@ -1354,16 +1418,17 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
 
                           {/* Gantt Bar Area (Right) */}
                           <div className="flex-1 relative h-7 bg-slate-50/40 dark:bg-slate-950/20 rounded-lg overflow-hidden border border-slate-100 dark:border-slate-800/60">
-                            {/* Weekend stripe background */}
+                            {/* Grid / Holiday stripe background */}
                             <div className="absolute inset-0 flex pointer-events-none">
                               {ganttTimelineDays.map((d, i) => {
-                                const isWk = !isWorkingDay(d, holidaySet);
+                                const dStr = format(d, 'yyyy-MM-dd');
+                                const isHoliday = holidaySet.has(dStr);
                                 const isTod = isToday(d);
                                 return (
                                   <div
                                     key={i}
                                     className={`flex-1 border-r border-slate-100/60 dark:border-slate-800/40 ${
-                                      isWk ? 'bg-slate-200/40 dark:bg-slate-950/50' : ''
+                                      isHoliday ? 'bg-slate-200/40 dark:bg-slate-950/50' : ''
                                     } ${isTod ? 'bg-indigo-500/10' : ''}`}
                                   />
                                 );
