@@ -637,16 +637,16 @@ projectRoutes.get('/:projectKey/plan', async (req: Request, res: Response): Prom
       [normKey]
     );
 
-    // Se algum item não tiver canal no metadata, buscar do Jira e atualizar (ignora tarefas manuais/externas)
-    const missingCanalKeys = resPlan.rows
-      .filter((r) => !r.metadata?.canal && !r.metadata?.isManual && !r.metadata?.isExternal)
+    // Se algum item não tiver canal ou usuário do Jira no metadata, buscar do Jira e atualizar (ignora tarefas manuais/externas)
+    const missingKeys = resPlan.rows
+      .filter((r) => (!r.metadata?.canal || !r.metadata?.jira_assignee) && !r.metadata?.isManual && !r.metadata?.isExternal)
       .map((r) => r.issue_key);
 
-    const canalMap = new Map<string, { canal: string | null; industry: string | null }>();
+    const jiraInfoMap = new Map<string, { canal: string | null; industry: string | null; assignee: string | null }>();
 
-    if (missingCanalKeys.length > 0 && config.api_token && config.domain && config.email) {
+    if (missingKeys.length > 0 && config.api_token && config.domain && config.email) {
       try {
-        const jql = `key in (${missingCanalKeys.map((k) => `"${k}"`).join(',')})`;
+        const jql = `key in (${missingKeys.map((k) => `"${k}"`).join(',')})`;
         const searchRes = await fetch(`https://${host}/rest/api/3/search/jql`, {
           method: 'POST',
           headers: {
@@ -656,7 +656,7 @@ projectRoutes.get('/:projectKey/plan', async (req: Request, res: Response): Prom
           },
           body: JSON.stringify({
             jql,
-            fields: ['key', 'customfield_10780', 'customfield_10273'],
+            fields: ['key', 'customfield_10780', 'customfield_10273', 'assignee'],
             maxResults: 100,
           }),
         });
@@ -665,20 +665,25 @@ projectRoutes.get('/:projectKey/plan', async (req: Request, res: Response): Prom
           for (const iss of data.issues || []) {
             const ind = extractFieldValue(iss.fields?.customfield_10780);
             const can = extractFieldValue(iss.fields?.customfield_10273);
-            canalMap.set(iss.key, { canal: can, industry: ind });
+            const ass = iss.fields?.assignee?.displayName || iss.fields?.assignee?.name || null;
+            jiraInfoMap.set(iss.key, { canal: can, industry: ind, assignee: ass });
           }
         }
       } catch (err) {
-        console.warn('[Projects API] Falha ao enriquecer canal/indústria:', err);
+        console.warn('[Projects API] Falha ao enriquecer canal/indústria/usuário:', err);
       }
     }
 
     const rawItems: PlanItemInput[] = resPlan.rows.map((r) => {
-      const enriched = canalMap.get(r.issue_key);
+      const enriched = jiraInfoMap.get(r.issue_key);
       const meta = { ...(r.metadata || {}) };
       if (enriched) {
         if (!meta.canal && enriched.canal) meta.canal = enriched.canal;
         if (!meta.industry && enriched.industry) meta.industry = enriched.industry;
+        if (enriched.assignee) meta.jira_assignee = enriched.assignee;
+      }
+      if (!meta.jira_assignee && r.assignee_name) {
+        meta.jira_assignee = r.assignee_name;
       }
       return {
         id: r.id,
@@ -695,9 +700,9 @@ projectRoutes.get('/:projectKey/plan', async (req: Request, res: Response): Prom
       };
     });
 
-    if (canalMap.size > 0) {
+    if (jiraInfoMap.size > 0) {
       for (const item of rawItems) {
-        if (canalMap.has(item.issue_key)) {
+        if (jiraInfoMap.has(item.issue_key)) {
           pool.query(
             `UPDATE project_plan_items SET metadata = $1 WHERE id = $2 AND UPPER(project_key) = $3`,
             [JSON.stringify(item.metadata), item.id, normKey]

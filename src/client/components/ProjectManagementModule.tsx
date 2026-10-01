@@ -3,6 +3,7 @@ import {
   Calendar,
   Clock,
   Users,
+  User,
   ChevronDown,
   ChevronRight,
   Plus,
@@ -587,6 +588,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
         industry: addingIssue.industry,
         layout: addingIssue.layout,
         canal: addingIssue.canal || null,
+        jira_assignee: addingIssue.assignee?.displayName || addingIssue.assignee?.name || assigneeInput.trim() || null,
         isBlocked: addingIssue.isBlocked,
         blockedReason: addingIssue.blockedReason,
         rawStatus: addingIssue.rawStatus,
@@ -668,6 +670,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
         isManual: true,
         isExternal: true,
         source: 'manual',
+        jira_assignee: manualAssignee.trim() || null,
         issuetype: 'Tarefa Avulsa',
         priority: 'Medium',
         industry: manualIndustry.trim() || null,
@@ -1153,9 +1156,15 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       setIsExporting('excel');
       const rows = displayPlanItems.map((item, idx) => {
         const isManual = Boolean(item.metadata?.isManual || item.metadata?.isExternal);
+        const rawUser = item.metadata?.jira_assignee || item.metadata?.assignee?.displayName || item.assignee_name || '';
+        const userFirstName = (!rawUser || rawUser.toLowerCase().includes('não atribuído') || rawUser.toLowerCase().includes('nao atribuido'))
+          ? '-'
+          : rawUser.trim().split(' ')[0];
+
         const row: any = {
           Ordem: idx + 1,
           'Chave / Código': item.issue_key,
+          'Usuário': userFirstName,
           'Resumo da Demanda': item.summary,
           'Indústria': item.metadata?.industry || '-',
           'Canal de Distribuição': item.metadata?.canal || '-',
@@ -1178,6 +1187,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
         ? [
             { wch: 8 },  // Ordem
             { wch: 14 }, // Chave
+            { wch: 16 }, // Usuário
             { wch: 60 }, // Resumo
             { wch: 22 }, // Indústria
             { wch: 24 }, // Canal de Distribuição
@@ -1189,6 +1199,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
         : [
             { wch: 8 },  // Ordem
             { wch: 14 }, // Chave
+            { wch: 16 }, // Usuário
             { wch: 45 }, // Resumo
             { wch: 22 }, // Indústria
             { wch: 24 }, // Canal de Distribuição
@@ -1942,6 +1953,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                     <tr className="border-b border-slate-200 dark:border-slate-800 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                       <th className="py-2.5 px-3">Ordem</th>
                       <th className="py-2.5 px-3">Chave</th>
+                      <th className="py-2.5 px-3">Usuário</th>
                       <th className="py-2.5 px-3">Status</th>
                       <th className="py-2.5 px-3">Resumo da Demanda</th>
                       <th className="py-2.5 px-3">Detalhes</th>
@@ -2062,6 +2074,27 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                                 </span>
                               )}
                             </div>
+                          </td>
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            {(() => {
+                              const rawUser = item.metadata?.jira_assignee || item.metadata?.assignee?.displayName || item.assignee_name || '';
+                              const isUnassigned = !rawUser || rawUser.toLowerCase().includes('não atribuído') || rawUser.toLowerCase().includes('nao atribuido') || rawUser.toLowerCase() === 'unassigned';
+                              const userFirstName = isUnassigned ? '-' : rawUser.trim().split(' ')[0];
+
+                              return (
+                                <div
+                                  className="flex items-center gap-1.5"
+                                  title={`Usuário no Jira: ${rawUser || 'Não atribuído'}`}
+                                >
+                                  <span className="w-5 h-5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center text-[9px] font-black uppercase flex-shrink-0">
+                                    {userFirstName !== '-' ? userFirstName.charAt(0) : '?'}
+                                  </span>
+                                  <span className="font-semibold text-slate-700 dark:text-slate-200 text-xs">
+                                    {userFirstName}
+                                  </span>
+                                </div>
+                              );
+                            })()}
                           </td>
                           <td className="py-3 px-3">
                             <span
