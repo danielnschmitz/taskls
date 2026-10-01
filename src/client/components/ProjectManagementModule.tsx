@@ -52,9 +52,10 @@ import {
   endOfWeek,
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { toJpeg } from 'html-to-image';
+import { toJpeg, toPng } from 'html-to-image';
 import jsPDF from 'jspdf';
 import * as XLSX from 'xlsx';
+import { ProjectPdfExportTemplate } from './ProjectPdfExportTemplate';
 
 import {
   ProjectRecord,
@@ -194,6 +195,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
   // Gantt Chart View state
   const [ganttScale, setGanttScale] = useState<'day' | 'week'>('day');
   const ganttContainerRef = useRef<HTMLDivElement>(null);
+  const pdfExportContainerRef = useRef<HTMLDivElement>(null);
 
   // Assignee Color Mapping Cache
   const assigneeColorMap = useMemo(() => {
@@ -1060,241 +1062,53 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
   };
 
   const handleExportPdf = async () => {
-    let restoredTab: 'gantt' | 'backlog' | 'settings' | null = null;
-    const wasDark = document.documentElement.classList.contains('dark');
     try {
       setIsExporting('pdf');
+      // Pequena pausa para garantir renderização do template no DOM
+      await new Promise((r) => setTimeout(r, 200));
 
-      // Se não estiver na aba do Gantt, alterna temporariamente para montar o container no DOM
-      if (activeTab !== 'gantt') {
-        restoredTab = activeTab;
-        setActiveTab('gantt');
-        await new Promise((r) => setTimeout(r, 200));
+      const container = pdfExportContainerRef.current;
+      if (!container) {
+        throw new Error('Contêiner de exportação PDF não encontrado.');
       }
 
-      // O Gantt no PDF deve ser sempre exportado no modo claro: desativa temporariamente o tema escuro
-      if (wasDark) {
-        document.documentElement.classList.remove('dark');
-        await new Promise((r) => setTimeout(r, 120));
+      const slides = container.querySelectorAll<HTMLElement>('.pdf-export-slide');
+      if (slides.length === 0) {
+        throw new Error('Nenhum slide encontrado para gerar o PDF.');
       }
 
+      // Formato Widescreen 16:9 em milímetros: 297 x 167.0625 mm
       const doc = new jsPDF({
         orientation: 'landscape',
         unit: 'mm',
-        format: 'a4',
+        format: [297, 167.0625],
       });
 
-      const todayStr = format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+      for (let i = 0; i < slides.length; i++) {
+        const slideEl = slides[i];
+        const imgDataUrl = await toPng(slideEl, {
+          quality: 1,
+          pixelRatio: 2.5,
+          backgroundColor: '#ffffff',
+          width: 1024,
+          height: 576,
+          cacheBust: true,
+        });
 
-      // Title & Header
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(16);
-      doc.setTextColor(30, 41, 59);
-      doc.text(`Plano de Projeto & Cronograma · ${activeProject?.name || selectedProjectKey}`, 14, 16);
-
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.setTextColor(100, 116, 139);
-      doc.text(`Gerado em: ${todayStr}`, 14, 22);
-
-      // KPI Summary Box
-      doc.setFillColor(241, 245, 249);
-      doc.roundedRect(14, 26, 269, 14, 2, 2, 'F');
-
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
-      doc.setTextColor(51, 65, 85);
-      doc.text(`Total de Demandas: ${displayPlanItems.length}`, 20, 35);
-      if (!isClientView) {
-        doc.text(`Total de Horas: ${totalPlannedHours}h`, 80, 35);
-        doc.text(`Executores Ativos: ${uniqueAssignees.length}`, 140, 35);
-        doc.text(
-          `Previsão de Término: ${
-            projectedEndDate ? format(parseISO(projectedEndDate), 'dd/MM/yyyy') : 'N/A'
-          }`,
-          205,
-          35
-        );
-      } else {
-        doc.text(
-          `Previsão de Término: ${
-            projectedEndDate ? format(parseISO(projectedEndDate), 'dd/MM/yyyy') : 'N/A'
-          }`,
-          100,
-          35
-        );
-      }
-
-      // Table Header renderer
-      let y = 46;
-      const renderPdfHeader = (curY: number) => {
-        doc.setFillColor(79, 70, 229);
-        doc.rect(14, curY, 269, 8, 'F');
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8);
-        doc.setTextColor(255, 255, 255);
-        doc.text('#', 16, curY + 5.5);
-        if (isClientView) {
-          doc.text('Chave', 24, curY + 5.5);
-          doc.text('Resumo da Demanda', 48, curY + 5.5);
-          doc.text('Indústria', 162, curY + 5.5);
-          doc.text('Canal de Distribuição', 209, curY + 5.5);
-          doc.text('Entrega', 258, curY + 5.5);
-        } else {
-          doc.text('Chave', 25, curY + 5.5);
-          doc.text('Resumo da Demanda', 50, curY + 5.5);
-          doc.text('Responsável', 160, curY + 5.5);
-          doc.text('Estimativa', 205, curY + 5.5);
-          doc.text('Início', 225, curY + 5.5);
-          doc.text('Fim', 245, curY + 5.5);
-          doc.text('Dias Úteis', 265, curY + 5.5);
-        }
-      };
-
-      renderPdfHeader(y);
-      y += 8;
-
-      // Table Rows
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(30, 41, 59);
-
-      displayPlanItems.forEach((item, idx) => {
-        if (y > 185) {
-          doc.addPage('a4', 'landscape');
-          y = 15;
-          renderPdfHeader(y);
-          y += 8;
-          doc.setFont('helvetica', 'normal');
-          doc.setTextColor(30, 41, 59);
+        if (i > 0) {
+          doc.addPage([297, 167.0625], 'landscape');
         }
 
-        // Zebra striping
-        if (idx % 2 === 0) {
-          doc.setFillColor(248, 250, 252);
-          doc.rect(14, y, 269, 7, 'F');
-        }
-
-        doc.text(String(idx + 1), 16, y + 4.8);
-        if (isClientView) {
-          const truncatedSummary =
-            item.summary.length > 68 ? item.summary.substring(0, 66) + '...' : item.summary;
-          const cleanText = (str: string | null | undefined) =>
-            (str || '').replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '').trim() || '-';
-          const ind = cleanText(item.metadata?.industry);
-          const truncatedIndustry = ind.length > 25 ? ind.substring(0, 23) + '...' : ind;
-          const canal = cleanText(item.metadata?.canal);
-          const truncatedCanal = canal.length > 25 ? canal.substring(0, 23) + '...' : canal;
-
-          doc.text(item.issue_key, 24, y + 4.8);
-          doc.text(truncatedSummary, 48, y + 4.8);
-          doc.text(truncatedIndustry, 162, y + 4.8);
-          doc.text(truncatedCanal, 209, y + 4.8);
-          doc.text(format(parseISO(item.end_date), 'dd/MM/yyyy'), 258, y + 4.8);
-        } else {
-          doc.text(item.issue_key, 25, y + 4.8);
-          const truncatedSummary =
-            item.summary.length > 60 ? item.summary.substring(0, 58) + '...' : item.summary;
-          doc.text(truncatedSummary, 50, y + 4.8);
-          doc.text(item.assignee_name, 160, y + 4.8);
-          doc.text(`${item.estimate_hours}h`, 205, y + 4.8);
-          doc.text(format(parseISO(item.start_date), 'dd/MM/yyyy'), 225, y + 4.8);
-          doc.text(format(parseISO(item.end_date), 'dd/MM/yyyy'), 245, y + 4.8);
-          doc.text(`${item.working_days} d`, 265, y + 4.8);
-        }
-
-        y += 7;
-      });
-
-      // Captura e inclusão do cronograma Gantt abaixo da lista de demandas
-      if (ganttContainerRef.current) {
-        try {
-          const bgColor = '#ffffff';
-
-          const scrollEl = ganttContainerRef.current.querySelector('.overflow-x-auto') as HTMLElement | null;
-          const innerContent = scrollEl?.firstElementChild as HTMLElement | null;
-          const fullContentWidth = innerContent ? innerContent.scrollWidth : 0;
-          const targetWidth = Math.max(
-            ganttContainerRef.current.offsetWidth || 1000,
-            fullContentWidth + 48
-          );
-
-          const ganttDataUrl = await toJpeg(ganttContainerRef.current, {
-            quality: 0.95,
-            pixelRatio: 2,
-            backgroundColor: bgColor,
-            width: targetWidth,
-            style: {
-              width: `${targetWidth}px`,
-              maxWidth: 'none',
-            },
-            filter: (node) => {
-              if (node instanceof HTMLElement) {
-                if (node.getAttribute('data-export-ignore') === 'true') {
-                  return false;
-                }
-                if (node.getAttribute('data-gantt-header') === 'true') {
-                  return false;
-                }
-              }
-              return true;
-            },
-          });
-
-          // Obter dimensões reais da imagem gerada
-          const img = new window.Image();
-          img.src = ganttDataUrl;
-          await new Promise<void>((resolve, reject) => {
-            img.onload = () => resolve();
-            img.onerror = (e) => reject(e);
-          });
-
-          const imgWidth = img.naturalWidth || img.width || 1200;
-          const imgHeight = img.naturalHeight || img.height || 400;
-          const aspectRatio = imgHeight / imgWidth;
-
-          // Espaço utilizável na página A4 Paisagem (297 x 210 mm)
-          // Margens padrão: x = 14 a 283 (largura utilizável = 269 mm), y máx = 196 mm
-          const pageWidth = 269;
-          const maxPageHeight = 182; // 196 - 14
-
-          let pdfGanttWidth = pageWidth;
-          let pdfGanttHeight = pdfGanttWidth * aspectRatio;
-
-          const remainingHeightOnPage = 196 - (y + 8);
-
-          // Se couber na mesma página abaixo da lista (com folga e altura mínima de 40mm)
-          if (pdfGanttHeight <= remainingHeightOnPage && remainingHeightOnPage >= 40) {
-            const ganttY = y + 8;
-            doc.addImage(ganttDataUrl, 'JPEG', 14, ganttY, pdfGanttWidth, pdfGanttHeight);
-          } else {
-            // Caso contrário, adiciona uma nova página dedicada ao Gantt
-            doc.addPage('a4', 'landscape');
-            if (pdfGanttHeight > maxPageHeight) {
-              pdfGanttHeight = maxPageHeight;
-              pdfGanttWidth = pdfGanttHeight / aspectRatio;
-            }
-            const ganttX = 14 + (pageWidth - pdfGanttWidth) / 2;
-            doc.addImage(ganttDataUrl, 'JPEG', ganttX, 14, pdfGanttWidth, pdfGanttHeight);
-          }
-        } catch (ganttErr) {
-          console.error('[PDF Export] Erro ao renderizar Gantt no PDF:', ganttErr);
-        }
+        doc.addImage(imgDataUrl, 'PNG', 0, 0, 297, 167.0625, undefined, 'FAST');
       }
 
       const projCleanName = (activeProject?.name || selectedProjectKey).toLowerCase().replace(/\s+/g, '-');
-      doc.save(`relatorio-plano-${projCleanName}_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
-      onShowToast('Relatório PDF exportado com sucesso!', 'success');
-    } catch (err) {
-      console.error(err);
-      onShowToast('Falha ao exportar PDF do plano.', 'error');
+      doc.save(`plano-cronograma-${projCleanName}_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+      onShowToast('Relatório PDF exportado com sucesso no padrão SysMiddle!', 'success');
+    } catch (err: any) {
+      console.error('[PDF Export] Erro ao exportar:', err);
+      onShowToast('Falha ao exportar PDF: ' + (err.message || ''), 'error');
     } finally {
-      if (wasDark) {
-        document.documentElement.classList.add('dark');
-      }
-      if (restoredTab !== null) {
-        setActiveTab(restoredTab);
-      }
       setIsExporting(null);
     }
   };
@@ -3242,6 +3056,16 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
           </div>
         </div>
       )}
+
+      {/* Hidden Off-Screen Container for SysMiddle Branded PDF Export */}
+      <ProjectPdfExportTemplate
+        containerRef={pdfExportContainerRef}
+        projectName={activeProject?.name || selectedProjectKey}
+        items={displayPlanItems}
+        settings={settings}
+        holidaySet={holidaySet}
+        isClientView={isClientView}
+      />
     </div>
   );
 };
