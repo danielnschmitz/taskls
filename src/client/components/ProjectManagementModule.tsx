@@ -700,10 +700,9 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
         doc.text('#', 16, curY + 5.5);
         if (isClientView) {
           doc.text('Chave', 24, curY + 5.5);
-          doc.text('Resumo da Demanda', 46, curY + 5.5);
-          doc.text('Indústria', 145, curY + 5.5);
-          doc.text('Canal de Distribuição', 190, curY + 5.5);
-          doc.text('Início', 235, curY + 5.5);
+          doc.text('Resumo da Demanda', 48, curY + 5.5);
+          doc.text('Indústria', 162, curY + 5.5);
+          doc.text('Canal de Distribuição', 209, curY + 5.5);
           doc.text('Entrega', 258, curY + 5.5);
         } else {
           doc.text('Chave', 25, curY + 5.5);
@@ -743,19 +742,18 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
         doc.text(String(idx + 1), 16, y + 4.8);
         if (isClientView) {
           const truncatedSummary =
-            item.summary.length > 55 ? item.summary.substring(0, 53) + '...' : item.summary;
+            item.summary.length > 68 ? item.summary.substring(0, 66) + '...' : item.summary;
           const cleanText = (str: string | null | undefined) =>
             (str || '').replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '').trim() || '-';
           const ind = cleanText(item.metadata?.industry);
-          const truncatedIndustry = ind.length > 22 ? ind.substring(0, 20) + '...' : ind;
+          const truncatedIndustry = ind.length > 25 ? ind.substring(0, 23) + '...' : ind;
           const canal = cleanText(item.metadata?.canal);
-          const truncatedCanal = canal.length > 22 ? canal.substring(0, 20) + '...' : canal;
+          const truncatedCanal = canal.length > 25 ? canal.substring(0, 23) + '...' : canal;
 
           doc.text(item.issue_key, 24, y + 4.8);
-          doc.text(truncatedSummary, 46, y + 4.8);
-          doc.text(truncatedIndustry, 145, y + 4.8);
-          doc.text(truncatedCanal, 190, y + 4.8);
-          doc.text(format(parseISO(item.start_date), 'dd/MM/yyyy'), 235, y + 4.8);
+          doc.text(truncatedSummary, 48, y + 4.8);
+          doc.text(truncatedIndustry, 162, y + 4.8);
+          doc.text(truncatedCanal, 209, y + 4.8);
           doc.text(format(parseISO(item.end_date), 'dd/MM/yyyy'), 258, y + 4.8);
         } else {
           doc.text(item.issue_key, 25, y + 4.8);
