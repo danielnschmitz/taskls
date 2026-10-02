@@ -260,22 +260,31 @@ export async function initDatabase(): Promise<void> {
       -- Módulo de Gestão de Projetos: Cadastro de Projetos
       CREATE TABLE IF NOT EXISTS projects (
         id VARCHAR(36) PRIMARY KEY,
-        key VARCHAR(20) UNIQUE NOT NULL,
+        key VARCHAR(50) UNIQUE NOT NULL,
         name VARCHAR(100) NOT NULL,
         description TEXT,
+        jira_project_key VARCHAR(50),
         settings JSONB DEFAULT '{}'::jsonb,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
       CREATE INDEX IF NOT EXISTS idx_projects_key ON projects(key);
 
+      -- Migração: Garantir suporte a múltiplos planos por projeto do Jira
+      ALTER TABLE projects ALTER COLUMN key TYPE VARCHAR(50);
+      ALTER TABLE project_plan_items ALTER COLUMN project_key TYPE VARCHAR(50);
+      ALTER TABLE project_change_logs ALTER COLUMN project_key TYPE VARCHAR(50);
+      ALTER TABLE projects ADD COLUMN IF NOT EXISTS jira_project_key VARCHAR(50);
+      UPDATE projects SET jira_project_key = key WHERE jira_project_key IS NULL;
+
       -- Seed do projeto inicial 'NEO' caso não exista
-      INSERT INTO projects (id, key, name, description, settings)
+      INSERT INTO projects (id, key, name, description, jira_project_key, settings)
       VALUES (
         'proj_neo',
         'NEO',
         'Neogrid',
         'Projeto de Ativações e Tarefas Neogrid',
+        'NEO',
         '{"delivered_users": ["Neogrid"], "work_hours_per_day": 8, "client_hours_markup_percent": 0, "client_delivery_buffer_days": 1, "issue_types": ["Ativação", "Tarefa"]}'::jsonb
       ) ON CONFLICT (key) DO NOTHING;
 

@@ -427,6 +427,7 @@ export interface ProjectRecord {
   key: string;
   name: string;
   description?: string | null;
+  jira_project_key?: string;
   settings?: ProjectSettings;
   created_at?: string;
   updated_at?: string;
@@ -440,6 +441,7 @@ export interface PlanItemInput {
   assignee_name: string;
   estimate_hours: number;
   sort_order: number;
+  fixed_start_date?: string | null; // 'YYYY-MM-DD'
   metadata?: any;
 }
 
@@ -448,6 +450,7 @@ export interface ScheduledPlanItem extends PlanItemInput {
   start_date: string; // 'YYYY-MM-DD'
   end_date: string;   // 'YYYY-MM-DD'
   working_days: number;
+  fixed_start_date?: string | null; // 'YYYY-MM-DD'
 }
 
 export interface ProjectChangeLog {

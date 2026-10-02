@@ -92,6 +92,7 @@ export interface PlanItemInput {
   assignee_name: string;
   estimate_hours: number;
   sort_order: number;
+  fixed_start_date?: string | null; // 'YYYY-MM-DD'
   metadata?: any;
 }
 
@@ -100,6 +101,7 @@ export interface ScheduledPlanItem extends PlanItemInput {
   start_date: string; // 'YYYY-MM-DD'
   end_date: string;   // 'YYYY-MM-DD'
   working_days: number;
+  fixed_start_date?: string | null; // 'YYYY-MM-DD'
 }
 
 /**
@@ -142,6 +144,7 @@ export function countWorkingDays(startDateStr: string, endDateStr: string, holid
 interface PersonTimelineState {
   currentDate: Date;
   hoursRemainingToday: number;
+  maxDateReached: Date;
 }
 
 /**
@@ -151,6 +154,7 @@ interface PersonTimelineState {
  * - Considera a jornada diária em horas
  * - Execução em paralelo entre pessoas distintas
  * - Execução sequencial para a mesma pessoa, aproveitando frações de dia restantes
+ * - Respeita datas de início fixas informadas (ideal para novos executores iniciando em datas específicas)
  */
 export function calculatePlanSchedule(
   items: PlanItemInput[],
@@ -179,12 +183,29 @@ export function calculatePlanSchedule(
   for (const item of sortedItems) {
     const personKey = (item.assignee_name || 'Não atribuído').trim() || 'Não atribuído';
     
+    // Obter data de início fixa informada no item (se houver)
+    const rawFixedDate = item.fixed_start_date || item.metadata?.fixed_start_date;
+    let fixedTargetDate: Date | null = null;
+    if (rawFixedDate && typeof rawFixedDate === 'string' && rawFixedDate.trim()) {
+      try {
+        const parsed = parseISO(rawFixedDate.trim().substring(0, 10));
+        if (!isNaN(parsed.getTime())) {
+          fixedTargetDate = getNextWorkingDay(parsed, holidaySet);
+        }
+      } catch {
+        fixedTargetDate = null;
+      }
+    }
+
     // Obtém ou inicializa a linha do tempo desta pessoa
     let person = personStates.get(personKey);
     if (!person) {
+      // Primeiro item desta pessoa: se tiver data de início fixa (ex: novo executor), começa exatamente nela
+      const startDay = fixedTargetDate ? fixedTargetDate : initialWorkDay;
       person = {
-        currentDate: new Date(initialWorkDay.getTime()),
+        currentDate: new Date(startDay.getTime()),
         hoursRemainingToday: workHoursPerDay,
+        maxDateReached: new Date(startDay.getTime()),
       };
       personStates.set(personKey, person);
     } else {
@@ -192,6 +213,25 @@ export function calculatePlanSchedule(
       if (person.hoursRemainingToday <= 0.001) {
         person.currentDate = getNextWorkingDay(addDays(person.currentDate, 1), holidaySet);
         person.hoursRemainingToday = workHoursPerDay;
+      }
+
+      // Se este item possui data de início fixa especificada
+      if (fixedTargetDate) {
+        if (fixedTargetDate > person.currentDate) {
+          // A data fixa é no futuro em relação à conclusão da demanda anterior desta pessoa
+          person.currentDate = new Date(fixedTargetDate.getTime());
+          person.hoursRemainingToday = workHoursPerDay;
+        } else if (fixedTargetDate < person.currentDate) {
+          // Se for fixada em data anterior, posiciona na data fixa
+          person.currentDate = new Date(fixedTargetDate.getTime());
+          person.hoursRemainingToday = workHoursPerDay;
+        }
+      } else {
+        // Sem data fixa: se tarefas anteriores definiram um término mais adiante, não volta no tempo
+        if (person.currentDate < person.maxDateReached) {
+          person.currentDate = getNextWorkingDay(addDays(person.maxDateReached, 1), holidaySet);
+          person.hoursRemainingToday = workHoursPerDay;
+        }
       }
     }
 
@@ -218,14 +258,29 @@ export function calculatePlanSchedule(
       }
     }
 
+    // Atualiza o avanço máximo da pessoa para que tarefas posteriores continuem após esta
+    const taskEndDate = parseISO(itemEndDateStr);
+    if (taskEndDate > person.maxDateReached) {
+      person.maxDateReached = new Date(taskEndDate.getTime());
+    }
+
     const workingDays = countWorkingDays(itemStartDateStr, itemEndDateStr, holidaySet);
+
+    const formattedFixedDate = fixedTargetDate && rawFixedDate
+      ? format(parseISO(rawFixedDate.trim().substring(0, 10)), 'yyyy-MM-dd')
+      : null;
 
     scheduledItems.push({
       ...item,
       id: item.id || `item_${item.issue_key}_${Date.now()}`,
+      fixed_start_date: formattedFixedDate,
       start_date: itemStartDateStr,
       end_date: itemEndDateStr,
       working_days: workingDays,
+      metadata: {
+        ...(item.metadata || {}),
+        fixed_start_date: formattedFixedDate,
+      },
     });
   }
 

@@ -50,6 +50,7 @@ import {
   CalendarSync,
   MessageSquare,
   ArrowUpDown,
+  Pin,
 } from 'lucide-react';
 import {
   format,
@@ -212,14 +213,17 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
 
-  // Modais de Criação e Edição de Projeto
+  // Modais de Criação e Edição de Projeto / Plano
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
+  const [jiraProjects, setJiraProjects] = useState<string[]>([]);
+  const [newJiraKey, setNewJiraKey] = useState('NEO');
   const [newProjectKey, setNewProjectKey] = useState('');
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectDesc, setNewProjectDesc] = useState('');
   const [isCreatingProject, setIsCreatingProject] = useState(false);
 
   const [editingProjectModal, setEditingProjectModal] = useState<ProjectRecord | null>(null);
+  const [editJiraKey, setEditJiraKey] = useState('');
   const [editProjectName, setEditProjectName] = useState('');
   const [editProjectDesc, setEditProjectDesc] = useState('');
   const [isSavingProjectInfo, setIsSavingProjectInfo] = useState(false);
@@ -294,6 +298,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
   const [addingIssue, setAddingIssue] = useState<ProjectBacklogIssue | null>(null);
   const [estimateHoursInput, setEstimateHoursInput] = useState<number>(8);
   const [assigneeInput, setAssigneeInput] = useState<string>('');
+  const [addFixedStartDate, setAddFixedStartDate] = useState<string>('');
 
   // Modal: Incluir Tarefa (Jira ou Tarefa Avulsa/Não Jira)
   const [isAddManualModalOpen, setIsAddManualModalOpen] = useState(false);
@@ -301,6 +306,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
   const [manualSummary, setManualSummary] = useState('');
   const [manualAssignee, setManualAssignee] = useState('');
   const [manualEstimateHours, setManualEstimateHours] = useState<number>(8);
+  const [manualFixedStartDate, setManualFixedStartDate] = useState<string>('');
   const [manualExecutionStatus, setManualExecutionStatus] = useState<ExecutionStatus>('not_started');
   const [manualIndustry, setManualIndustry] = useState('');
   const [manualCanal, setManualCanal] = useState('');
@@ -315,6 +321,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
   const [editingItem, setEditingItem] = useState<ScheduledPlanItem | null>(null);
   const [editEstimateHours, setEditEstimateHours] = useState<number>(8);
   const [editAssignee, setEditAssignee] = useState<string>('');
+  const [editFixedStartDate, setEditFixedStartDate] = useState<string>('');
   const [editSummary, setEditSummary] = useState<string>('');
   const [editStatus, setEditStatus] = useState<string>('Planejado');
   const [editIndustry, setEditIndustry] = useState<string>('');
@@ -380,6 +387,35 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
     return new Set((settings.holidays || []).map((h) => h.date.trim()));
   }, [settings.holidays]);
 
+  // Buscar siglas de projetos do Jira disponíveis
+  const loadJiraProjects = useCallback(async () => {
+    try {
+      const res = await fetch('/api/projects/jira-projects');
+      if (res.ok) {
+        const data: string[] = await res.json();
+        setJiraProjects(data);
+      }
+    } catch (err) {
+      console.warn('[Projects API] Falha ao carregar lista de projetos do Jira:', err);
+    }
+  }, []);
+
+  // Helper para sugerir a próxima chave única disponível para um plano baseado no Jira
+  const suggestNextPlanKey = useCallback(
+    (jiraKey: string) => {
+      const raw = jiraKey.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+      if (!raw) return '';
+      const existingKeys = new Set(projects.map((p) => p.key.toUpperCase()));
+      if (!existingKeys.has(raw)) return raw;
+      let i = 2;
+      while (existingKeys.has(`${raw}-${i}`)) {
+        i++;
+      }
+      return `${raw}-${i}`;
+    },
+    [projects]
+  );
+
   // 0. Fetch projects list
   const loadProjects = useCallback(async () => {
     try {
@@ -393,13 +429,14 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
         setSelectedProjectKey(fallbackKey);
         localStorage.setItem('taskls_selected_project_key', fallbackKey);
       }
+      loadJiraProjects();
     } catch (err: any) {
       console.error(err);
       onShowToast(err.message || 'Erro ao carregar lista de projetos.', 'error');
     } finally {
       setIsLoadingProjects(false);
     }
-  }, [selectedProjectKey, onShowToast]);
+  }, [selectedProjectKey, onShowToast, loadJiraProjects]);
 
   useEffect(() => {
     loadProjects();
@@ -506,13 +543,30 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
     setBacklogData(null);
   };
 
-  // Create new project
+  // Open create new plan modal with auto-suggested keys
+  const handleOpenNewProject = useCallback(() => {
+    const defaultJira = (activeProject?.jira_project_key || activeProject?.key || jiraProjects[0] || 'NEO').toUpperCase();
+    setNewJiraKey(defaultJira);
+    setNewProjectKey(suggestNextPlanKey(defaultJira));
+    setNewProjectName('');
+    setNewProjectDesc('');
+    setIsNewProjectModalOpen(true);
+    loadJiraProjects();
+  }, [activeProject, jiraProjects, suggestNextPlanKey, loadJiraProjects]);
+
+  // Create new project / plan
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanKey = newProjectKey.trim().toUpperCase();
+    const cleanJiraKey = newJiraKey.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+    const cleanKey = newProjectKey.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
     const cleanName = newProjectName.trim();
-    if (!cleanKey || !cleanName) {
-      onShowToast('Informe a chave/sigla e o nome do projeto.', 'error');
+
+    if (!cleanJiraKey) {
+      onShowToast('Informe a chave/sigla do projeto no Jira.', 'error');
+      return;
+    }
+    if (!cleanName) {
+      onShowToast('Informe o nome do plano/projeto.', 'error');
       return;
     }
 
@@ -522,7 +576,8 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          key: cleanKey,
+          jira_project_key: cleanJiraKey,
+          key: cleanKey || undefined,
           name: cleanName,
           description: newProjectDesc.trim() || undefined,
         }),
@@ -530,7 +585,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
 
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.error || 'Falha ao cadastrar projeto.');
+        throw new Error(errJson.error || 'Falha ao cadastrar plano/projeto.');
       }
 
       const json = await res.json();
@@ -543,10 +598,10 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       setNewProjectKey('');
       setNewProjectName('');
       setNewProjectDesc('');
-      onShowToast(`Projeto "${created.name}" cadastrado com sucesso!`, 'success');
+      onShowToast(`Plano "${created.name}" cadastrado com sucesso!`, 'success');
     } catch (err: any) {
       console.error(err);
-      onShowToast(err.message || 'Erro ao cadastrar projeto.', 'error');
+      onShowToast(err.message || 'Erro ao cadastrar plano/projeto.', 'error');
     } finally {
       setIsCreatingProject(false);
     }
@@ -558,36 +613,57 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
     setEditingProjectModal(activeProject);
     setEditProjectName(activeProject.name);
     setEditProjectDesc(activeProject.description || '');
+    setEditJiraKey(activeProject.jira_project_key || activeProject.key || 'NEO');
+    loadJiraProjects();
   };
 
   // Update project details
   const handleUpdateProject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProjectModal) return;
+
+    const cleanJiraKey = editJiraKey.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+    const cleanName = editProjectName.trim();
+
+    if (!cleanName) {
+      onShowToast('O nome do plano é obrigatório.', 'error');
+      return;
+    }
+    if (!cleanJiraKey) {
+      onShowToast('A sigla do projeto Jira associado é obrigatória.', 'error');
+      return;
+    }
+
     try {
       setIsSavingProjectInfo(true);
       const res = await fetch(`/api/projects/${encodeURIComponent(editingProjectModal.key)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: editProjectName.trim(),
+          name: cleanName,
           description: editProjectDesc.trim(),
+          jira_project_key: cleanJiraKey,
         }),
       });
 
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.error || 'Falha ao atualizar projeto.');
+        throw new Error(errJson.error || 'Falha ao atualizar plano.');
       }
 
       const json = await res.json();
       const updated: ProjectRecord = json.project || json;
       setProjects((prev) => prev.map((p) => (p.key === updated.key ? updated : p)));
       setEditingProjectModal(null);
-      onShowToast(`Projeto "${updated.name}" atualizado com sucesso!`, 'success');
+      onShowToast(`Plano "${updated.name}" atualizado com sucesso!`, 'success');
+
+      // Se a chave do Jira foi alterada no plano atual, recarrega o backlog
+      if (updated.key === selectedProjectKey) {
+        loadBacklog(updated.key);
+      }
     } catch (err: any) {
       console.error(err);
-      onShowToast(err.message || 'Erro ao atualizar projeto.', 'error');
+      onShowToast(err.message || 'Erro ao atualizar plano.', 'error');
     } finally {
       setIsSavingProjectInfo(false);
     }
@@ -729,6 +805,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
   const handleOpenAddModal = (issue: ProjectBacklogIssue) => {
     setAddingIssue(issue);
     setEstimateHoursInput(8);
+    setAddFixedStartDate('');
     const jiraAssignee = issue.assignee?.displayName || '';
     const match = registeredAssignees.find(
       (a) => a.trim().toLowerCase() === jiraAssignee.trim().toLowerCase()
@@ -751,6 +828,8 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       return;
     }
 
+    const fixedStart = addFixedStartDate.trim() || null;
+
     const newItem: PlanItemInput = {
       id: `plan_${addingIssue.key}_${Date.now()}`,
       issue_key: addingIssue.key,
@@ -759,6 +838,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       assignee_name: assigneeInput.trim(),
       estimate_hours: Number(estimateHoursInput),
       sort_order: localItems.length + 1, // Sempre no final da fila!
+      fixed_start_date: fixedStart,
       metadata: {
         issuetype: addingIssue.issuetype,
         priority: addingIssue.priority,
@@ -775,6 +855,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
         rawStatus: addingIssue.rawStatus || addingIssue.status,
         displayStatus: 'Planejado',
         execution_status: 'not_started',
+        fixed_start_date: fixedStart,
       },
     };
 
@@ -790,6 +871,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
     setManualSummary('');
     setManualAssignee(registeredAssignees.length === 1 ? registeredAssignees[0] : '');
     setManualEstimateHours(8);
+    setManualFixedStartDate('');
     setManualExecutionStatus('not_started');
     setManualIndustry('');
     setManualCanal('');
@@ -809,10 +891,10 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       setDuplicateWarning(null);
       return;
     }
-    const prefix = activeProject?.key || 'EXT';
+    const jiraKey = (activeProject?.jira_project_key || activeProject?.key || 'EXT').toUpperCase();
     let targetKey = clean;
     if (/^\d+$/.test(clean)) {
-      targetKey = `${prefix}-${clean}`;
+      targetKey = `${jiraKey}-${clean}`;
     }
     const existing = localItems.find((it) => it.issue_key.toUpperCase() === targetKey);
     if (existing) {
@@ -843,10 +925,10 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       return;
     }
 
-    const prefix = activeProject?.key || 'EXT';
+    const jiraKey = (activeProject?.jira_project_key || activeProject?.key || 'EXT').toUpperCase();
     let fullKey = clean;
     if (/^\d+$/.test(clean)) {
-      fullKey = `${prefix}-${clean}`;
+      fullKey = `${jiraKey}-${clean}`;
     }
 
     setIsSearchingJira(true);
@@ -979,7 +1061,8 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
   const handleConfirmAddManual = (e: React.FormEvent) => {
     e.preventDefault();
     const rawKey = manualKey.trim();
-    const prefix = activeProject?.key || 'EXT';
+    const planPrefix = activeProject?.key || 'EXT';
+    const jiraKey = (activeProject?.jira_project_key || activeProject?.key || 'EXT').toUpperCase();
 
     let finalKey = '';
     let isJira = false;
@@ -987,7 +1070,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
     if (!rawKey) {
       // Chave em branco: assumir tarefa que não está no Jira (avulsa)
       let maxNum = 0;
-      const regex = new RegExp(`^${prefix}[-_](?:EXT|AV|TASK)[-_]?(\\d+)`, 'i');
+      const regex = new RegExp(`^${planPrefix}[-_](?:EXT|AV|TASK)[-_]?(\\d+)`, 'i');
       localItems.forEach((it) => {
         const m = it.issue_key.match(regex);
         if (m && m[1]) {
@@ -996,14 +1079,14 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
         }
       });
       const nextNum = maxNum + 1;
-      finalKey = `${prefix}-EXT-${String(nextNum).padStart(2, '0')}`;
+      finalKey = `${planPrefix}-EXT-${String(nextNum).padStart(2, '0')}`;
       isJira = false;
     } else if (/^\d+$/.test(rawKey)) {
-      finalKey = `${prefix}-${rawKey}`;
+      finalKey = `${jiraKey}-${rawKey}`;
       isJira = true;
     } else {
       finalKey = rawKey.toUpperCase().replace(/[^A-Z0-9_-]/g, '');
-      isJira = Boolean(manualJiraMetadata?.url || finalKey.startsWith(`${prefix}-`));
+      isJira = Boolean(manualJiraMetadata?.url || finalKey.startsWith(`${jiraKey}-`));
     }
 
     if (!manualSummary.trim()) {
@@ -1043,6 +1126,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       initialDisplayStatus = 'Planejado';
     }
 
+    const fixedStart = manualFixedStartDate.trim() || null;
     const newItem: PlanItemInput = {
       id: uniqueId,
       issue_key: finalKey,
@@ -1051,6 +1135,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       assignee_name: manualAssignee.trim(),
       estimate_hours: Number(manualEstimateHours),
       sort_order: 1,
+      fixed_start_date: fixedStart,
       metadata: {
         isManual: !isJira,
         isExternal: !isJira,
@@ -1072,6 +1157,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
         started_at: startedAt,
         completed_at: completedAt,
         created: new Date().toISOString(),
+        fixed_start_date: fixedStart,
       },
     };
 
@@ -1144,6 +1230,8 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
     setEditingItem(baseItem);
     setEditEstimateHours(baseItem.estimate_hours);
     setEditAssignee(baseItem.assignee_name);
+    const currentFixed = baseItem.fixed_start_date || baseItem.metadata?.fixed_start_date || '';
+    setEditFixedStartDate(currentFixed ? currentFixed.substring(0, 10) : '');
     setEditSummary(baseItem.summary);
     setEditStatus(baseItem.status || 'Planejado');
     setEditIndustry(baseItem.metadata?.industry || '');
@@ -1172,10 +1260,13 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       return;
     }
 
+    const fixedStart = editFixedStartDate.trim() || null;
+
     const updatedList = localItems.map((item) => {
       if (item.id === editingItem.id || item.issue_key === editingItem.issue_key) {
         const newMeta = { ...(item.metadata || {}) };
         newMeta.execution_status = editExecutionStatus;
+        newMeta.fixed_start_date = fixedStart;
 
         let updatedStatus = item.status;
         if (editExecutionStatus === 'completed') {
@@ -1209,6 +1300,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
           status: updatedStatus,
           estimate_hours: Number(editEstimateHours),
           assignee_name: editAssignee.trim(),
+          fixed_start_date: fixedStart,
           metadata: newMeta,
         };
       }
@@ -1379,7 +1471,10 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
 
       setSyncJiraItem(null);
       setSyncJiraComment('');
-      onShowToast(data.message || `Datas da demanda ${syncJiraItem.issue_key} sincronizadas no Jira com sucesso!`, 'success');
+      const successMsg = isClientView
+        ? `Data de entrega da demanda ${syncJiraItem.issue_key} (${format(parseISO(syncJiraItem.end_date), 'dd/MM/yyyy')}) sincronizada no Jira com sucesso!`
+        : (data.message || `Datas da demanda ${syncJiraItem.issue_key} sincronizadas no Jira com sucesso!`);
+      onShowToast(successMsg, 'success');
     } catch (err: any) {
       console.error(err);
       onShowToast(err.message || 'Erro ao sincronizar datas com o Jira.', 'error');
@@ -2370,13 +2465,18 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                     type="button"
                     onClick={() => setIsProjectDropdownOpen((prev) => !prev)}
                     className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700/80 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white transition-all shadow-sm active:scale-95 text-left"
-                    title="Alternar entre projetos cadastrados"
+                    title="Alternar entre planos cadastrados"
                   >
                     <Briefcase className="w-4 h-4 text-indigo-500 flex-shrink-0" />
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20">
                         {activeProject?.key || selectedProjectKey}
                       </span>
+                      {activeProject?.jira_project_key && activeProject.jira_project_key !== activeProject.key && (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                          Jira: {activeProject.jira_project_key}
+                        </span>
+                      )}
                       <span className="text-sm font-black tracking-tight text-slate-800 dark:text-white truncate max-w-[200px]">
                         {activeProject?.name || 'Carregando...'}
                       </span>
@@ -2391,9 +2491,9 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                         className="fixed inset-0 z-30"
                         onClick={() => setIsProjectDropdownOpen(false)}
                       />
-                      <div className="absolute left-0 top-full mt-2 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-40 p-2 space-y-1 animate-in fade-in zoom-in-95 duration-150">
+                      <div className="absolute left-0 top-full mt-2 w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-40 p-2 space-y-1 animate-in fade-in zoom-in-95 duration-150">
                         <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                          Selecione o Projeto Ativo
+                          Selecione o Plano Ativo
                         </div>
                         <div className="max-h-60 overflow-y-auto space-y-0.5 custom-scrollbar">
                           {projects.map((p) => {
@@ -2409,10 +2509,15 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                                     : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/70'
                                 }`}
                               >
-                                <div className="flex items-center gap-2 truncate">
+                                <div className="flex items-center gap-1.5 truncate">
                                   <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
                                     {p.key}
                                   </span>
+                                  {p.jira_project_key && p.jira_project_key !== p.key && (
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/60">
+                                      Jira: {p.jira_project_key}
+                                    </span>
+                                  )}
                                   <span className="text-xs truncate">{p.name}</span>
                                 </div>
                                 {isSelected && <Check className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 flex-shrink-0" />}
@@ -2426,12 +2531,12 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                             type="button"
                             onClick={() => {
                               setIsProjectDropdownOpen(false);
-                              setIsNewProjectModalOpen(true);
+                              handleOpenNewProject();
                             }}
                             className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors"
                           >
                             <FolderPlus className="w-4 h-4" />
-                            <span>+ Cadastrar Novo Projeto</span>
+                            <span>+ Cadastrar Novo Plano</span>
                           </button>
                         </div>
                       </div>
@@ -2444,7 +2549,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                   type="button"
                   onClick={handleOpenEditProject}
                   className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-300 dark:border-slate-700 transition-all shadow-sm active:scale-95"
-                  title="Editar dados deste projeto ou excluí-lo"
+                  title="Editar dados deste plano ou excluí-lo"
                 >
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
@@ -2452,12 +2557,12 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                 {/* New Project Quick Button */}
                 <button
                   type="button"
-                  onClick={() => setIsNewProjectModalOpen(true)}
+                  onClick={handleOpenNewProject}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 text-xs font-bold border border-indigo-200 dark:border-indigo-500/30 transition-all shadow-sm active:scale-95"
-                  title="Cadastrar um novo projeto no módulo"
+                  title="Cadastrar um novo plano no módulo"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Novo Projeto</span>
+                  <span>Novo Plano</span>
                 </button>
               </div>
 
@@ -3855,6 +3960,15 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                                   {format(parseISO(item.start_date), 'dd/MM/yyyy')}
                                 </span>
                               )}
+                              {(item.fixed_start_date || item.metadata?.fixed_start_date) && (
+                                <span
+                                  className="inline-flex items-center gap-1 text-[9px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/50 px-1.5 py-0.5 rounded-md border border-indigo-200 dark:border-indigo-800/50 w-fit mt-1 shadow-xs"
+                                  title={`Data de início fixada manualmente: ${format(parseISO(String(item.fixed_start_date || item.metadata?.fixed_start_date).substring(0, 10)), 'dd/MM/yyyy')}`}
+                                >
+                                  <Pin className="w-2.5 h-2.5 text-indigo-500 flex-shrink-0" />
+                                  <span>Início Fixo</span>
+                                </span>
+                              )}
                             </div>
                           </td>
                           <td className="py-3 px-3">
@@ -3899,13 +4013,17 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                           </td>
                           <td className="py-3 px-3 text-right">
                             <div className="flex items-center justify-end gap-0.5">
-                              {!isClientView && !item.metadata?.isManual && !item.metadata?.isExternal && (
+                              {!item.metadata?.isManual && !item.metadata?.isExternal && (
                                 <button
                                   type="button"
                                   onMouseDown={(e) => e.stopPropagation()}
                                   onClick={() => handleOpenSyncJiraModal(item)}
                                   className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-all cursor-pointer"
-                                  title="Sincronizar datas com o Jira"
+                                  title={
+                                    isClientView
+                                      ? "Sincronizar data de entrega com o Jira (Modo Cliente)"
+                                      : "Sincronizar datas com o Jira"
+                                  }
                                 >
                                   <CalendarSync className="w-3.5 h-3.5" />
                                 </button>
@@ -4269,6 +4387,36 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                 </p>
               </div>
 
+              {/* Data de Início Fixa (Opcional - Ideal para novos executores) */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Data de Início Fixa <span className="text-slate-400 font-normal">(Opcional)</span>
+                  </label>
+                  {addFixedStartDate && (
+                    <button
+                      type="button"
+                      onClick={() => setAddFixedStartDate('')}
+                      className="text-[11px] text-rose-500 hover:text-rose-600 dark:hover:text-rose-400 font-semibold cursor-pointer"
+                    >
+                      Limpar data fixa
+                    </button>
+                  )}
+                </div>
+                <div className="relative">
+                  <Calendar className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="date"
+                    value={addFixedStartDate}
+                    onChange={(e) => setAddFixedStartDate(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                  />
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Se informada, esta demanda iniciará exatamente nesta data (ideal para tarefas de novos executores no projeto). Deixe em branco para calcular automaticamente.
+                </p>
+              </div>
+
               {/* Action Buttons */}
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
                 <button
@@ -4479,6 +4627,36 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                     />
                   </div>
                 </div>
+              </div>
+
+              {/* Data de Início Fixa (Opcional - Ideal para novos executores) */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Data de Início Fixa <span className="text-slate-400 font-normal">(Opcional)</span>
+                  </label>
+                  {manualFixedStartDate && (
+                    <button
+                      type="button"
+                      onClick={() => setManualFixedStartDate('')}
+                      className="text-[11px] text-rose-500 hover:text-rose-600 dark:hover:text-rose-400 font-semibold cursor-pointer"
+                    >
+                      Limpar data fixa
+                    </button>
+                  )}
+                </div>
+                <div className="relative">
+                  <Calendar className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="date"
+                    value={manualFixedStartDate}
+                    onChange={(e) => setManualFixedStartDate(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                  />
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Se informada, esta demanda iniciará exatamente nesta data (ideal para tarefas de novos executores no projeto). Deixe em branco para calcular automaticamente.
+                </p>
               </div>
 
               {/* Indústria e Canal (Opcionais) */}
@@ -4796,6 +4974,36 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                 </p>
               </div>
 
+              {/* Data de Início Fixa (Opcional) */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Data de Início Fixa <span className="text-slate-400 font-normal">(Opcional)</span>
+                  </label>
+                  {editFixedStartDate && (
+                    <button
+                      type="button"
+                      onClick={() => setEditFixedStartDate('')}
+                      className="text-[11px] text-rose-500 hover:text-rose-600 dark:hover:text-rose-400 font-semibold cursor-pointer"
+                    >
+                      Remover data fixa
+                    </button>
+                  )}
+                </div>
+                <div className="relative">
+                  <Calendar className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="date"
+                    value={editFixedStartDate}
+                    onChange={(e) => setEditFixedStartDate(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                  />
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Se informada, esta demanda iniciará exatamente nesta data. Remova para calcular automaticamente.
+                </p>
+              </div>
+
               {/* Para tarefas manuais: Indústria e Canal */}
               {(editingItem.metadata?.isManual || editingItem.metadata?.isExternal) && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -4868,11 +5076,20 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                 <CalendarSync className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                  Sincronizar com o Jira
-                </h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                    Sincronizar com o Jira
+                  </h3>
+                  {isClientView && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700/50">
+                      Modo Cliente
+                    </span>
+                  )}
+                </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Atualize as datas de início e fim da demanda diretamente no Jira.
+                  {isClientView
+                    ? "Atualize o prazo/data de entrega (Due Date) no Jira com as datas calculadas no Modo Cliente."
+                    : "Atualize as datas de início e fim da demanda diretamente no Jira."}
                 </p>
               </div>
             </div>
@@ -4886,9 +5103,16 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
 
             {/* Datas calculadas que serão enviadas para o Jira */}
             <div className="mb-4 p-3.5 rounded-xl border border-indigo-100 dark:border-indigo-900/40 bg-indigo-50/40 dark:bg-indigo-950/30">
-              <div className="text-[11px] font-bold text-indigo-900 dark:text-indigo-200 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                <span>Datas que serão gravadas no Jira</span>
+              <div className="text-[11px] font-bold text-indigo-900 dark:text-indigo-200 uppercase tracking-wider mb-2 flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                  <span>Datas que serão gravadas no Jira</span>
+                </div>
+                {isClientView && (
+                  <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-400">
+                    Previsão com buffer ({settings.client_delivery_buffer_days ?? 1}d)
+                  </span>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-white dark:bg-slate-900/80 p-2.5 rounded-lg border border-indigo-100/80 dark:border-indigo-900/30">
@@ -4898,7 +5122,9 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                   </span>
                 </div>
                 <div className="bg-white dark:bg-slate-900/80 p-2.5 rounded-lg border border-indigo-100/80 dark:border-indigo-900/30">
-                  <span className="block text-[10px] font-bold text-slate-400 uppercase">Data de Fim (Due Date)</span>
+                  <span className="block text-[10px] font-bold text-slate-400 uppercase">
+                    {isClientView ? "Data de Entrega (Due Date)" : "Data de Fim (Due Date)"}
+                  </span>
                   <span className="text-sm font-extrabold text-slate-800 dark:text-white">
                     {format(parseISO(syncJiraItem.end_date), 'dd/MM/yyyy')}
                   </span>
@@ -4926,7 +5152,11 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                   value={syncJiraComment}
                   onChange={(e) => setSyncJiraComment(e.target.value)}
                   disabled={isSyncingJira}
-                  placeholder="Ex: Datas atualizadas conforme planejamento da fila de execução..."
+                  placeholder={
+                    isClientView
+                      ? "Ex: Previsão de entrega alinhada com o cliente..."
+                      : "Ex: Datas atualizadas conforme planejamento da fila de execução..."
+                  }
                   className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/50 resize-y"
                 />
                 <p className="text-[11px] text-slate-400 mt-1">
@@ -4968,11 +5198,11 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       )}
 
       {/* -------------------------------------------------------- */}
-      {/* MODAL: CREATE NEW PROJECT                                */}
+      {/* MODAL: CREATE NEW PROJECT / PLAN                         */}
       {/* -------------------------------------------------------- */}
       {isNewProjectModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 dark:bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-[#0e1424] border border-slate-200 dark:border-indigo-900/60 rounded-2xl w-full max-w-md p-6 shadow-2xl relative text-slate-800 dark:text-slate-200">
+          <div className="bg-white dark:bg-[#0e1424] border border-slate-200 dark:border-indigo-900/60 rounded-2xl w-full max-w-lg p-6 shadow-2xl relative text-slate-800 dark:text-slate-200">
             <button
               type="button"
               onClick={() => setIsNewProjectModalOpen(false)}
@@ -4987,48 +5217,90 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
               </div>
               <div>
                 <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                  Cadastrar Novo Projeto
+                  Cadastrar Novo Plano
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Crie um contexto exclusivo para plano, backlog e metas.
+                  Crie um plano independente com fila de execução e metas próprias.
                 </p>
               </div>
             </div>
 
             <form onSubmit={handleCreateProject} className="space-y-4">
-              {/* Sigla / Chave do Projeto */}
+              {/* Projeto no Jira */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Chave / Sigla Jira <span className="text-rose-500">*</span>
+                  Projeto do Jira <span className="text-rose-500">*</span>
                 </label>
-                <input
-                  type="text"
-                  required
-                  autoFocus
-                  maxLength={10}
-                  value={newProjectKey}
-                  onChange={(e) => setNewProjectKey(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ''))}
-                  placeholder="Ex: NEO, PORTAL, CRM"
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-mono font-bold uppercase focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-                />
+                <div className="flex gap-2">
+                  <select
+                    value={newJiraKey}
+                    onChange={(e) => {
+                      const selected = e.target.value;
+                      setNewJiraKey(selected);
+                      setNewProjectKey(suggestNextPlanKey(selected));
+                    }}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-mono font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                  >
+                    {jiraProjects.map((jp) => (
+                      <option key={jp} value={jp}>
+                        {jp}
+                      </option>
+                    ))}
+                    {!jiraProjects.includes(newJiraKey) && newJiraKey && (
+                      <option value={newJiraKey}>{newJiraKey}</option>
+                    )}
+                  </select>
+                  <input
+                    type="text"
+                    maxLength={15}
+                    value={newJiraKey}
+                    onChange={(e) => {
+                      const val = e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+                      setNewJiraKey(val);
+                      setNewProjectKey(suggestNextPlanKey(val));
+                    }}
+                    placeholder="Outro (Ex: CRM)"
+                    className="w-36 px-2.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-mono font-bold uppercase focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                    title="Ou digite outra sigla de projeto do Jira"
+                  />
+                </div>
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Chave do projeto no Jira (ex: NEO). O backlog buscará as demandas via JQL desse projeto.
+                  As demandas do backlog serão obtidas deste projeto no Jira.
                 </p>
               </div>
 
-              {/* Nome do Projeto */}
+              {/* Nome do Plano */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Nome do Projeto <span className="text-rose-500">*</span>
+                  Nome do Plano / Projeto <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
                   required
                   value={newProjectName}
                   onChange={(e) => setNewProjectName(e.target.value)}
-                  placeholder="Ex: Neogrid, Portal do Cliente"
+                  placeholder="Ex: Neogrid - Fase 2, Neogrid - Sprint 1"
                   className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                 />
+              </div>
+
+              {/* Identificador / Chave do Plano */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Identificador do Plano (Chave Única) <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  maxLength={25}
+                  value={newProjectKey}
+                  onChange={(e) => setNewProjectKey(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ''))}
+                  placeholder="Ex: NEO-2, NEO-FASE2"
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-mono font-bold uppercase focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Identificador interno deste plano (sugestão automática baseada no projeto do Jira).
+                </p>
               </div>
 
               {/* Descrição do Projeto */}
@@ -5040,14 +5312,14 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                   rows={2}
                   value={newProjectDesc}
                   onChange={(e) => setNewProjectDesc(e.target.value)}
-                  placeholder="Breve descrição do escopo ou equipe..."
+                  placeholder="Breve descrição do escopo, sprint ou equipe..."
                   className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                 />
               </div>
 
               <div className="p-3 rounded-xl bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50 text-[11px] text-indigo-700 dark:text-indigo-300 space-y-1">
-                <span className="font-bold block">✨ Contexto Isolado:</span>
-                <span>Ao cadastrar o projeto, seu plano Gantt, backlog e parâmetros de jornada serão independentes. Apenas os feriados nacionais serão globais.</span>
+                <span className="font-bold block">✨ Múltiplos Planos para o Mesmo Projeto Jira:</span>
+                <span>Você pode criar quantos planos desejar associados ao mesmo projeto do Jira. Cada plano mantém sua própria fila de execução, datas e configurações de forma independente.</span>
               </div>
 
               {/* Action Buttons */}
@@ -5066,7 +5338,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                   className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition-all active:scale-95 disabled:opacity-50"
                 >
                   {isCreatingProject ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                  <span>Cadastrar Projeto</span>
+                  <span>Cadastrar Plano</span>
                 </button>
               </div>
             </form>
@@ -5075,11 +5347,11 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       )}
 
       {/* -------------------------------------------------------- */}
-      {/* MODAL: EDIT / MANAGE PROJECT                             */}
+      {/* MODAL: EDIT / MANAGE PROJECT / PLAN                      */}
       {/* -------------------------------------------------------- */}
       {editingProjectModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 dark:bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-[#0e1424] border border-slate-200 dark:border-indigo-900/60 rounded-2xl w-full max-w-md p-6 shadow-2xl relative text-slate-800 dark:text-slate-200">
+          <div className="bg-white dark:bg-[#0e1424] border border-slate-200 dark:border-indigo-900/60 rounded-2xl w-full max-w-lg p-6 shadow-2xl relative text-slate-800 dark:text-slate-200">
             <button
               type="button"
               onClick={() => setEditingProjectModal(null)}
@@ -5094,29 +5366,63 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
               </div>
               <div>
                 <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                  Editar Projeto · {editingProjectModal.key}
+                  Editar Plano · {editingProjectModal.key}
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Atualize o nome e descrição ou remova o projeto.
+                  Atualize o nome, descrição ou projeto Jira associado.
                 </p>
               </div>
             </div>
 
             <form onSubmit={handleUpdateProject} className="space-y-4">
-              {/* Sigla / Chave do Projeto (fixa) */}
+              {/* Identificador do Plano (fixo) */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Chave Jira
+                  Identificador do Plano
                 </label>
                 <div className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-mono font-bold text-slate-500">
                   {editingProjectModal.key}
                 </div>
               </div>
 
-              {/* Nome do Projeto */}
+              {/* Projeto Jira Associado */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Nome do Projeto <span className="text-rose-500">*</span>
+                  Projeto do Jira Associado <span className="text-rose-500">*</span>
+                </label>
+                <div className="flex gap-2">
+                  <select
+                    value={editJiraKey}
+                    onChange={(e) => setEditJiraKey(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-mono font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                  >
+                    {jiraProjects.map((jp) => (
+                      <option key={jp} value={jp}>
+                        {jp}
+                      </option>
+                    ))}
+                    {!jiraProjects.includes(editJiraKey) && editJiraKey && (
+                      <option value={editJiraKey}>{editJiraKey}</option>
+                    )}
+                  </select>
+                  <input
+                    type="text"
+                    maxLength={15}
+                    value={editJiraKey}
+                    onChange={(e) => setEditJiraKey(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ''))}
+                    placeholder="Outro..."
+                    className="w-36 px-2.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-mono font-bold uppercase focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                  />
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  O backlog deste plano obtém as demandas deste projeto no Jira.
+                </p>
+              </div>
+
+              {/* Nome do Plano */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Nome do Plano <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -5147,10 +5453,10 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                   onClick={() => handleDeleteProject(editingProjectModal)}
                   disabled={isDeletingProject || projects.length <= 1}
                   className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  title={projects.length <= 1 ? 'Não é possível excluir o único projeto restante' : 'Excluir projeto e seus itens'}
+                  title={projects.length <= 1 ? 'Não é possível excluir o único plano restante' : 'Excluir plano e suas tarefas'}
                 >
                   {isDeletingProject ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                  <span>Excluir Projeto</span>
+                  <span>Excluir Plano</span>
                 </button>
 
                 <div className="flex items-center gap-2">

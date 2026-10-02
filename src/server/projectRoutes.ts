@@ -148,10 +148,35 @@ async function getProjectSettings(projectKey: string): Promise<ProjectSettings> 
 /**
  * GET /api/projects - Lista todos os projetos cadastrados
  */
+/**
+ * GET /api/projects/jira-projects - Lista as siglas/chaves de projetos Jira disponíveis para associar aos planos
+ */
+projectRoutes.get('/jira-projects', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const config = await getJiraConfig();
+    const set = new Set<string>();
+    if (Array.isArray(config.projects)) {
+      config.projects.forEach((p) => p && set.add(p.trim().toUpperCase()));
+    }
+    const dbRes = await pool.query('SELECT DISTINCT jira_project_key, key FROM projects');
+    for (const r of dbRes.rows) {
+      if (r.jira_project_key) set.add(r.jira_project_key.trim().toUpperCase());
+      else if (r.key) set.add(r.key.trim().toUpperCase());
+    }
+    res.json(Array.from(set).sort());
+  } catch (err: any) {
+    console.error('[Projects API] Erro ao listar projetos do Jira:', err);
+    res.status(500).json({ error: 'Erro ao listar projetos do Jira.' });
+  }
+});
+
+/**
+ * GET /api/projects - Lista todos os projetos/planos cadastrados
+ */
 projectRoutes.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const result = await pool.query(
-      `SELECT id, key, name, description, settings, created_at, updated_at
+      `SELECT id, key, name, description, jira_project_key, settings, created_at, updated_at
        FROM projects
        ORDER BY (CASE WHEN UPPER(key) = 'NEO' THEN 0 ELSE 1 END), name ASC`
     );
@@ -167,16 +192,16 @@ projectRoutes.get('/', async (req: Request, res: Response): Promise<void> => {
         issue_types: ['Ativação', 'Tarefa'],
       };
       const insert = await pool.query(
-        `INSERT INTO projects (id, key, name, description, settings)
-         VALUES ('proj_neo', 'NEO', 'Neogrid', 'Projeto de Ativações e Tarefas Neogrid', $1)
-         RETURNING id, key, name, description, settings, created_at, updated_at`,
+        `INSERT INTO projects (id, key, name, description, jira_project_key, settings)
+         VALUES ('proj_neo', 'NEO', 'Neogrid', 'Projeto de Ativações e Tarefas Neogrid', 'NEO', $1)
+         RETURNING id, key, name, description, jira_project_key, settings, created_at, updated_at`,
         [JSON.stringify(neoSettings)]
       );
-      res.json(insert.rows);
+      res.json(insert.rows.map((r) => ({ ...r, jira_project_key: r.jira_project_key || r.key })));
       return;
     }
 
-    res.json(result.rows);
+    res.json(result.rows.map((r) => ({ ...r, jira_project_key: r.jira_project_key || r.key })));
   } catch (err: any) {
     console.error('[Projects API] Erro ao listar projetos:', err);
     res.status(500).json({ error: 'Erro ao listar projetos.' });
@@ -184,37 +209,54 @@ projectRoutes.get('/', async (req: Request, res: Response): Promise<void> => {
 });
 
 /**
- * POST /api/projects - Cadastra um novo projeto
+ * POST /api/projects - Cadastra um novo plano de projeto (permite múltiplos planos para o mesmo projeto Jira)
  */
 projectRoutes.post('/', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { key, name, description, settings } = req.body;
+    const { key, name, description, settings, jira_project_key } = req.body;
 
-    if (!key || !String(key).trim()) {
-      res.status(400).json({ error: 'A chave do projeto (sigla) é obrigatória.' });
-      return;
-    }
     if (!name || !String(name).trim()) {
-      res.status(400).json({ error: 'O nome do projeto é obrigatório.' });
+      res.status(400).json({ error: 'O nome do plano/projeto é obrigatório.' });
       return;
     }
 
-    const normKey = String(key).trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
-    if (normKey.length < 2 || normKey.length > 20) {
-      res.status(400).json({ error: 'A chave do projeto deve ter entre 2 e 20 caracteres alfanuméricos.' });
+    const cleanName = String(name).trim();
+    const rawJiraKey = String(jira_project_key || key || '').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+    if (!rawJiraKey) {
+      res.status(400).json({ error: 'A sigla/chave do projeto no Jira é obrigatória.' });
       return;
     }
 
-    // Verificar unicidade da chave
-    const check = await pool.query(`SELECT id FROM projects WHERE UPPER(key) = $1`, [normKey]);
-    if (check.rows.length > 0) {
-      res.status(400).json({ error: `Já existe um projeto cadastrado com a chave "${normKey}".` });
-      return;
+    // Determinar a chave única do plano
+    let planKey = key ? String(key).trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '') : '';
+    if (!planKey) {
+      // Se não informou a chave do plano, gerar automaticamente com base no Jira e nome
+      const existingRes = await pool.query(`SELECT UPPER(key) as key FROM projects`);
+      const existingKeys = new Set(existingRes.rows.map((r) => r.key));
+
+      if (!existingKeys.has(rawJiraKey)) {
+        planKey = rawJiraKey;
+      } else {
+        let counter = 2;
+        while (existingKeys.has(`${rawJiraKey}-${counter}`)) {
+          counter++;
+        }
+        planKey = `${rawJiraKey}-${counter}`;
+      }
+    } else {
+      // Se informou a chave do plano, verificar se já existe
+      const check = await pool.query(`SELECT id FROM projects WHERE UPPER(key) = $1`, [planKey]);
+      if (check.rows.length > 0) {
+        res.status(400).json({
+          error: `Já existe um plano cadastrado com a chave "${planKey}". Escolha outro identificador ou deixe em branco para gerar automaticamente.`,
+        });
+        return;
+      }
     }
 
-    const id = `proj_${normKey.toLowerCase()}_${Date.now()}`;
+    const id = `proj_${planKey.toLowerCase()}_${Date.now()}`;
     const initialSettings: Partial<ProjectSettings> = {
-      delivered_users: [name.trim()],
+      delivered_users: [cleanName],
       work_hours_per_day: 8,
       plan_start_date: new Date().toISOString().split('T')[0],
       client_hours_markup_percent: 0,
@@ -224,16 +266,26 @@ projectRoutes.post('/', async (req: Request, res: Response): Promise<void> => {
     };
 
     const insertRes = await pool.query(
-      `INSERT INTO projects (id, key, name, description, settings)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, key, name, description, settings, created_at, updated_at`,
-      [id, normKey, String(name).trim(), description ? String(description).trim() : null, JSON.stringify(initialSettings)]
+      `INSERT INTO projects (id, key, name, description, jira_project_key, settings)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, key, name, description, jira_project_key, settings, created_at, updated_at`,
+      [
+        id,
+        planKey,
+        cleanName,
+        description ? String(description).trim() : null,
+        rawJiraKey,
+        JSON.stringify(initialSettings),
+      ]
     );
 
     res.status(201).json({
       success: true,
-      message: 'Projeto cadastrado com sucesso!',
-      project: insertRes.rows[0],
+      message: 'Plano cadastrado com sucesso!',
+      project: {
+        ...insertRes.rows[0],
+        jira_project_key: insertRes.rows[0].jira_project_key || rawJiraKey,
+      },
     });
   } catch (err: any) {
     console.error('[Projects API] Erro ao cadastrar projeto:', err);
@@ -433,6 +485,7 @@ projectRoutes.put('/:projectKey/settings', async (req: Request, res: Response): 
         assignee_name: r.assignee_name,
         estimate_hours: Number(r.estimate_hours),
         sort_order: r.sort_order,
+        fixed_start_date: r.metadata?.fixed_start_date || null,
         metadata: r.metadata,
       }));
 
@@ -462,12 +515,12 @@ projectRoutes.put('/:projectKey/settings', async (req: Request, res: Response): 
 });
 
 /**
- * PUT /api/projects/:projectKey - Atualiza nome e descrição de um projeto
+ * PUT /api/projects/:projectKey - Atualiza nome, descrição e projeto Jira associado
  */
 projectRoutes.put('/:projectKey', async (req: Request, res: Response): Promise<void> => {
   try {
     const projectKey = String(req.params.projectKey);
-    const { name, description } = req.body;
+    const { name, description, jira_project_key } = req.body;
 
     if (!name || !String(name).trim()) {
       res.status(400).json({ error: 'O nome do projeto é obrigatório.' });
@@ -475,12 +528,24 @@ projectRoutes.put('/:projectKey', async (req: Request, res: Response): Promise<v
     }
 
     const normKey = projectKey.trim().toUpperCase();
+    const cleanJiraKey = jira_project_key
+      ? String(jira_project_key).trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '')
+      : null;
+
     const updateRes = await pool.query(
       `UPDATE projects
-       SET name = $1, description = $2, updated_at = NOW()
-       WHERE UPPER(key) = $3
-       RETURNING id, key, name, description, settings, created_at, updated_at`,
-      [String(name).trim(), description !== undefined ? String(description).trim() : null, normKey]
+       SET name = $1,
+           description = $2,
+           jira_project_key = COALESCE($3, jira_project_key, key),
+           updated_at = NOW()
+       WHERE UPPER(key) = $4
+       RETURNING id, key, name, description, jira_project_key, settings, created_at, updated_at`,
+      [
+        String(name).trim(),
+        description !== undefined ? String(description).trim() : null,
+        cleanJiraKey,
+        normKey,
+      ]
     );
 
     if (updateRes.rows.length === 0) {
@@ -491,7 +556,10 @@ projectRoutes.put('/:projectKey', async (req: Request, res: Response): Promise<v
     res.json({
       success: true,
       message: 'Projeto atualizado com sucesso!',
-      project: updateRes.rows[0],
+      project: {
+        ...updateRes.rows[0],
+        jira_project_key: updateRes.rows[0].jira_project_key || updateRes.rows[0].key,
+      },
     });
   } catch (err: any) {
     console.error('[Projects API] Erro ao atualizar projeto:', err);
@@ -517,6 +585,7 @@ projectRoutes.delete('/:projectKey', async (req: Request, res: Response): Promis
     }
 
     await client.query('BEGIN');
+    await client.query(`DELETE FROM project_change_logs WHERE UPPER(project_key) = $1`, [normKey]);
     await client.query(`DELETE FROM project_plan_items WHERE UPPER(project_key) = $1`, [normKey]);
     const delRes = await client.query(`DELETE FROM projects WHERE UPPER(key) = $1 RETURNING id`, [normKey]);
     await client.query('COMMIT');
@@ -547,6 +616,13 @@ projectRoutes.get('/:projectKey/backlog', async (req: Request, res: Response): P
     const config = await getJiraConfig();
     const settings = await getProjectSettings(normKey);
 
+    // Identificar a chave do projeto no Jira correspondente a este plano
+    const projRes = await pool.query(
+      `SELECT jira_project_key, key FROM projects WHERE UPPER(key) = $1`,
+      [normKey]
+    );
+    const jiraKey = (projRes.rows[0]?.jira_project_key || normKey).trim().toUpperCase();
+
     if (!config.api_token || !config.domain || !config.email) {
       res.status(400).json({
         error: 'A integração com o Jira não está configurada.',
@@ -576,9 +652,9 @@ projectRoutes.get('/:projectKey/backlog', async (req: Request, res: Response): P
     let jql = '';
     if (configuredTypes.length > 0) {
       const typesClause = configuredTypes.map((t: string) => `"${t}"`).join(', ');
-      jql = `project = "${normKey}" AND issuetype in (${typesClause}) AND issuetype not in ("Epic", "Épico") ORDER BY status ASC, created DESC`;
+      jql = `project = "${jiraKey}" AND issuetype in (${typesClause}) AND issuetype not in ("Epic", "Épico") ORDER BY status ASC, created DESC`;
     } else {
-      jql = `project = "${normKey}" AND issuetype not in ("Epic", "Épico", "Sub-task", "Subtarefa") ORDER BY status ASC, created DESC`;
+      jql = `project = "${jiraKey}" AND issuetype not in ("Epic", "Épico", "Sub-task", "Subtarefa") ORDER BY status ASC, created DESC`;
     }
 
     const queryFields = [
@@ -628,7 +704,7 @@ projectRoutes.get('/:projectKey/backlog', async (req: Request, res: Response): P
       if (!searchRes.ok && pageCount === 1) {
         const errText = await searchRes.text();
         console.warn(`[Projects API] Busca estrita falhou (${searchRes.status}): ${errText}. Tentando fallback sem filtro estrito de issuetype...`);
-        jql = `project = "${normKey}" AND issuetype not in ("Epic", "Épico", "Sub-task", "Subtarefa") ORDER BY status ASC, created DESC`;
+        jql = `project = "${jiraKey}" AND issuetype not in ("Epic", "Épico", "Sub-task", "Subtarefa") ORDER BY status ASC, created DESC`;
         payload.jql = jql;
         searchRes = await fetch(`https://${host}/rest/api/3/search/jql`, {
           method: 'POST',
@@ -735,9 +811,14 @@ projectRoutes.get('/:projectKey/jira-issue/:issueKey', async (req: Request, res:
     const projectKey = String(req.params.projectKey).trim().toUpperCase();
     let issueKey = String(req.params.issueKey).trim().toUpperCase();
 
-    // Se for apenas numérico, prefixa com a chave do projeto
+    // Se for apenas numérico, prefixa com a chave do projeto Jira
     if (/^\d+$/.test(issueKey)) {
-      issueKey = `${projectKey}-${issueKey}`;
+      const projRes = await pool.query(
+        `SELECT jira_project_key, key FROM projects WHERE UPPER(key) = $1`,
+        [projectKey]
+      );
+      const jiraKey = (projRes.rows[0]?.jira_project_key || projectKey).trim().toUpperCase();
+      issueKey = `${jiraKey}-${issueKey}`;
     }
 
     const config = await getJiraConfig();
@@ -859,9 +940,16 @@ projectRoutes.post('/:projectKey/jira-issue/:issueKey/sync-dates', async (req: R
     const host = config.domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
     const prefix = projectKey.trim().toUpperCase();
 
+    // Identificar a chave do projeto Jira associado a este plano
+    const projRes = await pool.query(
+      `SELECT jira_project_key, key FROM projects WHERE UPPER(key) = $1`,
+      [prefix]
+    );
+    const jiraKey = (projRes.rows[0]?.jira_project_key || prefix).trim().toUpperCase();
+
     let fullKey = issueKey.trim().toUpperCase();
     if (/^\d+$/.test(fullKey)) {
-      fullKey = `${prefix}-${fullKey}`;
+      fullKey = `${jiraKey}-${fullKey}`;
     }
 
     // 1. Atualizar campos de data no Jira (customfield_10015 = Data de início, duedate = Data limite)
@@ -1039,8 +1127,10 @@ projectRoutes.get('/:projectKey/plan', async (req: Request, res: Response): Prom
         assignee_name: r.assignee_name,
         estimate_hours: Number(r.estimate_hours),
         sort_order: r.sort_order,
+        fixed_start_date: meta.fixed_start_date || null,
         metadata: {
           ...meta,
+          fixed_start_date: meta.fixed_start_date || null,
           url: meta.isManual || meta.isExternal ? null : (meta.url || `https://${host}/browse/${r.issue_key}`),
         },
       };
@@ -1090,17 +1180,24 @@ projectRoutes.put('/:projectKey/plan', async (req: Request, res: Response): Prom
 
     const settings = await getProjectSettings(normKey);
 
-    // Normaliza os itens de entrada com sort_order
-    const normalizedInputs: PlanItemInput[] = items.map((item: any, idx: number) => ({
-      id: item.id || `item_${item.issue_key}_${Date.now()}_${idx}`,
-      issue_key: String(item.issue_key).trim().toUpperCase(),
-      summary: String(item.summary || 'Sem resumo').trim(),
-      status: item.status || 'Planejado',
-      assignee_name: String(item.assignee_name || 'Não atribuído').trim(),
-      estimate_hours: Math.max(0.5, Number(item.estimate_hours) || 1),
-      sort_order: idx + 1,
-      metadata: item.metadata || {},
-    }));
+    // Normaliza os itens de entrada com sort_order e fixed_start_date
+    const normalizedInputs: PlanItemInput[] = items.map((item: any, idx: number) => {
+      const fixedStartDate = item.fixed_start_date || item.metadata?.fixed_start_date || null;
+      return {
+        id: item.id || `item_${item.issue_key}_${Date.now()}_${idx}`,
+        issue_key: String(item.issue_key).trim().toUpperCase(),
+        summary: String(item.summary || 'Sem resumo').trim(),
+        status: item.status || 'Planejado',
+        assignee_name: String(item.assignee_name || 'Não atribuído').trim(),
+        estimate_hours: Math.max(0.5, Number(item.estimate_hours) || 1),
+        sort_order: idx + 1,
+        fixed_start_date: fixedStartDate,
+        metadata: {
+          ...(item.metadata || {}),
+          fixed_start_date: fixedStartDate,
+        },
+      };
+    });
 
     // Calcula as datas com o motor
     const scheduled = calculatePlanSchedule(normalizedInputs, settings);
