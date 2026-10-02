@@ -811,14 +811,18 @@ projectRoutes.get('/:projectKey/jira-issue/:issueKey', async (req: Request, res:
     const projectKey = String(req.params.projectKey).trim().toUpperCase();
     let issueKey = String(req.params.issueKey).trim().toUpperCase();
 
+    const projRes = await pool.query(
+      `SELECT jira_project_key, key FROM projects WHERE UPPER(key) = $1`,
+      [projectKey]
+    );
+    const jiraKey = (projRes.rows[0]?.jira_project_key || projectKey).trim().toUpperCase();
+
     // Se for apenas numérico, prefixa com a chave do projeto Jira
     if (/^\d+$/.test(issueKey)) {
-      const projRes = await pool.query(
-        `SELECT jira_project_key, key FROM projects WHERE UPPER(key) = $1`,
-        [projectKey]
-      );
-      const jiraKey = (projRes.rows[0]?.jira_project_key || projectKey).trim().toUpperCase();
       issueKey = `${jiraKey}-${issueKey}`;
+    } else if (jiraKey !== projectKey && issueKey.startsWith(`${projectKey}-`)) {
+      // Se passou a chave com prefixo do plano (ex: NEO-2-173), ajusta para a chave do projeto Jira (ex: NEO-173)
+      issueKey = `${jiraKey}-${issueKey.substring(projectKey.length + 1)}`;
     }
 
     const config = await getJiraConfig();
@@ -950,6 +954,8 @@ projectRoutes.post('/:projectKey/jira-issue/:issueKey/sync-dates', async (req: R
     let fullKey = issueKey.trim().toUpperCase();
     if (/^\d+$/.test(fullKey)) {
       fullKey = `${jiraKey}-${fullKey}`;
+    } else if (jiraKey !== prefix && fullKey.startsWith(`${prefix}-`)) {
+      fullKey = `${jiraKey}-${fullKey.substring(prefix.length + 1)}`;
     }
 
     // 1. Atualizar campos de data no Jira (customfield_10015 = Data de início, duedate = Data limite)

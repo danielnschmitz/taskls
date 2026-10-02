@@ -891,10 +891,13 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       setDuplicateWarning(null);
       return;
     }
-    const jiraKey = (activeProject?.jira_project_key || activeProject?.key || 'EXT').toUpperCase();
+    const planKey = (activeProject?.key || selectedProjectKey || 'EXT').toUpperCase();
+    const jiraKey = (activeProject?.jira_project_key || activeProject?.key || selectedProjectKey || 'EXT').toUpperCase();
     let targetKey = clean;
     if (/^\d+$/.test(clean)) {
       targetKey = `${jiraKey}-${clean}`;
+    } else if (jiraKey !== planKey && clean.startsWith(`${planKey}-`)) {
+      targetKey = `${jiraKey}-${clean.substring(planKey.length + 1)}`;
     }
     const existing = localItems.find((it) => it.issue_key.toUpperCase() === targetKey);
     if (existing) {
@@ -915,7 +918,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
     } else {
       setDuplicateWarning(null);
     }
-  }, [activeProject, localItems]);
+  }, [activeProject, selectedProjectKey, localItems]);
 
   // Buscar dados da tarefa no Jira para autopreenchimento
   const handleFetchJiraIssue = async (keyInput: string) => {
@@ -925,10 +928,13 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       return;
     }
 
-    const jiraKey = (activeProject?.jira_project_key || activeProject?.key || 'EXT').toUpperCase();
+    const planKey = (activeProject?.key || selectedProjectKey || 'EXT').toUpperCase();
+    const jiraKey = (activeProject?.jira_project_key || activeProject?.key || selectedProjectKey || 'EXT').toUpperCase();
     let fullKey = clean;
     if (/^\d+$/.test(clean)) {
       fullKey = `${jiraKey}-${clean}`;
+    } else if (jiraKey !== planKey && clean.startsWith(`${planKey}-`)) {
+      fullKey = `${jiraKey}-${clean.substring(planKey.length + 1)}`;
     }
 
     setIsSearchingJira(true);
@@ -984,9 +990,9 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
         return;
       }
 
-      // 2. Buscar no endpoint do servidor
+      // 2. Buscar no endpoint do servidor usando a chave do plano atual
       const res = await fetch(
-        `/api/projects/${encodeURIComponent(prefix)}/jira-issue/${encodeURIComponent(fullKey)}`
+        `/api/projects/${encodeURIComponent(selectedProjectKey)}/jira-issue/${encodeURIComponent(fullKey)}`
       );
       if (res.ok) {
         const data = await res.json();
@@ -1061,8 +1067,8 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
   const handleConfirmAddManual = (e: React.FormEvent) => {
     e.preventDefault();
     const rawKey = manualKey.trim();
-    const planPrefix = activeProject?.key || 'EXT';
-    const jiraKey = (activeProject?.jira_project_key || activeProject?.key || 'EXT').toUpperCase();
+    const planPrefix = (activeProject?.key || selectedProjectKey || 'EXT').toUpperCase();
+    const jiraKey = (activeProject?.jira_project_key || activeProject?.key || selectedProjectKey || 'EXT').toUpperCase();
 
     let finalKey = '';
     let isJira = false;
@@ -1085,7 +1091,11 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       finalKey = `${jiraKey}-${rawKey}`;
       isJira = true;
     } else {
-      finalKey = rawKey.toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+      let candidate = rawKey.toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+      if (jiraKey !== planPrefix && candidate.startsWith(`${planPrefix}-`)) {
+        candidate = `${jiraKey}-${candidate.substring(planPrefix.length + 1)}`;
+      }
+      finalKey = candidate;
       isJira = Boolean(manualJiraMetadata?.url || finalKey.startsWith(`${jiraKey}-`));
     }
 
@@ -1369,7 +1379,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       key: editingItem.issue_key,
       summary: editingItem.summary,
       duedate: meta.duedate || '',
-      project: meta.project || { key: activeProject?.key || 'NEO', name: activeProject?.name || 'Neogrid' },
+      project: meta.project || { key: activeProject?.jira_project_key || activeProject?.key || 'NEO', name: activeProject?.name || 'Neogrid' },
       rawStatus: meta.rawStatus || editingItem.status || '',
       displayStatus: meta.displayStatus || editingItem.status || 'Planejado',
       assignee: editAssignee ? { displayName: editAssignee } : null,
@@ -1391,7 +1401,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       key: syncJiraItem.issue_key,
       summary: syncJiraItem.summary,
       duedate: meta.duedate || '',
-      project: meta.project || { key: activeProject?.key || 'NEO', name: activeProject?.name || 'Neogrid' },
+      project: meta.project || { key: activeProject?.jira_project_key || activeProject?.key || 'NEO', name: activeProject?.name || 'Neogrid' },
       rawStatus: meta.rawStatus || syncJiraItem.status || '',
       displayStatus: meta.displayStatus || syncJiraItem.status || 'Planejado',
       assignee: syncJiraItem.assignee_name ? { displayName: syncJiraItem.assignee_name } : null,
@@ -4489,11 +4499,17 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                       Código / Chave
                     </label>
                     <span className="text-[9px] font-semibold px-1.5 py-0.2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
-                      {manualKey.trim() === ''
-                        ? 'Não Jira (Avulsa)'
-                        : /^\d+$/.test(manualKey.trim())
-                        ? `Jira (${activeProject?.key || 'EXT'}-${manualKey.trim()})`
-                        : 'Jira'}
+                      {(() => {
+                        const trimmed = manualKey.trim();
+                        if (!trimmed) return 'Não Jira (Avulsa)';
+                        const jKey = (activeProject?.jira_project_key || activeProject?.key || selectedProjectKey || 'EXT').toUpperCase();
+                        const pKey = (activeProject?.key || selectedProjectKey || '').toUpperCase();
+                        if (/^\d+$/.test(trimmed)) return `Jira (${jKey}-${trimmed})`;
+                        if (pKey && jKey !== pKey && trimmed.toUpperCase().startsWith(`${pKey}-`)) {
+                          return `Jira (${jKey}-${trimmed.toUpperCase().substring(pKey.length + 1)})`;
+                        }
+                        return 'Jira';
+                      })()}
                     </span>
                   </div>
                   <div className="relative flex items-center">
@@ -4543,7 +4559,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                     </div>
                   )}
                   <p className="text-[10px] text-slate-400 mt-1">
-                    Deixe em branco para tarefa avulsa, ou informe o número para buscar no Jira ({activeProject?.key || 'EXT'}).
+                    Deixe em branco para tarefa avulsa, ou informe o número para buscar no Jira ({(activeProject?.jira_project_key || activeProject?.key || selectedProjectKey || 'EXT').toUpperCase()}).
                   </p>
                 </div>
 
