@@ -70,7 +70,7 @@ export const ProjectPdfExportTemplate: React.FC<ProjectPdfExportTemplateProps> =
         // Weekday abbreviation formatted like 'Sex', 'Seg', 'Qui (hoje)'
         const WEEKDAYS_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
         const shortWk = WEEKDAYS_SHORT[curr.getDay()] || 'Dia';
-        const weekdayLabel = isToday ? `${shortWk} (hoje)` : shortWk;
+        const weekdayLabel = isToday ? (diffDays > 20 ? shortWk : `${shortWk} (hoje)`) : shortWk;
 
         wDays.push({
           dateStr: dStr,
@@ -739,30 +739,37 @@ export const ProjectPdfExportTemplate: React.FC<ProjectPdfExportTemplateProps> =
                     gridTemplateColumns: `repeat(${Math.max(1, workingDays.length)}, 1fr)`,
                   }}
                 >
-                  {workingDays.map((d) => (
-                    <div key={d.dateStr} style={{ textAlign: 'center' }}>
-                      <div
-                        style={{
-                          fontSize: 9.5,
-                          fontWeight: d.isToday ? 700 : 600,
-                          color: d.isToday ? '#167fd0' : '#475569',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {d.weekdayLabel}
+                  {(() => {
+                    const totalDays = workingDays.length;
+                    const dayFontSize = totalDays > 35 ? 8 : totalDays > 25 ? 9 : totalDays > 15 ? 10 : 10.5;
+                    const weekdayFontSize = totalDays > 35 ? 7.5 : totalDays > 25 ? 8 : 8.5;
+
+                    return workingDays.map((d) => (
+                      <div key={d.dateStr} style={{ textAlign: 'center' }}>
+                        <div
+                          style={{
+                            fontSize: weekdayFontSize,
+                            fontWeight: 400,
+                            color: d.isToday ? '#167fd0' : '#64748b',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {d.weekdayLabel}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: dayFontSize,
+                            fontWeight: 400,
+                            color: d.isToday ? '#167fd0' : '#334155',
+                            lineHeight: 1.2,
+                            letterSpacing: '-0.02em',
+                          }}
+                        >
+                          {d.dayMonth}
+                        </div>
                       </div>
-                      <div
-                        style={{
-                          fontSize: 13,
-                          fontWeight: 800,
-                          color: d.isToday ? '#167fd0' : '#0f172a',
-                          lineHeight: 1.2,
-                        }}
-                      >
-                        {d.dayMonth}
-                      </div>
-                    </div>
-                  ))}
+                    ));
+                  })()}
                 </div>
               </div>
 
