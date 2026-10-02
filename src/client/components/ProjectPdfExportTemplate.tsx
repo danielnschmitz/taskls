@@ -1,9 +1,9 @@
 import React, { useMemo } from 'react';
 import { format, parseISO, differenceInCalendarDays, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ScheduledPlanItem, ProjectSettings } from '../types';
+import { ScheduledPlanItem, ProjectSettings, ProjectChangeLog } from '../types';
 import { SYSMIDDLE_LOGO_BASE64, SYSMIDDLE_ICON_BASE64 } from '../utils/sysmiddleBrand';
-import { isWorkingDay } from '../utils/projectScheduling';
+import { isWorkingDay, addWorkingDays } from '../utils/projectScheduling';
 
 interface ProjectPdfExportTemplateProps {
   projectName: string;
@@ -12,6 +12,8 @@ interface ProjectPdfExportTemplateProps {
   holidaySet: Set<string>;
   isClientView: boolean;
   containerRef: React.RefObject<HTMLDivElement | null>;
+  pdfExportMode?: 'plan' | 'log' | 'all';
+  logs?: ProjectChangeLog[];
 }
 
 export const ProjectPdfExportTemplate: React.FC<ProjectPdfExportTemplateProps> = ({
@@ -21,6 +23,8 @@ export const ProjectPdfExportTemplate: React.FC<ProjectPdfExportTemplateProps> =
   holidaySet,
   isClientView,
   containerRef,
+  pdfExportMode = 'plan',
+  logs = [],
 }) => {
   const todayStr = useMemo(() => format(new Date(), 'dd/MM/yyyy'), []);
 
@@ -177,7 +181,63 @@ export const ProjectPdfExportTemplate: React.FC<ProjectPdfExportTemplateProps> =
     return chunks;
   }, [items]);
 
-  const totalPages = tableChunks.length + ganttChunks.length;
+  const logChunks = useMemo(() => {
+    const list = logs || [];
+    if (list.length === 0) return [[]];
+    const chunks: ProjectChangeLog[][] = [];
+    chunks.push(list.slice(0, 7));
+    let cur = 7;
+    while (cur < list.length) {
+      chunks.push(list.slice(cur, cur + 10));
+      cur += 10;
+    }
+    return chunks;
+  }, [logs]);
+
+  const shouldRenderPlan = pdfExportMode === 'plan' || pdfExportMode === 'all';
+  const shouldRenderLog = pdfExportMode === 'log' || pdfExportMode === 'all';
+
+  const planPages = shouldRenderPlan ? tableChunks.length + ganttChunks.length : 0;
+  const logPages = shouldRenderLog ? logChunks.length : 0;
+  const totalPages = Math.max(1, planPages + logPages);
+
+  const formatLogItemDetail = (log: ProjectChangeLog) => {
+    if (log.event_type === 'order_changed') {
+      return log.description;
+    }
+
+    const oldVal = log.old_value || {};
+    const newVal = log.new_value || {};
+
+    if (!oldVal.start_date || !newVal.start_date) {
+      return log.description;
+    }
+
+    const sOld = format(parseISO(oldVal.start_date), 'dd/MM/yyyy');
+    const sNew = format(parseISO(newVal.start_date), 'dd/MM/yyyy');
+
+    if (!isClientView) {
+      const eOld = format(parseISO(oldVal.end_date), 'dd/MM/yyyy');
+      const eNew = format(parseISO(newVal.end_date), 'dd/MM/yyyy');
+      return `Início: ${sOld} ➔ ${sNew} | Fim: ${eOld} ➔ ${eNew}`;
+    }
+
+    // Modo Cliente
+    const bufferDays = settings.client_delivery_buffer_days !== undefined
+      ? Math.max(0, Number(settings.client_delivery_buffer_days) || 0)
+      : 1;
+
+    let eOldDate = parseISO(oldVal.end_date);
+    let eNewDate = parseISO(newVal.end_date);
+    if (bufferDays > 0) {
+      eOldDate = addWorkingDays(eOldDate, bufferDays, holidaySet);
+      eNewDate = addWorkingDays(eNewDate, bufferDays, holidaySet);
+    }
+
+    const eOld = format(eOldDate, 'dd/MM/yyyy');
+    const eNew = format(eNewDate, 'dd/MM/yyyy');
+    return `Início: ${sOld} ➔ ${sNew} | Entrega Prevista: ${eOld} ➔ ${eNew}`;
+  };
 
   return (
     <div
@@ -196,7 +256,7 @@ export const ProjectPdfExportTemplate: React.FC<ProjectPdfExportTemplateProps> =
       {/* ------------------------------------------------------------- */}
       {/* SLIDE TYPE 1: DEMANDS LIST & SUMMARY KPIS                      */}
       {/* ------------------------------------------------------------- */}
-      {tableChunks.map((chunk, pageIdx) => {
+      {shouldRenderPlan && tableChunks.map((chunk, pageIdx) => {
         const currentPageNum = pageIdx + 1;
         const isFirstPage = pageIdx === 0;
 
@@ -559,7 +619,7 @@ export const ProjectPdfExportTemplate: React.FC<ProjectPdfExportTemplateProps> =
       {/* ------------------------------------------------------------- */}
       {/* SLIDE TYPE 2: CRONOGRAMA DE EXECUÇÃO (GANTT)                  */}
       {/* ------------------------------------------------------------- */}
-      {ganttChunks.map((chunk, gIdx) => {
+      {shouldRenderPlan && ganttChunks.map((chunk, gIdx) => {
         const currentPageNum = tableChunks.length + gIdx + 1;
 
         return (
@@ -929,6 +989,338 @@ export const ProjectPdfExportTemplate: React.FC<ProjectPdfExportTemplateProps> =
               }}
             >
               <div>SysMiddle | Integration as a Service</div>
+              <div>{currentPageNum} / {totalPages}</div>
+            </div>
+          </div>
+        );
+      })}
+
+      {/* ------------------------------------------------------------- */}
+      {/* SLIDE TYPE 3: LOG DE ALTERAÇÕES DO CRONOGRAMA                 */}
+      {/* ------------------------------------------------------------- */}
+      {shouldRenderLog && logChunks.map((chunk, pageIdx) => {
+        const currentPageNum = (shouldRenderPlan ? planPages : 0) + pageIdx + 1;
+        const isFirstLogPage = pageIdx === 0;
+
+        return (
+          <div
+            key={`log-page-${pageIdx}`}
+            className="pdf-export-slide pdf-log-slide"
+            style={{
+              width: 1024,
+              height: 576,
+              backgroundColor: '#ffffff',
+              position: 'relative',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              fontFamily: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+              boxSizing: 'border-box',
+              padding: '28px 44px 22px 48px',
+            }}
+          >
+            {/* Left Brand Stripe */}
+            <div
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: 7,
+                backgroundColor: '#0265b0',
+              }}
+            />
+
+            {/* Subtle Watermark Loop Icon in Bottom Right */}
+            <img
+              src={SYSMIDDLE_ICON_BASE64}
+              alt=""
+              style={{
+                position: 'absolute',
+                right: -30,
+                bottom: -40,
+                width: 380,
+                height: 380,
+                objectFit: 'contain',
+                opacity: 0.05,
+                pointerEvents: 'none',
+              }}
+            />
+
+            {/* Top Header */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 12,
+              }}
+            >
+              <img
+                src={SYSMIDDLE_LOGO_BASE64}
+                alt="SysMiddle"
+                style={{
+                  height: 28,
+                  width: 'auto',
+                  objectFit: 'contain',
+                }}
+              />
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', lineHeight: 1.2 }}>
+                  {projectName}
+                </div>
+                <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>
+                  Atualizado em {todayStr}
+                </div>
+              </div>
+            </div>
+
+            {/* Title & Subtitle */}
+            <div style={{ marginBottom: isFirstLogPage ? 12 : 16 }}>
+              <h1
+                style={{
+                  fontSize: 22,
+                  fontWeight: 800,
+                  color: '#0f172a',
+                  letterSpacing: '-0.02em',
+                  margin: 0,
+                  lineHeight: 1.2,
+                }}
+              >
+                Alterações do Cronograma
+              </h1>
+              <div style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>
+                Histórico de alterações de ordem e datas de execução
+                {logChunks.length > 1 ? ` (Parte ${pageIdx + 1} de ${logChunks.length})` : ''}
+              </div>
+            </div>
+
+            {/* 4 KPI Summary Cards (rendered on first page) */}
+            {isFirstLogPage && (
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(4, 1fr)',
+                  gap: 12,
+                  marginBottom: 14,
+                }}
+              >
+                {/* Card 1: Total de eventos */}
+                <div
+                  style={{
+                    backgroundColor: '#0265b0',
+                    borderRadius: 12,
+                    padding: '10px 16px',
+                    color: '#ffffff',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <div style={{ fontSize: 26, fontWeight: 900, lineHeight: 1 }}>{(logs || []).length}</div>
+                  <div style={{ fontSize: 10, fontWeight: 500, opacity: 0.9, marginTop: 4 }}>
+                    eventos de alteração
+                  </div>
+                </div>
+
+                {/* Card 2: Alterações de Ordem */}
+                <div
+                  style={{
+                    backgroundColor: '#f8fafc',
+                    border: '1.5px solid #e2e8f0',
+                    borderRadius: 12,
+                    padding: '10px 16px',
+                    color: '#0f172a',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <div style={{ fontSize: 26, fontWeight: 900, lineHeight: 1, color: '#4338ca' }}>
+                    {(logs || []).filter((l) => l.event_type === 'order_changed').length}
+                  </div>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: '#64748b', marginTop: 4 }}>
+                    alterações de ordem
+                  </div>
+                </div>
+
+                {/* Card 3: Alterações de Data */}
+                <div
+                  style={{
+                    backgroundColor: '#f8fafc',
+                    border: '1.5px solid #e2e8f0',
+                    borderRadius: 12,
+                    padding: '10px 16px',
+                    color: '#0f172a',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <div style={{ fontSize: 26, fontWeight: 900, lineHeight: 1, color: '#b45309' }}>
+                    {(logs || []).filter((l) => l.event_type === 'date_changed').length}
+                  </div>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: '#64748b', marginTop: 4 }}>
+                    alterações de data
+                  </div>
+                </div>
+
+                {/* Card 4: Demandas impactadas */}
+                <div
+                  style={{
+                    backgroundColor: '#f8fafc',
+                    border: '1.5px solid #e2e8f0',
+                    borderRadius: 12,
+                    padding: '10px 16px',
+                    color: '#0f172a',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <div style={{ fontSize: 26, fontWeight: 900, lineHeight: 1, color: '#059669' }}>
+                    {new Set((logs || []).map((l) => l.issue_key)).size}
+                  </div>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: '#64748b', marginTop: 4 }}>
+                    demandas impactadas
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Log Table */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '110px 100px 130px 130px 1fr',
+                  gap: 8,
+                  padding: '7px 12px',
+                  backgroundColor: '#0f172a',
+                  color: '#ffffff',
+                  borderRadius: '8px 8px 0 0',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                <div>DATA/HORA</div>
+                <div>TIPO</div>
+                <div>DEMANDA</div>
+                <div>RESPONSÁVEL</div>
+                <div>DETALHES DA ALTERAÇÃO</div>
+              </div>
+
+              {chunk.length === 0 ? (
+                <div
+                  style={{
+                    padding: 24,
+                    textAlign: 'center',
+                    color: '#94a3b8',
+                    fontSize: 12,
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '0 0 8px 8px',
+                    backgroundColor: '#f8fafc',
+                  }}
+                >
+                  Nenhuma alteração de ordem ou data registrada para os filtros selecionados.
+                </div>
+              ) : (
+                <div
+                  style={{
+                    border: '1px solid #e2e8f0',
+                    borderTop: 'none',
+                    borderRadius: '0 0 8px 8px',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {chunk.map((item, idx) => {
+                    const isEven = idx % 2 === 0;
+                    const isOrder = item.event_type === 'order_changed';
+                    const dateFormatted = format(parseISO(item.created_at), 'dd/MM/yyyy HH:mm');
+
+                    return (
+                      <div
+                        key={`log-${pageIdx}-${idx}`}
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: '110px 100px 130px 130px 1fr',
+                          gap: 8,
+                          padding: '7px 12px',
+                          backgroundColor: isEven ? '#ffffff' : '#f8fafc',
+                          borderBottom: idx === chunk.length - 1 ? 'none' : '1px solid #e2e8f0',
+                          fontSize: 10.5,
+                          alignItems: 'center',
+                        }}
+                      >
+                        <div style={{ color: '#64748b', fontSize: 10, fontFamily: 'monospace', fontWeight: 600 }}>
+                          {dateFormatted}
+                        </div>
+
+                        <div>
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              padding: '2px 8px',
+                              borderRadius: 4,
+                              fontSize: 9.5,
+                              fontWeight: 700,
+                              textTransform: 'uppercase',
+                              backgroundColor: isOrder ? '#e0e7ff' : '#fef3c7',
+                              color: isOrder ? '#4338ca' : '#b45309',
+                              border: `1px solid ${isOrder ? '#c7d2fe' : '#fde68a'}`,
+                            }}
+                          >
+                            {isOrder ? 'Ordem' : 'Data'}
+                          </span>
+                        </div>
+
+                        <div>
+                          <div style={{ fontWeight: 800, color: '#0f172a', fontFamily: 'monospace', fontSize: 11 }}>
+                            {item.issue_key}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 9.5,
+                              color: '#64748b',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                            title={item.summary}
+                          >
+                            {item.summary}
+                          </div>
+                        </div>
+
+                        <div style={{ color: '#334155', fontWeight: 600, fontSize: 10.5 }}>
+                          {item.assignee_name || '-'}
+                        </div>
+
+                        <div style={{ color: '#0f172a', fontWeight: 500, fontSize: 10.5 }}>
+                          {formatLogItemDetail(item)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginTop: 'auto',
+                paddingTop: 8,
+                fontSize: 9.5,
+                color: '#94a3b8',
+              }}
+            >
+              <div>SysMiddle | Integration as a Service · Log de Auditoria & Alterações</div>
               <div>{currentPageNum} / {totalPages}</div>
             </div>
           </div>

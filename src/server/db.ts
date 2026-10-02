@@ -283,6 +283,22 @@ export async function initDatabase(): Promise<void> {
       ALTER TABLE users ALTER COLUMN allowed_modules SET DEFAULT ARRAY['tasks', 'cards', 'health', 'dashboards', 'projects']::TEXT[];
       UPDATE users SET allowed_modules = array_append(allowed_modules, 'projects')
       WHERE allowed_modules IS NOT NULL AND NOT ('projects' = ANY(allowed_modules));
+
+      -- Tabela de Logs de Alterações de Projetos (Auditoria de Ordem e Datas)
+      CREATE TABLE IF NOT EXISTS project_change_logs (
+        id SERIAL PRIMARY KEY,
+        project_key VARCHAR(20) NOT NULL,
+        event_type VARCHAR(50) NOT NULL,
+        issue_key VARCHAR(50) NOT NULL,
+        summary TEXT,
+        assignee_name VARCHAR(100),
+        old_value JSONB,
+        new_value JSONB,
+        description TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_change_logs_proj ON project_change_logs(project_key, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_change_logs_issue ON project_change_logs(issue_key);
     `);
 
     // Seed de Feriados Globais de Gestão de Projetos

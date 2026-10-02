@@ -416,6 +416,7 @@ export interface ProjectSettings {
   work_hours_per_day: number;
   plan_start_date: string;
   holidays: ProjectHoliday[];
+  global_assignees?: string[];
   client_hours_markup_percent?: number;
   client_delivery_buffer_days?: number;
   issue_types?: string[];
@@ -447,6 +448,19 @@ export interface ScheduledPlanItem extends PlanItemInput {
   start_date: string; // 'YYYY-MM-DD'
   end_date: string;   // 'YYYY-MM-DD'
   working_days: number;
+}
+
+export interface ProjectChangeLog {
+  id?: number | string;
+  project_key: string;
+  event_type: 'order_changed' | 'date_changed';
+  issue_key: string;
+  summary: string;
+  assignee_name?: string;
+  old_value?: any;
+  new_value?: any;
+  description: string;
+  created_at: string;
 }
 
 export interface ProjectBacklogIssue extends JiraDemand {

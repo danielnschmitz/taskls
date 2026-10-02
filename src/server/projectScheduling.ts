@@ -10,6 +10,7 @@ export interface ProjectSettings {
   work_hours_per_day: number; // e.g. 8
   plan_start_date: string; // 'YYYY-MM-DD'
   holidays: ProjectHoliday[];
+  global_assignees?: string[];
   client_hours_markup_percent?: number;
   client_delivery_buffer_days?: number;
   issue_types?: string[];
@@ -78,6 +79,7 @@ export const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   work_hours_per_day: 8,
   plan_start_date: format(new Date(), 'yyyy-MM-dd'),
   holidays: DEFAULT_BRAZILIAN_HOLIDAYS,
+  global_assignees: [],
   client_hours_markup_percent: 0,
   client_delivery_buffer_days: 1,
 };

@@ -4,6 +4,7 @@ import {
   Clock,
   Users,
   User,
+  UserPlus,
   ChevronDown,
   ChevronRight,
   Plus,
@@ -46,6 +47,9 @@ import {
   FilterX,
   SlidersHorizontal,
   CalendarRange,
+  CalendarSync,
+  MessageSquare,
+  ArrowUpDown,
 } from 'lucide-react';
 import {
   format,
@@ -76,6 +80,8 @@ import {
   ProjectBacklogIssue,
   ProjectBacklogResponse,
   ProjectPlanResponse,
+  JiraDemand,
+  ProjectChangeLog,
 } from '../types';
 import {
   calculatePlanSchedule,
@@ -237,10 +243,18 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
     work_hours_per_day: 8,
     plan_start_date: format(new Date(), 'yyyy-MM-dd'),
     holidays: [],
+    global_assignees: [],
     client_hours_markup_percent: 0,
     client_delivery_buffer_days: 1,
     issue_types: ['Ativação', 'Tarefa'],
   });
+
+  const registeredAssignees = useMemo(() => {
+    if (Array.isArray(settings.global_assignees) && settings.global_assignees.length > 0) {
+      return settings.global_assignees;
+    }
+    return [];
+  }, [settings.global_assignees]);
 
   // Stored / Server Plan vs Live Local Plan
   const [serverItems, setServerItems] = useState<ScheduledPlanItem[]>([]);
@@ -307,6 +321,11 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
   const [editCanal, setEditCanal] = useState<string>('');
   const [editExecutionStatus, setEditExecutionStatus] = useState<ExecutionStatus>('not_started');
 
+  // Modal: Sincronizar Datas com o Jira
+  const [syncJiraItem, setSyncJiraItem] = useState<ScheduledPlanItem | null>(null);
+  const [syncJiraComment, setSyncJiraComment] = useState<string>('');
+  const [isSyncingJira, setIsSyncingJira] = useState<boolean>(false);
+
   // Dropdown menu de status na linha da tabela
   const [openStatusMenuId, setOpenStatusMenuId] = useState<string | null>(null);
 
@@ -330,6 +349,17 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
   const [ganttScale, setGanttScale] = useState<'day' | 'week'>('day');
   const ganttContainerRef = useRef<HTMLDivElement>(null);
   const pdfExportContainerRef = useRef<HTMLDivElement>(null);
+
+  // Log de auditoria e exportação
+  const [changeLogs, setChangeLogs] = useState<ProjectChangeLog[]>([]);
+  const [pdfExportMode, setPdfExportMode] = useState<'plan' | 'log' | 'all'>('plan');
+  const [isPdfDropdownOpen, setIsPdfDropdownOpen] = useState(false);
+
+  // Modal: Inverter Ordem de Tarefas
+  const [isSwapModalOpen, setIsSwapModalOpen] = useState(false);
+  const [swapItem1Key, setSwapItem1Key] = useState<string>('');
+  const [swapItem2Key, setSwapItem2Key] = useState<string>('');
+  const [isSwapping, setIsSwapping] = useState<boolean>(false);
 
   // Assignee Color Mapping Cache
   const assigneeColorMap = useMemo(() => {
@@ -375,6 +405,20 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
     loadProjects();
   }, [loadProjects]);
 
+  // Carregar histórico de logs de auditoria do projeto
+  const loadProjectLogs = useCallback(async (projectKey: string) => {
+    if (!projectKey) return;
+    try {
+      const res = await fetch(`/api/projects/${encodeURIComponent(projectKey)}/logs`);
+      if (res.ok) {
+        const data = await res.json();
+        setChangeLogs(data);
+      }
+    } catch (err) {
+      console.warn('[Projects API] Falha ao carregar logs:', err);
+    }
+  }, []);
+
   // 1. Fetch settings and plan for active project
   const loadPlanAndSettings = useCallback(async (projectKey: string) => {
     if (!projectKey) return;
@@ -387,13 +431,14 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       setServerItems(data.items);
       setLocalItems(data.items);
       setHasUnsavedChanges(false);
+      loadProjectLogs(projectKey);
     } catch (err: any) {
       console.error(err);
       onShowToast(err.message || 'Erro ao carregar dados do plano.', 'error');
     } finally {
       setIsLoadingPlan(false);
     }
-  }, [onShowToast]);
+  }, [onShowToast, loadProjectLogs]);
 
   useEffect(() => {
     if (selectedProjectKey) {
@@ -684,7 +729,11 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
   const handleOpenAddModal = (issue: ProjectBacklogIssue) => {
     setAddingIssue(issue);
     setEstimateHoursInput(8);
-    setAssigneeInput(issue.assignee?.displayName || '');
+    const jiraAssignee = issue.assignee?.displayName || '';
+    const match = registeredAssignees.find(
+      (a) => a.trim().toLowerCase() === jiraAssignee.trim().toLowerCase()
+    );
+    setAssigneeInput(match || (registeredAssignees.length === 1 ? registeredAssignees[0] : ''));
   };
 
   // Confirm addition to plan
@@ -698,7 +747,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
     }
 
     if (!assigneeInput.trim()) {
-      onShowToast('Informe quem irá executar a demanda.', 'error');
+      onShowToast('Selecione quem irá executar a demanda.', 'error');
       return;
     }
 
@@ -739,7 +788,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
   const handleOpenAddManualModal = () => {
     setManualKey('');
     setManualSummary('');
-    setManualAssignee(uniqueAssignees[0] || '');
+    setManualAssignee(registeredAssignees.length === 1 ? registeredAssignees[0] : '');
     setManualEstimateHours(8);
     setManualExecutionStatus('not_started');
     setManualIndustry('');
@@ -819,7 +868,12 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       if (foundIssue) {
         setManualSummary(foundIssue.summary || '');
         if (foundIssue.assignee && foundIssue.assignee !== 'Não atribuído') {
-          setManualAssignee(foundIssue.assignee);
+          const match = registeredAssignees.find(
+            (a) => a.trim().toLowerCase() === foundIssue.assignee.trim().toLowerCase()
+          );
+          if (match) {
+            setManualAssignee(match);
+          }
         }
         setManualExecutionStatus('not_started');
         if (foundIssue.metadata?.industry) {
@@ -856,7 +910,12 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
         const data = await res.json();
         setManualSummary(data.summary || '');
         if (data.assignee && data.assignee !== 'Não atribuído') {
-          setManualAssignee(data.assignee);
+          const match = registeredAssignees.find(
+            (a) => a.trim().toLowerCase() === data.assignee.trim().toLowerCase()
+          );
+          if (match) {
+            setManualAssignee(match);
+          }
         }
         setManualExecutionStatus('not_started');
         if (data.industry) {
@@ -953,7 +1012,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
     }
 
     if (!manualAssignee.trim()) {
-      onShowToast('Informe quem irá executar a demanda.', 'error');
+      onShowToast('Selecione quem irá executar a demanda.', 'error');
       return;
     }
 
@@ -1103,7 +1162,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
     }
 
     if (!editAssignee.trim()) {
-      onShowToast('Informe quem irá executar a demanda.', 'error');
+      onShowToast('Selecione quem irá executar a demanda.', 'error');
       return;
     }
 
@@ -1231,6 +1290,104 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
     };
   }, [editingItem, editAssignee, activeProject]);
 
+  // Object for JiraCard representation in sync Jira modal
+  const syncJiraDemand: JiraDemand | null = useMemo(() => {
+    if (!syncJiraItem) return null;
+    const meta = syncJiraItem.metadata || {};
+    return {
+      id: syncJiraItem.id,
+      key: syncJiraItem.issue_key,
+      summary: syncJiraItem.summary,
+      duedate: meta.duedate || '',
+      project: meta.project || { key: activeProject?.key || 'NEO', name: activeProject?.name || 'Neogrid' },
+      rawStatus: meta.rawStatus || syncJiraItem.status || '',
+      displayStatus: meta.displayStatus || syncJiraItem.status || 'Planejado',
+      assignee: syncJiraItem.assignee_name ? { displayName: syncJiraItem.assignee_name } : null,
+      epic: meta.epic || null,
+      industry: meta.industry || null,
+      layout: meta.layout || null,
+      isBlocked: meta.isBlocked || false,
+      blockedReason: meta.blockedReason || null,
+      url: meta.url || `https://sysmiddle.atlassian.net/browse/${syncJiraItem.issue_key}`,
+    };
+  }, [syncJiraItem, activeProject]);
+
+  // Abrir modal de sincronização de datas com o Jira
+  const handleOpenSyncJiraModal = (item: ScheduledPlanItem) => {
+    setSyncJiraItem(item);
+    setSyncJiraComment('');
+  };
+
+  // Confirmar sincronização de datas com a API do Jira
+  const handleConfirmSyncJira = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!syncJiraItem) return;
+
+    try {
+      setIsSyncingJira(true);
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(selectedProjectKey)}/jira-issue/${encodeURIComponent(syncJiraItem.issue_key)}/sync-dates`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            startDate: syncJiraItem.start_date,
+            endDate: syncJiraItem.end_date,
+            comment: syncJiraComment.trim() || undefined,
+          }),
+        }
+      );
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || 'Erro ao sincronizar datas no Jira.');
+      }
+
+      const data = await res.json();
+
+      // Atualiza localItems com a nova data limite (duedate = end_date)
+      setLocalItems((prev) =>
+        prev.map((it) => {
+          if (it.id === syncJiraItem.id || it.issue_key === syncJiraItem.issue_key) {
+            return {
+              ...it,
+              metadata: {
+                ...(it.metadata || {}),
+                duedate: syncJiraItem.end_date,
+              },
+            };
+          }
+          return it;
+        })
+      );
+
+      // Atualiza serverItems também para manter sincronizado com a base
+      setServerItems((prev) =>
+        prev.map((it) => {
+          if (it.id === syncJiraItem.id || it.issue_key === syncJiraItem.issue_key) {
+            return {
+              ...it,
+              metadata: {
+                ...(it.metadata || {}),
+                duedate: syncJiraItem.end_date,
+              },
+            };
+          }
+          return it;
+        })
+      );
+
+      setSyncJiraItem(null);
+      setSyncJiraComment('');
+      onShowToast(data.message || `Datas da demanda ${syncJiraItem.issue_key} sincronizadas no Jira com sucesso!`, 'success');
+    } catch (err: any) {
+      console.error(err);
+      onShowToast(err.message || 'Erro ao sincronizar datas com o Jira.', 'error');
+    } finally {
+      setIsSyncingJira(false);
+    }
+  };
+
   // Save changes to database
   const handleSavePlan = async () => {
     try {
@@ -1277,6 +1434,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       onShowToast('Plano de projeto salvo com sucesso!', 'success');
       // Invalidate backlog cache so added demands disappear from backlog
       loadBacklog(selectedProjectKey);
+      loadProjectLogs(selectedProjectKey);
     } catch (err: any) {
       console.error(err);
       onShowToast(err.message || 'Falha ao salvar plano de projeto.', 'error');
@@ -1801,11 +1959,126 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
     }
   };
 
-  const handleExportPdf = async () => {
+  // Logs filtrados respeitando exatamente os filtros aplicados na tela (filteredPlanItems)
+  const filteredLogs = useMemo(() => {
+    if (!changeLogs || changeLogs.length === 0) return [];
+    const allowedKeys = new Set(filteredPlanItems.map((it) => it.issue_key));
+    return changeLogs.filter((log) => allowedKeys.has(log.issue_key));
+  }, [changeLogs, filteredPlanItems]);
+
+  const formatLogItemDetailText = (log: ProjectChangeLog) => {
+    if (log.event_type === 'order_changed') {
+      return log.description;
+    }
+
+    const oldVal = log.old_value || {};
+    const newVal = log.new_value || {};
+
+    if (!oldVal.start_date || !newVal.start_date) {
+      return log.description;
+    }
+
+    const sOld = format(parseISO(oldVal.start_date), 'dd/MM/yyyy');
+    const sNew = format(parseISO(newVal.start_date), 'dd/MM/yyyy');
+
+    if (!isClientView) {
+      const eOld = format(parseISO(oldVal.end_date), 'dd/MM/yyyy');
+      const eNew = format(parseISO(newVal.end_date), 'dd/MM/yyyy');
+      return `Início: ${sOld} ➔ ${sNew} | Fim: ${eOld} ➔ ${eNew}`;
+    }
+
+    // Modo Cliente
+    const bufferDays =
+      settings.client_delivery_buffer_days !== undefined
+        ? Math.max(0, Number(settings.client_delivery_buffer_days) || 0)
+        : 1;
+
+    let eOldDate = parseISO(oldVal.end_date);
+    let eNewDate = parseISO(newVal.end_date);
+    if (bufferDays > 0) {
+      eOldDate = addWorkingDays(eOldDate, bufferDays, holidaySet);
+      eNewDate = addWorkingDays(eNewDate, bufferDays, holidaySet);
+    }
+
+    const eOld = format(eOldDate, 'dd/MM/yyyy');
+    const eNew = format(eNewDate, 'dd/MM/yyyy');
+    return `Início: ${sOld} ➔ ${sNew} | Entrega Prevista: ${eOld} ➔ ${eNew}`;
+  };
+
+  const handleExportTextLog = () => {
+    try {
+      const list = filteredLogs;
+      const projName = activeProject?.name || selectedProjectKey;
+      const nowFormatted = format(new Date(), 'dd/MM/yyyy HH:mm:ss');
+      const modeLabel = isClientView
+        ? 'Modo Cliente (Com Buffer e Margem)'
+        : 'Modo Interno (Datas Reais / Técnicas)';
+
+      const orderCount = list.filter((l) => l.event_type === 'order_changed').length;
+      const dateCount = list.filter((l) => l.event_type === 'date_changed').length;
+      const affectedIssues = new Set(list.map((l) => l.issue_key)).size;
+
+      let text = `================================================================================\n`;
+      text += `LOG DE AUDITORIA E ALTERAÇÕES - ${projName.toUpperCase()} (${selectedProjectKey})\n`;
+      text += `Data de Exportação: ${nowFormatted}\n`;
+      text += `Visualização: ${modeLabel}\n`;
+      text += `Filtros Aplicados na Tela: ${hasActiveFilters ? 'Sim (Exibindo subconjunto filtrado)' : 'Nenhum (Todos os itens)'}\n`;
+      text += `Total de Eventos: ${list.length}\n`;
+      text += `================================================================================\n\n`;
+
+      text += `[RESUMO DOS EVENTOS]\n`;
+      text += `- Alterações de Ordem na Fila: ${orderCount}\n`;
+      text += `- Alterações de Datas: ${dateCount}\n`;
+      text += `- Demandas Únicas Impactadas: ${affectedIssues}\n\n`;
+
+      text += `--------------------------------------------------------------------------------\n`;
+      text += `HISTÓRICO DETALHADO DE EVENTOS\n`;
+      text += `--------------------------------------------------------------------------------\n\n`;
+
+      if (list.length === 0) {
+        text += `Nenhum registro de alteração de ordem ou data encontrado para as demandas filtradas.\n`;
+      } else {
+        list.forEach((item, idx) => {
+          let dateStr = item.created_at;
+          try {
+            dateStr = format(parseISO(item.created_at), 'dd/MM/yyyy HH:mm:ss');
+          } catch {
+            // fallback
+          }
+          const typeLabel = item.event_type === 'order_changed' ? 'ALTERAÇÃO DE ORDEM' : 'ALTERAÇÃO DE DATA';
+          const detail = formatLogItemDetailText(item);
+
+          text += `[#${idx + 1}] [${dateStr}] [${typeLabel}]\n`;
+          text += `Demanda:     ${item.issue_key} - ${item.summary}\n`;
+          text += `Responsável: ${item.assignee_name || 'Não atribuído'}\n`;
+          text += `Detalhes:    ${detail}\n`;
+          text += `--------------------------------------------------------------------------------\n`;
+        });
+      }
+
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const projClean = (activeProject?.name || selectedProjectKey).toLowerCase().replace(/\s+/g, '-');
+      link.download = `log-alteracoes-${projClean}_${format(new Date(), 'yyyy-MM-dd')}.txt`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      onShowToast('Log em modo texto (.txt) exportado com sucesso!', 'success');
+    } catch (err: any) {
+      console.error(err);
+      onShowToast('Erro ao exportar log de texto: ' + (err.message || ''), 'error');
+    }
+  };
+
+  const handleExportPdf = async (mode: 'plan' | 'log' | 'all' = 'plan') => {
     try {
       setIsExporting('pdf');
-      // Pequena pausa para garantir renderização do template no DOM
-      await new Promise((r) => setTimeout(r, 200));
+      setPdfExportMode(mode);
+      // Aguardar renderização no DOM do template com o novo modo
+      await new Promise((r) => setTimeout(r, 450));
 
       const container = pdfExportContainerRef.current;
       if (!container) {
@@ -1843,13 +2116,118 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       }
 
       const projCleanName = (activeProject?.name || selectedProjectKey).toLowerCase().replace(/\s+/g, '-');
-      doc.save(`plano-cronograma-${projCleanName}_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
-      onShowToast('Relatório PDF exportado com sucesso no padrão SysMiddle!', 'success');
+      const suffix = mode === 'log' ? 'log-alteracoes' : mode === 'all' ? 'plano-e-log' : 'plano-cronograma';
+      doc.save(`${suffix}-${projCleanName}_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+      
+      const successMessage =
+        mode === 'log'
+          ? 'Log de alterações exportado em PDF com sucesso!'
+          : mode === 'all'
+          ? 'Plano e Log exportados em PDF com sucesso no padrão SysMiddle!'
+          : 'Relatório PDF do plano exportado com sucesso no padrão SysMiddle!';
+      onShowToast(successMessage, 'success');
     } catch (err: any) {
       console.error('[PDF Export] Erro ao exportar:', err);
       onShowToast('Falha ao exportar PDF: ' + (err.message || ''), 'error');
     } finally {
       setIsExporting(null);
+    }
+  };
+
+  // Obter itens selecionados para o modal de inversão
+  const swapItem1 = useMemo(() => {
+    return localItems.find((i) => i.issue_key === swapItem1Key) || null;
+  }, [localItems, swapItem1Key]);
+
+  const swapItem2 = useMemo(() => {
+    return localItems.find((i) => i.issue_key === swapItem2Key) || null;
+  }, [localItems, swapItem2Key]);
+
+  const handleExecuteSwap = async (saveImmediately: boolean = true) => {
+    if (!swapItem1 || !swapItem2 || swapItem1.issue_key === swapItem2.issue_key) return;
+
+    try {
+      setIsSwapping(true);
+      const idx1 = localItems.findIndex((it) => it.issue_key === swapItem1.issue_key);
+      const idx2 = localItems.findIndex((it) => it.issue_key === swapItem2.issue_key);
+
+      if (idx1 === -1 || idx2 === -1) {
+        throw new Error('Uma das tarefas selecionadas não foi encontrada na fila.');
+      }
+
+      const reordered = [...localItems];
+      const temp = reordered[idx1];
+      reordered[idx1] = reordered[idx2];
+      reordered[idx2] = temp;
+
+      // Reindexar sort_order
+      reordered.forEach((it, idx) => {
+        it.sort_order = idx + 1;
+      });
+
+      const recalculated = calculatePlanSchedule(reordered, settings);
+
+      if (!saveImmediately) {
+        setLocalItems(recalculated);
+        setHasUnsavedChanges(true);
+        setIsSwapModalOpen(false);
+        onShowToast(
+          `Ordem invertida entre ${swapItem1.issue_key} e ${swapItem2.issue_key} na fila! Clique em Salvar Alterações para persistir.`,
+          'info'
+        );
+        return;
+      }
+
+      // Inverter e salvar imediatamente no servidor
+      setIsSavingPlan(true);
+      const swapLogs = [
+        {
+          event_type: 'order_changed',
+          issue_key: swapItem1.issue_key,
+          summary: swapItem1.summary,
+          assignee_name: swapItem1.assignee_name,
+          old_value: { sort_order: swapItem1.sort_order },
+          new_value: { sort_order: swapItem2.sort_order },
+          description: `Inversão de ordem com ${swapItem2.issue_key}: Posição ${swapItem1.sort_order} ➔ Posição ${swapItem2.sort_order}`,
+        },
+        {
+          event_type: 'order_changed',
+          issue_key: swapItem2.issue_key,
+          summary: swapItem2.summary,
+          assignee_name: swapItem2.assignee_name,
+          old_value: { sort_order: swapItem2.sort_order },
+          new_value: { sort_order: swapItem1.sort_order },
+          description: `Inversão de ordem com ${swapItem1.issue_key}: Posição ${swapItem2.sort_order} ➔ Posição ${swapItem1.sort_order}`,
+        },
+      ];
+
+      const res = await fetch(`/api/projects/${encodeURIComponent(selectedProjectKey)}/plan`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: recalculated, logs: swapLogs }),
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || 'Erro ao persistir inversão de tarefas.');
+      }
+
+      const data = await res.json();
+      setServerItems(data.items);
+      setLocalItems(data.items);
+      setHasUnsavedChanges(false);
+      setIsSwapModalOpen(false);
+      await loadProjectLogs(selectedProjectKey);
+      onShowToast(
+        `Ordem invertida com sucesso entre ${swapItem1.issue_key} e ${swapItem2.issue_key}!`,
+        'success'
+      );
+    } catch (err: any) {
+      console.error(err);
+      onShowToast(err.message || 'Erro ao inverter ordem de tarefas.', 'error');
+    } finally {
+      setIsSwapping(false);
+      setIsSavingPlan(false);
     }
   };
 
@@ -2290,18 +2668,111 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
               )}
             </div>
 
+            {/* PDF Export Dropdown Selector */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsPdfDropdownOpen((prev) => !prev)}
+                disabled={isExporting !== null || localItems.length === 0}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold border border-slate-300 dark:border-slate-700 transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                title="Exportar documento PDF (Plano, Log ou Plano + Log)"
+              >
+                {isExporting === 'pdf' ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-500" />
+                ) : (
+                  <FileText className="w-3.5 h-3.5 text-rose-500" />
+                )}
+                <span>PDF</span>
+                <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${isPdfDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {isPdfDropdownOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setIsPdfDropdownOpen(false)}
+                  />
+                  <div className="absolute right-0 top-full mt-1.5 z-50 w-64 p-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl space-y-1 animate-in fade-in zoom-in-95 duration-100">
+                    <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
+                      Exportar Relatório PDF
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsPdfDropdownOpen(false);
+                        handleExportPdf('plan');
+                      }}
+                      className="w-full text-left flex items-start gap-2.5 p-2 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-700 dark:text-slate-200 transition-colors group"
+                    >
+                      <div className="mt-0.5 p-1 rounded bg-rose-100 dark:bg-rose-900/60 text-rose-600 dark:text-rose-400">
+                        <FileText className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <span className="block text-xs font-bold group-hover:text-rose-600 dark:group-hover:text-rose-400">
+                          1 - Exportar plano
+                        </span>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                          Lista de demandas e cronograma Gantt
+                        </span>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsPdfDropdownOpen(false);
+                        handleExportPdf('log');
+                      }}
+                      className="w-full text-left flex items-start gap-2.5 p-2 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/40 text-slate-700 dark:text-slate-200 transition-colors group"
+                    >
+                      <div className="mt-0.5 p-1 rounded bg-amber-100 dark:bg-amber-900/60 text-amber-600 dark:text-amber-400">
+                        <RotateCcw className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <span className="block text-xs font-bold group-hover:text-amber-600 dark:group-hover:text-amber-400">
+                          2 - Exportar log
+                        </span>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                          Histórico de alterações ({filteredLogs.length} eventos)
+                        </span>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsPdfDropdownOpen(false);
+                        handleExportPdf('all');
+                      }}
+                      className="w-full text-left flex items-start gap-2.5 p-2 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-700 dark:text-slate-200 transition-colors group border-t border-slate-100 dark:border-slate-800/80"
+                    >
+                      <div className="mt-0.5 p-1 rounded bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400">
+                        <Layers className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <span className="block text-xs font-bold group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                          3 - Exportar plano + log
+                        </span>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                          Documento completo unificado
+                        </span>
+                      </div>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Exportar Log em Modo Texto (.txt) */}
             <button
-              onClick={handleExportPdf}
+              onClick={handleExportTextLog}
               disabled={isExporting !== null || localItems.length === 0}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold border border-slate-300 dark:border-slate-700 transition-all shadow-sm active:scale-95 disabled:opacity-50"
-              title="Exportar plano detalhado e relatório em PDF"
+              title="Exportar log de alterações em arquivo de texto (.txt)"
             >
-              {isExporting === 'pdf' ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-500" />
-              ) : (
-                <FileText className="w-3.5 h-3.5 text-rose-500" />
-              )}
-              <span>PDF</span>
+              <Download className="w-3.5 h-3.5 text-blue-500" />
+              <span>Log (.txt)</span>
             </button>
 
             <button
@@ -2939,6 +3410,23 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                       </button>
                     )}
 
+                    {localItems.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSwapItem1Key(localItems[0]?.issue_key || '');
+                          setSwapItem2Key(localItems[1]?.issue_key || '');
+                          setIsSwapModalOpen(true);
+                        }}
+                        disabled={isSavingPlan}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold border border-slate-300 dark:border-slate-700 transition-all active:scale-95 disabled:opacity-50"
+                        title="Inverter a ordem de duas tarefas na fila de execução"
+                      >
+                        <ArrowUpDown className="w-3.5 h-3.5 text-indigo-500" />
+                        <span>Inverter ordem</span>
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       onClick={handleOpenAddManualModal}
@@ -2998,9 +3486,9 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                       <th className="py-2.5 px-3">Resumo da Demanda</th>
                       <th className="py-2.5 px-3">Detalhes</th>
                       {!isClientView && <th className="py-2.5 px-3">Executor</th>}
-                      {!isClientView && <th className="py-2.5 px-3">Estimativa</th>}
-                      <th className="py-2.5 px-3">Início Calculado</th>
-                      <th className="py-2.5 px-3">{isClientView ? 'Entrega Prevista' : 'Fim Calculado'}</th>
+                      {!isClientView && <th className="py-2.5 px-3">EST</th>}
+                      <th className="py-2.5 px-3">Início</th>
+                      <th className="py-2.5 px-3">{isClientView ? 'Entrega Prevista' : 'Fim'}</th>
                       <th className="py-2.5 px-3">Prazo Jira</th>
                       <th className="py-2.5 px-3">Dias Úteis</th>
                       <th className="py-2.5 px-3 text-right">Ações</th>
@@ -3117,14 +3605,6 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                                   <ExternalLink className="w-3 h-3 opacity-60 group-hover:opacity-100 flex-shrink-0" />
                                 </a>
                               )}
-                              {isBlocked && (
-                                <span
-                                  className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-300 text-[9px] font-bold flex-shrink-0"
-                                  title={`Bloqueado: ${item.metadata?.blockedReason || 'Impedimento'}`}
-                                >
-                                  <AlertOctagon className="w-2.5 h-2.5 text-red-500" />
-                                </span>
-                              )}
                             </div>
                           </td>
                           <td className="py-3 px-3 whitespace-nowrap">
@@ -3149,7 +3629,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                             })()}
                           </td>
                           <td className="py-3 px-3 relative" data-status-menu-container="true">
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex flex-col items-start gap-1">
                               {/* Botão Badge de Status */}
                               {!isClientView ? (
                                 <button
@@ -3205,35 +3685,23 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                                 </span>
                               )}
 
-                              {/* Botões rápidos de 1 clique */}
-                              {!isClientView && (
-                                <div className="flex items-center gap-1">
-                                  {execState.status === 'not_started' && (
-                                    <button
-                                      type="button"
-                                      onMouseDown={(e) => e.stopPropagation()}
-                                      onClick={() => handleUpdateTaskExecutionStatus(item, 'started')}
-                                      className="px-2 py-0.5 rounded-lg bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95 shadow-2xs cursor-pointer"
-                                      title="Marcar rapidamente como Iniciada"
-                                    >
-                                      <Play className="w-2.5 h-2.5 fill-current" />
-                                      <span>Iniciar</span>
-                                    </button>
-                                  )}
-                                  {execState.status === 'started' && (
-                                    <button
-                                      type="button"
-                                      onMouseDown={(e) => e.stopPropagation()}
-                                      onClick={() => handleUpdateTaskExecutionStatus(item, 'completed')}
-                                      className="px-2 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95 shadow-2xs cursor-pointer"
-                                      title="Marcar rapidamente como Concluída"
-                                    >
-                                      <Check className="w-3 h-3" />
-                                      <span>Concluir</span>
-                                    </button>
-                                  )}
-                                </div>
-                              )}
+                              {/* Status do Jira (apenas como visualização) */}
+                              {(() => {
+                                const isJira = !item.metadata?.isManual && !item.metadata?.isExternal;
+                                const jiraStatus = item.metadata?.rawStatus || (!item.metadata?.isManual && !item.metadata?.isExternal && item.status && !['Planejado', 'Iniciada', 'Concluída', 'Não Iniciada'].includes(item.status) ? item.status : null);
+                                if (!isJira || !jiraStatus) return null;
+
+                                return (
+                                  <div
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100/90 dark:bg-slate-800/70 text-[9.5px] font-medium text-slate-600 dark:text-slate-400 border border-slate-200/70 dark:border-slate-700/50"
+                                    title={`Status no Jira: ${jiraStatus}`}
+                                  >
+                                    <span className="text-[8.5px] font-bold text-slate-400 dark:text-slate-500 uppercase">Jira:</span>
+                                    <span className="truncate max-w-[110px] font-semibold text-slate-700 dark:text-slate-300">{jiraStatus}</span>
+                                  </div>
+                                );
+                              })()}
+                            </div>
 
                               {/* Menu Suspenso de Seleção de Status */}
                               {!isClientView && openStatusMenuId === item.id && (
@@ -3297,22 +3765,12 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                                   </button>
                                 </div>
                               )}
-                            </div>
                           </td>
                           <td className="py-3 px-3 max-w-xs font-medium text-slate-800 dark:text-slate-200 truncate" title={item.summary}>
                             {item.summary}
                           </td>
                           <td className="py-3 px-3">
                             <div className="flex flex-wrap items-center gap-1 max-w-[200px]">
-                              {item.metadata?.epic && (
-                                <span
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-500/30 text-[9px] font-medium truncate max-w-[120px]"
-                                  title={`Épico: ${item.metadata.epic.summary || item.metadata.epic.key}`}
-                                >
-                                  <Layers className="w-2.5 h-2.5 flex-shrink-0 text-purple-500" />
-                                  <span className="truncate">{item.metadata.epic.summary || item.metadata.epic.key}</span>
-                                </span>
-                              )}
                               {item.metadata?.industry && (
                                 <span
                                   className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-500/30 text-[9px] font-medium truncate max-w-[100px]"
@@ -3320,15 +3778,6 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                                 >
                                   <Building2 className="w-2.5 h-2.5 flex-shrink-0 text-teal-500" />
                                   <span className="truncate">{item.metadata.industry}</span>
-                                </span>
-                              )}
-                              {item.metadata?.layout && (
-                                <span
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30 text-[9px] font-medium truncate max-w-[100px]"
-                                  title={`Layout: ${item.metadata.layout}`}
-                                >
-                                  <LayoutTemplate className="w-2.5 h-2.5 flex-shrink-0 text-amber-500" />
-                                  <span className="truncate">{item.metadata.layout}</span>
                                 </span>
                               )}
                               {item.metadata?.canal && (
@@ -3340,7 +3789,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                                   <span className="truncate">{item.metadata.canal}</span>
                                 </span>
                               )}
-                              {!item.metadata?.epic && !item.metadata?.industry && !item.metadata?.layout && !item.metadata?.canal && (
+                              {!item.metadata?.industry && !item.metadata?.canal && (
                                 <span className="text-slate-400 text-[10px]">-</span>
                               )}
                             </div>
@@ -3445,17 +3894,28 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                           </td>
                           <td className="py-3 px-3">
                             <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-300">
-                              {item.working_days} {item.working_days === 1 ? 'dia' : 'dias'}
+                              {item.working_days}
                             </span>
                           </td>
                           <td className="py-3 px-3 text-right">
-                            <div className="flex items-center justify-end gap-1">
+                            <div className="flex items-center justify-end gap-0.5">
+                              {!isClientView && !item.metadata?.isManual && !item.metadata?.isExternal && (
+                                <button
+                                  type="button"
+                                  onMouseDown={(e) => e.stopPropagation()}
+                                  onClick={() => handleOpenSyncJiraModal(item)}
+                                  className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-all cursor-pointer"
+                                  title="Sincronizar datas com o Jira"
+                                >
+                                  <CalendarSync className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                               {!isClientView && (
                                 <button
                                   type="button"
                                   onMouseDown={(e) => e.stopPropagation()}
                                   onClick={() => handleOpenEditModal(item)}
-                                  className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all mr-1"
+                                  className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer"
                                   title="Editar estimativa de horas e executor"
                                 >
                                   <Pencil className="w-3.5 h-3.5" />
@@ -3472,7 +3932,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                                       onMouseDown={(e) => e.stopPropagation()}
                                       onClick={() => handleMoveUp(origIdx)}
                                       disabled={hasActiveFilters || origIdx <= 0}
-                                      className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-all"
+                                      className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer"
                                       title={
                                         hasActiveFilters
                                           ? 'Limpe os filtros para reordenar a fila'
@@ -3490,7 +3950,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                                         origIdx < 0 ||
                                         origIdx >= localItems.length - 1
                                       }
-                                      className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-all"
+                                      className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer"
                                       title={
                                         hasActiveFilters
                                           ? 'Limpe os filtros para reordenar a fila'
@@ -3506,7 +3966,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                                 type="button"
                                 onMouseDown={(e) => e.stopPropagation()}
                                 onClick={() => handleRemoveFromPlan(item)}
-                                className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-all ml-1"
+                                className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-all cursor-pointer"
                                 title="Remover do plano e retornar ao backlog"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -3681,6 +4141,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
         <ProjectSettingsPanel
           settings={settings}
           activeProject={activeProject}
+          availablePlanAssignees={uniqueAssignees}
           onSaveSettings={async (updated) => {
             try {
               const res = await fetch(`/api/projects/${encodeURIComponent(selectedProjectKey)}/settings`, {
@@ -3716,16 +4177,6 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
           }}
         />
       )}
-
-      {/* Autocomplete Datalist for Assignees (shared across modals) */}
-      <datalist id="available-assignees-list">
-        {backlogData?.availableAssignees.map((name) => (
-          <option key={`backlog-${name}`} value={name} />
-        ))}
-        {uniqueAssignees.map((name) => (
-          <option key={`unique-${name}`} value={name} />
-        ))}
-      </datalist>
 
       {/* -------------------------------------------------------- */}
       {/* MODAL: ADD DEMAND TO PLAN (Obrigatório: Horas + Executor) */}
@@ -3790,19 +4241,31 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                   Quem irá executá-la? <span className="text-rose-500">*</span>
                 </label>
                 <div className="relative">
-                  <Users className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
+                  <Users className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <select
                     required
                     value={assigneeInput}
                     onChange={(e) => setAssigneeInput(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-                    placeholder="Nome da pessoa responsável"
-                    list="available-assignees-list"
-                  />
+                    className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/50 appearance-none cursor-pointer"
+                  >
+                    <option value="" disabled>Selecione um executor cadastrado...</option>
+                    {registeredAssignees.map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                    {assigneeInput && !registeredAssignees.includes(assigneeInput) && (
+                      <option value={assigneeInput}>
+                        {assigneeInput} (Não cadastrado)
+                      </option>
+                    )}
+                  </select>
+                  <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Executores diferentes trabalham em paralelo; o mesmo executor trabalha em sequência.
+                  {registeredAssignees.length === 0
+                    ? 'Atenção: Nenhum executor cadastrado na aba Configurações.'
+                    : 'Apenas executores cadastrados globalmente podem ser selecionados.'}
                 </p>
               </div>
 
@@ -3975,16 +4438,26 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                     Quem irá executá-la? <span className="text-rose-500">*</span>
                   </label>
                   <div className="relative">
-                    <Users className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
+                    <Users className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <select
                       required
                       value={manualAssignee}
                       onChange={(e) => setManualAssignee(e.target.value)}
-                      placeholder="Nome do responsável"
-                      list="available-assignees-list"
-                      className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                    />
+                      className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/50 appearance-none cursor-pointer"
+                    >
+                      <option value="" disabled>Selecione um executor cadastrado...</option>
+                      {registeredAssignees.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                      {manualAssignee && !registeredAssignees.includes(manualAssignee) && (
+                        <option value={manualAssignee}>
+                          {manualAssignee} (Não cadastrado)
+                        </option>
+                      )}
+                    </select>
+                    <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                   </div>
                 </div>
 
@@ -4297,16 +4770,26 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                   Quem irá executá-la? <span className="text-rose-500">*</span>
                 </label>
                 <div className="relative">
-                  <Users className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
+                  <Users className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <select
                     required
                     value={editAssignee}
                     onChange={(e) => setEditAssignee(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-                    placeholder="Nome da pessoa responsável"
-                    list="available-assignees-list"
-                  />
+                    className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/50 appearance-none cursor-pointer"
+                  >
+                    <option value="" disabled>Selecione um executor cadastrado...</option>
+                    {registeredAssignees.map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                    {editAssignee && !registeredAssignees.includes(editAssignee) && (
+                      <option value={editAssignee}>
+                        {editAssignee} (Atual - não cadastrado)
+                      </option>
+                    )}
+                  </select>
+                  <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
                 <p className="text-[11px] text-slate-400 mt-1">
                   Ao trocar de responsável ou alterar as horas, o cronograma é recalculado automaticamente.
@@ -4358,6 +4841,125 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                 >
                   <Save className="w-4 h-4" />
                   <span>Salvar Alterações</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* -------------------------------------------------------- */}
+      {/* MODAL: SYNC DATES & COMMENT WITH JIRA                    */}
+      {/* -------------------------------------------------------- */}
+      {syncJiraItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 dark:bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-[#0e1424] border border-slate-200 dark:border-indigo-900/60 rounded-2xl w-full max-w-lg p-6 shadow-2xl relative text-slate-800 dark:text-slate-200">
+            <button
+              type="button"
+              onClick={() => !isSyncingJira && setSyncJiraItem(null)}
+              disabled={isSyncingJira}
+              className="absolute top-4 right-4 p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-40 cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-600/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center border border-indigo-200 dark:border-indigo-500/30">
+                <CalendarSync className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  Sincronizar com o Jira
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Atualize as datas de início e fim da demanda diretamente no Jira.
+                </p>
+              </div>
+            </div>
+
+            {/* Target Issue Details Card */}
+            {syncJiraDemand && (
+              <div className="mb-4">
+                <JiraCard demand={syncJiraDemand} showDueDateBadge={true} />
+              </div>
+            )}
+
+            {/* Datas calculadas que serão enviadas para o Jira */}
+            <div className="mb-4 p-3.5 rounded-xl border border-indigo-100 dark:border-indigo-900/40 bg-indigo-50/40 dark:bg-indigo-950/30">
+              <div className="text-[11px] font-bold text-indigo-900 dark:text-indigo-200 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                <span>Datas que serão gravadas no Jira</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-white dark:bg-slate-900/80 p-2.5 rounded-lg border border-indigo-100/80 dark:border-indigo-900/30">
+                  <span className="block text-[10px] font-bold text-slate-400 uppercase">Data de Início</span>
+                  <span className="text-sm font-extrabold text-slate-800 dark:text-white">
+                    {format(parseISO(syncJiraItem.start_date), 'dd/MM/yyyy')}
+                  </span>
+                </div>
+                <div className="bg-white dark:bg-slate-900/80 p-2.5 rounded-lg border border-indigo-100/80 dark:border-indigo-900/30">
+                  <span className="block text-[10px] font-bold text-slate-400 uppercase">Data de Fim (Due Date)</span>
+                  <span className="text-sm font-extrabold text-slate-800 dark:text-white">
+                    {format(parseISO(syncJiraItem.end_date), 'dd/MM/yyyy')}
+                  </span>
+                </div>
+              </div>
+              {syncJiraItem.metadata?.duedate && syncJiraItem.metadata.duedate !== syncJiraItem.end_date && (
+                <p className="text-[11px] text-amber-600 dark:text-amber-400 font-medium mt-2 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+                  <span>
+                    O prazo anterior no Jira ({format(parseISO(syncJiraItem.metadata.duedate), 'dd/MM/yyyy')}) será substituído por {format(parseISO(syncJiraItem.end_date), 'dd/MM/yyyy')}.
+                  </span>
+                </p>
+              )}
+            </div>
+
+            <form onSubmit={handleConfirmSyncJira} className="space-y-4">
+              {/* Comentário Opcional */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
+                  <MessageSquare className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Adicionar Comentário no Jira (Opcional)</span>
+                </label>
+                <textarea
+                  rows={3}
+                  value={syncJiraComment}
+                  onChange={(e) => setSyncJiraComment(e.target.value)}
+                  disabled={isSyncingJira}
+                  placeholder="Ex: Datas atualizadas conforme planejamento da fila de execução..."
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/50 resize-y"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Se preenchido, este comentário será publicado no histórico da demanda no Jira.
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setSyncJiraItem(null)}
+                  disabled={isSyncingJira}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSyncingJira}
+                  className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                >
+                  {isSyncingJira ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Sincronizando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CalendarSync className="w-4 h-4" />
+                      <span>Confirmar e Sincronizar</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>
@@ -4575,6 +5177,196 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
         </div>
       )}
 
+      {/* -------------------------------------------------------- */}
+      {/* MODAL: INVERTER ORDEM DE TAREFAS NA FILA                 */}
+      {/* -------------------------------------------------------- */}
+      {isSwapModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 dark:bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-[#0e1424] border border-slate-200 dark:border-indigo-900/60 rounded-2xl w-full max-w-xl p-6 shadow-2xl relative text-slate-800 dark:text-slate-200">
+            <button
+              type="button"
+              onClick={() => !isSwapping && setIsSwapModalOpen(false)}
+              disabled={isSwapping}
+              className="absolute top-4 right-4 p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-40 cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-600/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center border border-indigo-200 dark:border-indigo-500/30">
+                <ArrowUpDown className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  Inverter Ordem de Tarefas
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Troque a posição de duas tarefas na fila de execução mantendo o restante do cronograma alinhado.
+                </p>
+              </div>
+            </div>
+
+            {/* Selects: Tarefa 1 e Tarefa 2 */}
+            <div className="space-y-4 mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                {/* Select Tarefa 1 */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Primeira Tarefa
+                  </label>
+                  <select
+                    value={swapItem1Key}
+                    onChange={(e) => setSwapItem1Key(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                  >
+                    {localItems.map((item) => (
+                      <option key={`swap1-${item.issue_key}`} value={item.issue_key}>
+                        #{item.sort_order} · {item.issue_key} - {item.summary.length > 28 ? item.summary.substring(0, 28) + '...' : item.summary} ({item.estimated_hours}h)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Select Tarefa 2 */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Segunda Tarefa
+                  </label>
+                  <select
+                    value={swapItem2Key}
+                    onChange={(e) => setSwapItem2Key(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                  >
+                    {localItems.map((item) => (
+                      <option key={`swap2-${item.issue_key}`} value={item.issue_key}>
+                        #{item.sort_order} · {item.issue_key} - {item.summary.length > 28 ? item.summary.substring(0, 28) + '...' : item.summary} ({item.estimated_hours}h)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Botão rápido para alternar a seleção */}
+              <div className="flex justify-center -my-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const t = swapItem1Key;
+                    setSwapItem1Key(swapItem2Key);
+                    setSwapItem2Key(t);
+                  }}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 text-[10px] font-bold transition-all shadow-xs cursor-pointer"
+                  title="Inverter seleção"
+                >
+                  <ArrowUpDown className="w-3 h-3" />
+                  <span>Alternar seleção</span>
+                </button>
+              </div>
+
+              {/* Cards comparativos */}
+              {swapItem1 && swapItem2 && swapItem1.issue_key !== swapItem2.issue_key && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-1.5 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-black text-indigo-600 dark:text-indigo-400 text-xs">
+                        {swapItem1.issue_key}
+                      </span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300">
+                        #{swapItem1.sort_order} ➔ #{swapItem2.sort_order}
+                      </span>
+                    </div>
+                    <p className="font-medium text-slate-700 dark:text-slate-300 line-clamp-1 text-[11px]" title={swapItem1.summary}>
+                      {swapItem1.summary}
+                    </p>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-x-2">
+                      <span>Duração: <strong>{swapItem1.estimated_hours}h</strong></span>
+                      <span>•</span>
+                      <span>Resp: <strong>{swapItem1.assignee_name || '-'}</strong></span>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-1.5 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-black text-indigo-600 dark:text-indigo-400 text-xs">
+                        {swapItem2.issue_key}
+                      </span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300">
+                        #{swapItem2.sort_order} ➔ #{swapItem1.sort_order}
+                      </span>
+                    </div>
+                    <p className="font-medium text-slate-700 dark:text-slate-300 line-clamp-1 text-[11px]" title={swapItem2.summary}>
+                      {swapItem2.summary}
+                    </p>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-x-2">
+                      <span>Duração: <strong>{swapItem2.estimated_hours}h</strong></span>
+                      <span>•</span>
+                      <span>Resp: <strong>{swapItem2.assignee_name || '-'}</strong></span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Mensagem contextual sobre a duração */}
+              {swapItem1 && swapItem2 && swapItem1.issue_key === swapItem2.issue_key ? (
+                <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 text-[11px] text-rose-700 dark:text-rose-300 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                  <span>Selecione duas tarefas diferentes para realizar a inversão.</span>
+                </div>
+              ) : swapItem1 && swapItem2 && Number(swapItem1.estimated_hours) === Number(swapItem2.estimated_hours) ? (
+                <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 text-[11px] text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+                  <span>
+                    <strong>Mesmo tempo de execução ({swapItem1.estimated_hours}h):</strong> a inversão não alterará as datas das demais demandas da fila de execução.
+                  </span>
+                </div>
+              ) : swapItem1 && swapItem2 ? (
+                <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 text-[11px] text-amber-800 dark:text-amber-300 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                  <span>
+                    <strong>Tempos diferentes ({swapItem1.estimated_hours}h vs {swapItem2.estimated_hours}h):</strong> as datas de início e fim das demandas posteriores serão recalculadas automaticamente.
+                  </span>
+                </div>
+              ) : null}
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsSwapModalOpen(false)}
+                disabled={isSwapping}
+                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleExecuteSwap(false)}
+                  disabled={!swapItem1 || !swapItem2 || swapItem1.issue_key === swapItem2.issue_key || isSwapping}
+                  className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition-all disabled:opacity-40 cursor-pointer"
+                  title="Inverte na tela para você conferir antes de salvar"
+                >
+                  Inverter na Fila
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleExecuteSwap(true)}
+                  disabled={!swapItem1 || !swapItem2 || swapItem1.issue_key === swapItem2.issue_key || isSwapping}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition-all active:scale-95 disabled:opacity-40 cursor-pointer"
+                  title="Inverte a ordem e salva imediatamente no banco de dados com registro no log"
+                >
+                  {isSwapping ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowUpDown className="w-3.5 h-3.5" />}
+                  <span>Inverter e Salvar</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Hidden Off-Screen Container for SysMiddle Branded PDF Export */}
       <ProjectPdfExportTemplate
         containerRef={pdfExportContainerRef}
@@ -4583,6 +5375,8 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
         settings={settings}
         holidaySet={holidaySet}
         isClientView={isClientView}
+        pdfExportMode={pdfExportMode}
+        logs={filteredLogs}
       />
     </div>
   );
@@ -4595,6 +5389,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
 interface ProjectSettingsPanelProps {
   settings: ProjectSettings;
   activeProject: ProjectRecord | null;
+  availablePlanAssignees?: string[];
   onSaveSettings: (settings: ProjectSettings) => Promise<void>;
   onResetHolidays: () => Promise<void>;
 }
@@ -4602,6 +5397,7 @@ interface ProjectSettingsPanelProps {
 const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
   settings,
   activeProject,
+  availablePlanAssignees = [],
   onSaveSettings,
   onResetHolidays,
 }) => {
@@ -4611,11 +5407,56 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
   const [newHolidayDate, setNewHolidayDate] = useState('');
   const [newHolidayName, setNewHolidayName] = useState('');
   const [holidaySearch, setHolidaySearch] = useState('');
+  const [newAssigneeName, setNewAssigneeName] = useState('');
+  const [assigneeSearch, setAssigneeSearch] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     setFormData(settings);
   }, [settings]);
+
+  // Add / Remove Global Assignees
+  const handleAddAssignee = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const norm = newAssigneeName.trim();
+    if (!norm) return;
+    const current = formData.global_assignees || [];
+    if (!current.some((a) => a.toLowerCase() === norm.toLowerCase())) {
+      setFormData((prev) => ({
+        ...prev,
+        global_assignees: [...(prev.global_assignees || []), norm].sort((a, b) =>
+          a.localeCompare(b, 'pt-BR')
+        ),
+      }));
+    }
+    setNewAssigneeName('');
+  };
+
+  const handleRemoveAssignee = (name: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      global_assignees: (prev.global_assignees || []).filter((a) => a !== name),
+    }));
+  };
+
+  const handleImportExisting = () => {
+    if (!availablePlanAssignees || availablePlanAssignees.length === 0) return;
+    const current = formData.global_assignees || [];
+    const combined = Array.from(new Set([...current, ...availablePlanAssignees])).sort((a, b) =>
+      a.localeCompare(b, 'pt-BR')
+    );
+    setFormData((prev) => ({
+      ...prev,
+      global_assignees: combined,
+    }));
+  };
+
+  const filteredAssignees = useMemo(() => {
+    const list = formData.global_assignees || [];
+    if (!assigneeSearch.trim()) return list;
+    const q = assigneeSearch.toLowerCase();
+    return list.filter((a) => a.toLowerCase().includes(q));
+  }, [formData.global_assignees, assigneeSearch]);
 
   // Add delivered user tag
   const handleAddUser = () => {
@@ -4715,7 +5556,7 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
             </span>
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            As configurações abaixo (exceto feriados) pertencem exclusivamente a este projeto.
+            As configurações abaixo (exceto executores e feriados globais) pertencem exclusivamente a este projeto.
           </p>
         </div>
 
@@ -5001,7 +5842,103 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
         </div>
       </div>
 
-      {/* 3. Gestão de Feriados e Dias Não Trabalhados */}
+      {/* 4. Gestão de Executores Globais de Tarefas */}
+      <div className="p-5 rounded-2xl border-2 border-dashed border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/20 dark:bg-indigo-950/20 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-xs font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
+                <Users className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                <span>Executores de Tarefas Cadastrados ({(formData.global_assignees || []).length})</span>
+              </h3>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700/50">
+                <Globe className="w-3 h-3" />
+                <span>Global · Compartilhado entre todos os projetos</span>
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+              Cadastre os membros da equipe que podem ser atribuídos como executores das demandas. Todos os campos de responsável nas tarefas passam a aceitar exclusivamente a seleção desta lista.
+            </p>
+          </div>
+
+          {availablePlanAssignees && availablePlanAssignees.length > 0 && (
+            <button
+              type="button"
+              onClick={handleImportExisting}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 dark:bg-slate-800 dark:hover:bg-slate-750 dark:text-slate-200 dark:border-slate-700 text-xs font-bold transition-all shadow-sm self-start sm:self-auto"
+              title="Importa os executores das demandas existentes no plano atual para a lista global"
+            >
+              <UserPlus className="w-3.5 h-3.5 text-indigo-500" />
+              <span>Importar das Demandas Atuais</span>
+            </button>
+          )}
+        </div>
+
+        {/* Formulário de Adicionar Executor */}
+        <form onSubmit={handleAddAssignee} className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[240px]">
+            <Users className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              required
+              value={newAssigneeName}
+              onChange={(e) => setNewAssigneeName(e.target.value)}
+              placeholder="Nome completo do executor (Ex: Maria Silva)..."
+              className="w-full pl-9 pr-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs text-slate-800 dark:text-white font-medium"
+            />
+          </div>
+          <button
+            type="submit"
+            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-colors shadow-sm"
+          >
+            + Cadastrar Executor
+          </button>
+        </form>
+
+        {/* Lista de Executores */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <input
+              type="text"
+              value={assigneeSearch}
+              onChange={(e) => setAssigneeSearch(e.target.value)}
+              placeholder="Buscar executor cadastrado..."
+              className="max-w-xs px-3 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-[11px] text-slate-800 dark:text-white"
+            />
+            <span className="text-[10px] text-slate-400 font-bold">
+              Mostrando {filteredAssignees.length} de {(formData.global_assignees || []).length}
+            </span>
+          </div>
+
+          {filteredAssignees.length === 0 ? (
+            <div className="p-4 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 text-center text-xs text-slate-500 dark:text-slate-400">
+              Nenhum executor cadastrado ainda. Digite o nome acima e clique em &quot;Cadastrar Executor&quot;.
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2 p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 max-h-56 overflow-y-auto">
+              {filteredAssignees.map((assignee) => (
+                <span
+                  key={assignee}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-xs font-bold border border-indigo-200 dark:border-indigo-500/30"
+                >
+                  <Users className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>{assignee}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveAssignee(assignee)}
+                    className="hover:text-rose-500 ml-1 p-0.5 text-slate-400 dark:text-slate-500 transition-colors"
+                    title={`Remover ${assignee}`}
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 5. Gestão de Feriados e Dias Não Trabalhados */}
       <div className="p-5 rounded-2xl border-2 border-dashed border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/20 dark:bg-indigo-950/20 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
@@ -5016,7 +5953,7 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
               </span>
             </div>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-              Esta é a única configuração compartilhada da plataforma. As datas cadastradas aqui afetam o cronograma de todos os projetos cadastrados.
+              As datas cadastradas aqui afetam o cronograma de todos os projetos cadastrados.
             </p>
           </div>
 

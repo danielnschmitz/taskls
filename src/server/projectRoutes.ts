@@ -53,11 +53,64 @@ async function saveGlobalHolidays(holidays: any[]): Promise<ProjectHoliday[]> {
 }
 
 /**
- * Obtém as configurações de um projeto específico mescladas com os feriados globais
+ * Obtém os executores globais de tarefas (compartilhados entre todos os projetos)
+ */
+async function getGlobalAssignees(): Promise<string[]> {
+  const res = await pool.query(`SELECT value FROM app_settings WHERE key = 'project_global_assignees'`);
+  if (res.rows.length > 0 && Array.isArray(res.rows[0].value) && res.rows[0].value.length > 0) {
+    return res.rows[0].value;
+  }
+  // Se ainda não existir configuração global salva ou estiver vazia, busca executores distintos já presentes nos planos
+  const planItemsRes = await pool.query(
+    `SELECT DISTINCT assignee_name 
+     FROM project_plan_items 
+     WHERE assignee_name IS NOT NULL AND TRIM(assignee_name) != '' 
+     ORDER BY assignee_name ASC`
+  );
+  const foundAssignees = planItemsRes.rows
+    .map((r) => String(r.assignee_name).trim())
+    .filter(Boolean);
+
+  if (foundAssignees.length > 0) {
+    const uniqueFound = Array.from(new Set(foundAssignees)).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    await pool.query(
+      `INSERT INTO app_settings (key, value) VALUES ('project_global_assignees', $1)
+       ON CONFLICT (key) DO UPDATE SET value = $1`,
+      [JSON.stringify(uniqueFound)]
+    );
+    return uniqueFound;
+  }
+
+  return [];
+}
+
+/**
+ * Salva os executores globais de tarefas (compartilhados entre todos os projetos)
+ */
+async function saveGlobalAssignees(assignees: any[]): Promise<string[]> {
+  const sanitized = Array.from(
+    new Set(
+      assignees
+        .filter((a) => typeof a === 'string' && a.trim().length > 0)
+        .map((a) => a.trim())
+    )
+  ).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+  await pool.query(
+    `INSERT INTO app_settings (key, value) VALUES ('project_global_assignees', $1)
+     ON CONFLICT (key) DO UPDATE SET value = $1`,
+    [JSON.stringify(sanitized)]
+  );
+  return sanitized;
+}
+
+/**
+ * Obtém as configurações de um projeto específico mescladas com os feriados e executores globais
  */
 async function getProjectSettings(projectKey: string): Promise<ProjectSettings> {
   const normKey = projectKey.trim().toUpperCase();
   const globalHolidays = await getGlobalHolidays();
+  const globalAssignees = await getGlobalAssignees();
 
   const projRes = await pool.query(
     `SELECT settings FROM projects WHERE UPPER(key) = $1`,
@@ -79,6 +132,7 @@ async function getProjectSettings(projectKey: string): Promise<ProjectSettings> 
     work_hours_per_day: Number(val.work_hours_per_day) || DEFAULT_PROJECT_SETTINGS.work_hours_per_day,
     plan_start_date: val.plan_start_date || DEFAULT_PROJECT_SETTINGS.plan_start_date,
     holidays: globalHolidays,
+    global_assignees: globalAssignees,
     client_hours_markup_percent: Number(val.client_hours_markup_percent) >= 0 ? Number(val.client_hours_markup_percent) : 0,
     client_delivery_buffer_days: val.client_delivery_buffer_days !== undefined
       ? Math.max(0, Math.min(60, Number(val.client_delivery_buffer_days) || 0))
@@ -213,16 +267,61 @@ projectRoutes.get('/settings', async (req: Request, res: Response): Promise<void
 });
 
 /**
+ * GET /api/projects/settings/global-assignees - Lista todos os executores globais cadastrados
+ */
+projectRoutes.get('/settings/global-assignees', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const assignees = await getGlobalAssignees();
+    res.json(assignees);
+  } catch (err: any) {
+    console.error('[Projects API] Erro ao listar executores globais:', err);
+    res.status(500).json({ error: 'Erro ao listar executores globais.' });
+  }
+});
+
+/**
+ * PUT /api/projects/settings/global-assignees - Atualiza a lista de executores globais
+ */
+projectRoutes.put('/settings/global-assignees', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { assignees } = req.body;
+    if (!Array.isArray(assignees)) {
+      res.status(400).json({ error: 'Lista de executores inválida.' });
+      return;
+    }
+    const saved = await saveGlobalAssignees(assignees);
+    res.json({ success: true, assignees: saved });
+  } catch (err: any) {
+    console.error('[Projects API] Erro ao salvar executores globais:', err);
+    res.status(500).json({ error: 'Erro ao salvar executores globais.' });
+  }
+});
+
+/**
  * PUT /api/projects/settings - Compatibilidade legada
  */
 projectRoutes.put('/settings', async (req: Request, res: Response): Promise<void> => {
   try {
     const current = await getProjectSettings('NEO');
-    const { delivered_users, work_hours_per_day, plan_start_date, holidays, client_hours_markup_percent, client_delivery_buffer_days, issue_types } = req.body;
+    const {
+      delivered_users,
+      work_hours_per_day,
+      plan_start_date,
+      holidays,
+      global_assignees,
+      client_hours_markup_percent,
+      client_delivery_buffer_days,
+      issue_types,
+    } = req.body;
 
     let savedHolidays = current.holidays;
     if (Array.isArray(holidays)) {
       savedHolidays = await saveGlobalHolidays(holidays);
+    }
+
+    let savedAssignees = current.global_assignees || [];
+    if (Array.isArray(global_assignees)) {
+      savedAssignees = await saveGlobalAssignees(global_assignees);
     }
 
     const merged = {
@@ -239,14 +338,14 @@ projectRoutes.put('/settings', async (req: Request, res: Response): Promise<void
       [JSON.stringify(merged)]
     );
 
-    res.json({ ...merged, holidays: savedHolidays });
+    res.json({ ...merged, holidays: savedHolidays, global_assignees: savedAssignees });
   } catch (err: any) {
     res.status(500).json({ error: 'Erro ao salvar configurações.' });
   }
 });
 
 /**
- * GET /api/projects/:projectKey/settings - Configurações do projeto com feriados globais
+ * GET /api/projects/:projectKey/settings - Configurações do projeto com feriados e executores globais
  */
 projectRoutes.get('/:projectKey/settings', async (req: Request, res: Response): Promise<void> => {
   try {
@@ -260,7 +359,7 @@ projectRoutes.get('/:projectKey/settings', async (req: Request, res: Response): 
 });
 
 /**
- * PUT /api/projects/:projectKey/settings - Salva configurações do projeto e/ou feriados globais
+ * PUT /api/projects/:projectKey/settings - Salva configurações do projeto e/ou feriados e executores globais
  */
 projectRoutes.put('/:projectKey/settings', async (req: Request, res: Response): Promise<void> => {
   try {
@@ -273,6 +372,7 @@ projectRoutes.put('/:projectKey/settings', async (req: Request, res: Response): 
       work_hours_per_day,
       plan_start_date,
       holidays,
+      global_assignees,
       client_hours_markup_percent,
       client_delivery_buffer_days,
       issue_types,
@@ -284,7 +384,13 @@ projectRoutes.put('/:projectKey/settings', async (req: Request, res: Response): 
       savedHolidays = await saveGlobalHolidays(holidays);
     }
 
-    // 2. Configurações por Projeto
+    // 2. Atualiza Executores Globais (se enviados no payload)
+    let savedAssignees = current.global_assignees || [];
+    if (Array.isArray(global_assignees)) {
+      savedAssignees = await saveGlobalAssignees(global_assignees);
+    }
+
+    // 3. Configurações por Projeto
     const mergedProjectSettings = {
       delivered_users: Array.isArray(delivered_users)
         ? delivered_users.map((u: string) => u.trim()).filter(Boolean)
@@ -309,6 +415,7 @@ projectRoutes.put('/:projectKey/settings', async (req: Request, res: Response): 
     const fullSettings: ProjectSettings = {
       ...mergedProjectSettings,
       holidays: savedHolidays,
+      global_assignees: savedAssignees,
     };
 
     // Recalcular datas dos itens já existentes no plano deste projeto
@@ -729,6 +836,135 @@ projectRoutes.get('/:projectKey/jira-issue/:issueKey', async (req: Request, res:
 });
 
 /**
+ * POST /api/projects/:projectKey/jira-issue/:issueKey/sync-dates
+ * Atualiza as datas de início e fim no Jira e adiciona comentário opcional
+ */
+projectRoutes.post('/:projectKey/jira-issue/:issueKey/sync-dates', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const projectKey = String(req.params.projectKey);
+    const issueKey = String(req.params.issueKey);
+    const { startDate, endDate, comment } = req.body;
+
+    if (!startDate || !endDate) {
+      res.status(400).json({ error: 'As datas de início e fim são obrigatórias.' });
+      return;
+    }
+
+    const config = await getJiraConfig();
+    if (!config.api_token || !config.domain || !config.email) {
+      res.status(400).json({ error: 'A integração com o Jira não está configurada.' });
+      return;
+    }
+
+    const host = config.domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    const prefix = projectKey.trim().toUpperCase();
+
+    let fullKey = issueKey.trim().toUpperCase();
+    if (/^\d+$/.test(fullKey)) {
+      fullKey = `${prefix}-${fullKey}`;
+    }
+
+    // 1. Atualizar campos de data no Jira (customfield_10015 = Data de início, duedate = Data limite)
+    const startDateField = (config as any).custom_fields?.start_date || 'customfield_10015';
+
+    const fieldsToUpdate: Record<string, string> = {
+      [startDateField]: startDate,
+      duedate: endDate,
+    };
+
+    let updateRes = await fetch(`https://${host}/rest/api/3/issue/${fullKey}`, {
+      method: 'PUT',
+      headers: {
+        Authorization: getAuthHeader(config),
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ fields: fieldsToUpdate }),
+    });
+
+    // Se falhar com erro no campo de data de início, tentar atualizar apenas o duedate
+    if (!updateRes.ok) {
+      const errText = await updateRes.text();
+      console.warn(`[Jira Sync] Falha ao atualizar datas com ${startDateField}:`, errText);
+
+      if (errText.includes(startDateField)) {
+        updateRes = await fetch(`https://${host}/rest/api/3/issue/${fullKey}`, {
+          method: 'PUT',
+          headers: {
+            Authorization: getAuthHeader(config),
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({ fields: { duedate: endDate } }),
+        });
+      }
+
+      if (!updateRes.ok) {
+        const finalErr = await updateRes.text();
+        res.status(updateRes.status).json({
+          error: `Erro ao atualizar datas no Jira (${updateRes.status}): ${finalErr.substring(0, 200)}`,
+        });
+        return;
+      }
+    }
+
+    let commentAdded = false;
+    // 2. Se houver comentário informado, publicar na issue no Jira (formato ADF)
+    if (comment && String(comment).trim()) {
+      const commentText = String(comment).trim();
+      const paragraphs = commentText.split(/\r?\n/).map((line) => ({
+        type: 'paragraph',
+        content: line.trim() ? [{ type: 'text', text: line }] : [],
+      }));
+
+      const adfBody = {
+        type: 'doc',
+        version: 1,
+        content: paragraphs.length > 0 ? paragraphs : [{ type: 'paragraph', content: [{ type: 'text', text: commentText }] }],
+      };
+
+      const commentRes = await fetch(`https://${host}/rest/api/3/issue/${fullKey}/comment`, {
+        method: 'POST',
+        headers: {
+          Authorization: getAuthHeader(config),
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({ body: adfBody }),
+      });
+
+      if (commentRes.ok) {
+        commentAdded = true;
+      } else {
+        const commentErr = await commentRes.text();
+        console.warn(`[Jira Sync] Falha ao adicionar comentário na issue ${fullKey}:`, commentErr);
+      }
+    }
+
+    // 3. Atualiza também o duedate no metadata do item salvo no banco de dados local, se existir
+    await pool.query(
+      `UPDATE project_plan_items
+       SET metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{duedate}', to_jsonb($1::text), true),
+           updated_at = NOW()
+       WHERE UPPER(project_key) = $2 AND UPPER(issue_key) = $3`,
+      [endDate, prefix, fullKey]
+    );
+
+    res.json({
+      success: true,
+      message: `Datas da demanda ${fullKey} sincronizadas no Jira com sucesso!`,
+      issueKey: fullKey,
+      startDate,
+      endDate,
+      commentAdded,
+    });
+  } catch (err: any) {
+    console.error('[Projects API] Erro ao sincronizar datas com Jira:', err);
+    res.status(500).json({ error: err.message || 'Erro ao sincronizar datas no Jira.' });
+  }
+});
+
+/**
  * GET /api/projects/:projectKey/plan - Retorna os itens do plano salvos e agendados para o projeto
  */
 projectRoutes.get('/:projectKey/plan', async (req: Request, res: Response): Promise<void> => {
@@ -745,16 +981,16 @@ projectRoutes.get('/:projectKey/plan', async (req: Request, res: Response): Prom
       [normKey]
     );
 
-    // Se algum item não tiver canal ou usuário do Jira no metadata, buscar do Jira e atualizar (ignora tarefas manuais/externas)
-    const missingKeys = resPlan.rows
-      .filter((r) => (!r.metadata?.canal || !r.metadata?.jira_assignee) && !r.metadata?.isManual && !r.metadata?.isExternal)
+    // Buscar dados atualizados do Jira (canal, indústria, assignee, status)
+    const jiraKeys = resPlan.rows
+      .filter((r) => !r.metadata?.isManual && !r.metadata?.isExternal)
       .map((r) => r.issue_key);
 
-    const jiraInfoMap = new Map<string, { canal: string | null; industry: string | null; assignee: string | null }>();
+    const jiraInfoMap = new Map<string, { canal: string | null; industry: string | null; assignee: string | null; status: string | null }>();
 
-    if (missingKeys.length > 0 && config.api_token && config.domain && config.email) {
+    if (jiraKeys.length > 0 && config.api_token && config.domain && config.email) {
       try {
-        const jql = `key in (${missingKeys.map((k) => `"${k}"`).join(',')})`;
+        const jql = `key in (${jiraKeys.map((k) => `"${k}"`).join(',')})`;
         const searchRes = await fetch(`https://${host}/rest/api/3/search/jql`, {
           method: 'POST',
           headers: {
@@ -764,7 +1000,7 @@ projectRoutes.get('/:projectKey/plan', async (req: Request, res: Response): Prom
           },
           body: JSON.stringify({
             jql,
-            fields: ['key', 'customfield_10780', 'customfield_10273', 'assignee'],
+            fields: ['key', 'customfield_10780', 'customfield_10273', 'assignee', 'status'],
             maxResults: 100,
           }),
         });
@@ -774,11 +1010,12 @@ projectRoutes.get('/:projectKey/plan', async (req: Request, res: Response): Prom
             const ind = extractFieldValue(iss.fields?.customfield_10780);
             const can = extractFieldValue(iss.fields?.customfield_10273);
             const ass = iss.fields?.assignee?.displayName || iss.fields?.assignee?.name || null;
-            jiraInfoMap.set(iss.key, { canal: can, industry: ind, assignee: ass });
+            const st = iss.fields?.status?.name || null;
+            jiraInfoMap.set(iss.key, { canal: can, industry: ind, assignee: ass, status: st });
           }
         }
       } catch (err) {
-        console.warn('[Projects API] Falha ao enriquecer canal/indústria/usuário:', err);
+        console.warn('[Projects API] Falha ao enriquecer canal/indústria/usuário/status:', err);
       }
     }
 
@@ -789,6 +1026,7 @@ projectRoutes.get('/:projectKey/plan', async (req: Request, res: Response): Prom
         if (!meta.canal && enriched.canal) meta.canal = enriched.canal;
         if (!meta.industry && enriched.industry) meta.industry = enriched.industry;
         if (enriched.assignee) meta.jira_assignee = enriched.assignee;
+        if (enriched.status) meta.rawStatus = enriched.status;
       }
       if (!meta.jira_assignee && r.assignee_name) {
         meta.jira_assignee = r.assignee_name;
@@ -869,6 +1107,80 @@ projectRoutes.put('/:projectKey/plan', async (req: Request, res: Response): Prom
 
     await client.query('BEGIN');
 
+    // Buscar itens existentes para detectar alterações de ordem e de data
+    const existingRes = await client.query(
+      `SELECT * FROM project_plan_items WHERE UPPER(project_key) = $1`,
+      [normKey]
+    );
+    const existingMap = new Map<string, any>();
+    for (const r of existingRes.rows) {
+      existingMap.set(r.issue_key, r);
+    }
+
+    // Registrar alterações de ordem e data no log de auditoria
+    if (existingMap.size > 0) {
+      for (const item of scheduled) {
+        if (existingMap.has(item.issue_key)) {
+          const oldItem = existingMap.get(item.issue_key);
+
+          // 1. Alteração de Ordem
+          if (oldItem.sort_order !== item.sort_order) {
+            await client.query(
+              `INSERT INTO project_change_logs (project_key, event_type, issue_key, summary, assignee_name, old_value, new_value, description)
+               VALUES ($1, 'order_changed', $2, $3, $4, $5, $6, $7)`,
+              [
+                normKey,
+                item.issue_key,
+                item.summary,
+                item.assignee_name,
+                JSON.stringify({ sort_order: oldItem.sort_order }),
+                JSON.stringify({ sort_order: item.sort_order }),
+                `Alteração de ordem na fila: Posição ${oldItem.sort_order} ➔ Posição ${item.sort_order}`,
+              ]
+            );
+          }
+
+          // 2. Alteração de Data
+          if (oldItem.start_date !== item.start_date || oldItem.end_date !== item.end_date) {
+            await client.query(
+              `INSERT INTO project_change_logs (project_key, event_type, issue_key, summary, assignee_name, old_value, new_value, description)
+               VALUES ($1, 'date_changed', $2, $3, $4, $5, $6, $7)`,
+              [
+                normKey,
+                item.issue_key,
+                item.summary,
+                item.assignee_name,
+                JSON.stringify({ start_date: oldItem.start_date, end_date: oldItem.end_date }),
+                JSON.stringify({ start_date: item.start_date, end_date: item.end_date }),
+                `Alteração de datas: Início ${oldItem.start_date} ➔ ${item.start_date} | Fim ${oldItem.end_date} ➔ ${item.end_date}`,
+              ]
+            );
+          }
+        }
+      }
+    }
+
+    // Registrar logs explícitos enviados pelo cliente (ex: inversão de tarefas)
+    if (Array.isArray(req.body.logs) && req.body.logs.length > 0) {
+      for (const l of req.body.logs) {
+        if (!l.issue_key || !l.description) continue;
+        await client.query(
+          `INSERT INTO project_change_logs (project_key, event_type, issue_key, summary, assignee_name, old_value, new_value, description)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [
+            normKey,
+            l.event_type || 'order_changed',
+            l.issue_key,
+            l.summary || '',
+            l.assignee_name || null,
+            JSON.stringify(l.old_value || {}),
+            JSON.stringify(l.new_value || {}),
+            l.description,
+          ]
+        );
+      }
+    }
+
     // Remove os itens antigos deste projeto específico
     await client.query(`DELETE FROM project_plan_items WHERE UPPER(project_key) = $1`, [normKey]);
 
@@ -910,5 +1222,59 @@ projectRoutes.put('/:projectKey/plan', async (req: Request, res: Response): Prom
     res.status(500).json({ error: err.message || 'Erro ao salvar plano de projeto.' });
   } finally {
     client.release();
+  }
+});
+
+/**
+ * GET /api/projects/:projectKey/logs - Retorna os logs de auditoria e alteração do projeto
+ */
+projectRoutes.get('/:projectKey/logs', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const projectKey = String(req.params.projectKey).trim().toUpperCase();
+    const result = await pool.query(
+      `SELECT id, project_key, event_type, issue_key, summary, assignee_name, old_value, new_value, description, created_at
+       FROM project_change_logs
+       WHERE UPPER(project_key) = $1
+       ORDER BY created_at DESC
+       LIMIT 500`,
+      [projectKey]
+    );
+    res.json(result.rows);
+  } catch (err: any) {
+    console.error('[Projects API] Erro ao listar logs:', err);
+    res.status(500).json({ error: 'Erro ao carregar log de alterações.' });
+  }
+});
+
+/**
+ * POST /api/projects/:projectKey/logs - Registra novo(s) evento(s) de log no projeto
+ */
+projectRoutes.post('/:projectKey/logs', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const projectKey = String(req.params.projectKey).trim().toUpperCase();
+    const { logs } = req.body;
+    const logsArray = Array.isArray(logs) ? logs : [req.body];
+
+    for (const l of logsArray) {
+      if (!l.issue_key || !l.description) continue;
+      await pool.query(
+        `INSERT INTO project_change_logs (project_key, event_type, issue_key, summary, assignee_name, old_value, new_value, description)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          projectKey,
+          l.event_type || 'order_changed',
+          l.issue_key,
+          l.summary || '',
+          l.assignee_name || null,
+          JSON.stringify(l.old_value || {}),
+          JSON.stringify(l.new_value || {}),
+          l.description,
+        ]
+      );
+    }
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[Projects API] Erro ao gravar logs:', err);
+    res.status(500).json({ error: 'Erro ao gravar log de alterações.' });
   }
 });
