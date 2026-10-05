@@ -635,12 +635,16 @@ projectRoutes.get('/:projectKey/backlog', async (req: Request, res: Response): P
       settings.delivered_users.map((u) => u.trim().toLowerCase())
     );
 
-    // Buscar chaves que já estão no plano deste projeto
+    // Buscar chaves que já estão no plano deste projeto e sua contagem
     const planKeysRes = await pool.query(
       `SELECT issue_key FROM project_plan_items WHERE UPPER(project_key) = $1`,
       [normKey]
     );
-    const plannedKeys = new Set(planKeysRes.rows.map((r) => r.issue_key));
+    const planOccurrences = new Map<string, number>();
+    for (const r of planKeysRes.rows) {
+      const k = String(r.issue_key).toUpperCase().trim();
+      planOccurrences.set(k, (planOccurrences.get(k) || 0) + 1);
+    }
 
     const industryField = config.custom_fields?.industry || 'customfield_10780';
     const layoutField = config.custom_fields?.layout || 'customfield_10714';
@@ -734,7 +738,7 @@ projectRoutes.get('/:projectKey/backlog', async (req: Request, res: Response): P
       }
     }
 
-    // Filtrar: desconsiderar usuários entregues e itens já no plano deste projeto
+    // Filtrar: desconsiderar usuários entregues (demandas podem ser incluídas mais de uma vez)
     const backlogItems: any[] = [];
     const assigneesSet = new Set<string>();
 
@@ -755,16 +759,13 @@ projectRoutes.get('/:projectKey/backlog', async (req: Request, res: Response): P
         continue;
       }
 
-      // Se já está no plano deste projeto, não entra no backlog
-      if (plannedKeys.has(issue.key)) {
-        continue;
-      }
-
       if (assigneeName !== 'Não atribuído') {
         assigneesSet.add(assigneeName);
       }
 
       const demand = parseSingleJiraIssue(issue, host, industryField, layoutField, flaggedField, canalField);
+      const cleanKey = issue.key.toUpperCase().trim();
+      const planCount = planOccurrences.get(cleanKey) || 0;
 
       backlogItems.push({
         ...demand,
@@ -772,6 +773,8 @@ projectRoutes.get('/:projectKey/backlog', async (req: Request, res: Response): P
         issuetype: f.issuetype?.name || 'Demanda',
         priority: f.priority?.name || 'Média',
         created: f.created,
+        isPlanned: planCount > 0,
+        planCount,
       });
     }
 
@@ -792,7 +795,7 @@ projectRoutes.get('/:projectKey/backlog', async (req: Request, res: Response): P
     res.json({
       project: normKey,
       totalBacklog: backlogItems.length,
-      totalPlanned: plannedKeys.size,
+      totalPlanned: planKeysRes.rows.length,
       availableAssignees: Array.from(assigneesSet).sort(),
       groups: groupedBacklog,
       lastUpdated: new Date().toISOString(),
@@ -1215,17 +1218,20 @@ projectRoutes.put('/:projectKey/plan', async (req: Request, res: Response): Prom
       `SELECT * FROM project_plan_items WHERE UPPER(project_key) = $1`,
       [normKey]
     );
-    const existingMap = new Map<string, any>();
+    const existingById = new Map<string, any>();
+    const existingByKey = new Map<string, any>();
     for (const r of existingRes.rows) {
-      existingMap.set(r.issue_key, r);
+      if (r.id) existingById.set(r.id, r);
+      if (r.issue_key && !existingByKey.has(r.issue_key)) {
+        existingByKey.set(r.issue_key, r);
+      }
     }
 
     // Registrar alterações de ordem e data no log de auditoria
-    if (existingMap.size > 0) {
+    if (existingById.size > 0 || existingByKey.size > 0) {
       for (const item of scheduled) {
-        if (existingMap.has(item.issue_key)) {
-          const oldItem = existingMap.get(item.issue_key);
-
+        const oldItem = (item.id && existingById.get(item.id)) || existingByKey.get(item.issue_key);
+        if (oldItem) {
           // 1. Alteração de Ordem
           if (oldItem.sort_order !== item.sort_order) {
             await client.query(

@@ -272,7 +272,7 @@ export function calculatePlanSchedule(
 
     scheduledItems.push({
       ...item,
-      id: item.id || `item_${item.issue_key}_${Date.now()}`,
+      id: item.id || `item_${item.issue_key}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       fixed_start_date: formattedFixedDate,
       start_date: itemStartDateStr,
       end_date: itemEndDateStr,

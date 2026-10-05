@@ -240,7 +240,7 @@ export async function initDatabase(): Promise<void> {
       -- Módulo de Gestão de Projetos: Itens do Plano de Projeto (Neogrid)
       CREATE TABLE IF NOT EXISTS project_plan_items (
         id VARCHAR(36) PRIMARY KEY,
-        project_key VARCHAR(20) NOT NULL DEFAULT 'NEO',
+        project_key VARCHAR(50) NOT NULL DEFAULT 'NEO',
         issue_key VARCHAR(50) NOT NULL,
         summary TEXT NOT NULL,
         status VARCHAR(50),
@@ -251,8 +251,7 @@ export async function initDatabase(): Promise<void> {
         end_date DATE NOT NULL,
         metadata JSONB DEFAULT '{}'::jsonb,
         created_at TIMESTAMPTZ DEFAULT NOW(),
-        updated_at TIMESTAMPTZ DEFAULT NOW(),
-        UNIQUE(project_key, issue_key)
+        updated_at TIMESTAMPTZ DEFAULT NOW()
       );
       CREATE INDEX IF NOT EXISTS idx_plan_items_order ON project_plan_items(project_key, sort_order ASC);
       CREATE INDEX IF NOT EXISTS idx_plan_items_issue_key ON project_plan_items(issue_key);
@@ -270,12 +269,31 @@ export async function initDatabase(): Promise<void> {
       );
       CREATE INDEX IF NOT EXISTS idx_projects_key ON projects(key);
 
+      -- Tabela de Logs de Alterações de Projetos (Auditoria de Ordem e Datas)
+      CREATE TABLE IF NOT EXISTS project_change_logs (
+        id SERIAL PRIMARY KEY,
+        project_key VARCHAR(50) NOT NULL,
+        event_type VARCHAR(50) NOT NULL,
+        issue_key VARCHAR(50) NOT NULL,
+        summary TEXT,
+        assignee_name VARCHAR(100),
+        old_value JSONB,
+        new_value JSONB,
+        description TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_change_logs_proj ON project_change_logs(project_key, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_change_logs_issue ON project_change_logs(issue_key);
+
       -- Migração: Garantir suporte a múltiplos planos por projeto do Jira
       ALTER TABLE projects ALTER COLUMN key TYPE VARCHAR(50);
       ALTER TABLE project_plan_items ALTER COLUMN project_key TYPE VARCHAR(50);
       ALTER TABLE project_change_logs ALTER COLUMN project_key TYPE VARCHAR(50);
       ALTER TABLE projects ADD COLUMN IF NOT EXISTS jira_project_key VARCHAR(50);
       UPDATE projects SET jira_project_key = key WHERE jira_project_key IS NULL;
+
+      -- Migração: Permitir incluir mais de uma vez a mesma demanda Jira no mesmo plano
+      ALTER TABLE project_plan_items DROP CONSTRAINT IF EXISTS project_plan_items_project_key_issue_key_key;
 
       -- Seed do projeto inicial 'NEO' caso não exista
       INSERT INTO projects (id, key, name, description, jira_project_key, settings)
@@ -292,22 +310,6 @@ export async function initDatabase(): Promise<void> {
       ALTER TABLE users ALTER COLUMN allowed_modules SET DEFAULT ARRAY['tasks', 'cards', 'health', 'dashboards', 'projects']::TEXT[];
       UPDATE users SET allowed_modules = array_append(allowed_modules, 'projects')
       WHERE allowed_modules IS NOT NULL AND NOT ('projects' = ANY(allowed_modules));
-
-      -- Tabela de Logs de Alterações de Projetos (Auditoria de Ordem e Datas)
-      CREATE TABLE IF NOT EXISTS project_change_logs (
-        id SERIAL PRIMARY KEY,
-        project_key VARCHAR(20) NOT NULL,
-        event_type VARCHAR(50) NOT NULL,
-        issue_key VARCHAR(50) NOT NULL,
-        summary TEXT,
-        assignee_name VARCHAR(100),
-        old_value JSONB,
-        new_value JSONB,
-        description TEXT NOT NULL,
-        created_at TIMESTAMPTZ DEFAULT NOW()
-      );
-      CREATE INDEX IF NOT EXISTS idx_change_logs_proj ON project_change_logs(project_key, created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_change_logs_issue ON project_change_logs(issue_key);
     `);
 
     // Seed de Feriados Globais de Gestão de Projetos

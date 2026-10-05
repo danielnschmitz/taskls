@@ -293,6 +293,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
   const [backlogData, setBacklogData] = useState<ProjectBacklogResponse | null>(null);
   const [openAccordions, setOpenAccordions] = useState<Record<string, boolean>>({});
   const [backlogSearch, setBacklogSearch] = useState('');
+  const [hidePlannedInBacklog, setHidePlannedInBacklog] = useState(false);
 
   // Modal: Add Demand to Plan (do Jira)
   const [addingIssue, setAddingIssue] = useState<ProjectBacklogIssue | null>(null);
@@ -831,7 +832,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
     const fixedStart = addFixedStartDate.trim() || null;
 
     const newItem: PlanItemInput = {
-      id: `plan_${addingIssue.key}_${Date.now()}`,
+      id: `plan_${addingIssue.key}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       issue_key: addingIssue.key,
       summary: addingIssue.summary,
       status: 'Planejado',
@@ -884,7 +885,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
     setIsAddManualModalOpen(true);
   };
 
-  // Verificar se a tarefa já está no plano e alertar caso não esteja concluída
+  // Informar se a demanda já consta no plano e quantas vezes
   const checkDuplicateWarning = useCallback((keyInput: string) => {
     const clean = keyInput.trim().toUpperCase();
     if (!clean) {
@@ -899,22 +900,11 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
     } else if (jiraKey !== planKey && clean.startsWith(`${planKey}-`)) {
       targetKey = `${jiraKey}-${clean.substring(planKey.length + 1)}`;
     }
-    const existing = localItems.find((it) => it.issue_key.toUpperCase() === targetKey);
-    if (existing) {
-      const exec = getTaskExecutionState(existing);
-      if (exec.status !== 'completed') {
-        const statusLabel =
-          exec.status === 'started'
-            ? 'Iniciada (Em andamento)'
-            : exec.isDelayedStart
-            ? 'Atrasada: não iniciada'
-            : 'Não Iniciada / Planejado';
-        setDuplicateWarning(
-          `Atenção: A tarefa "${targetKey}" já consta no plano com status "${statusLabel}" (não concluída). Você pode prosseguir com a inclusão se desejar.`
-        );
-      } else {
-        setDuplicateWarning(null);
-      }
+    const matching = localItems.filter((it) => it.issue_key.toUpperCase() === targetKey);
+    if (matching.length > 0) {
+      setDuplicateWarning(
+        `Informação: A demanda "${targetKey}" já consta no plano (${matching.length}x). Uma nova instância será adicionada à fila de execução.`
+      );
     } else {
       setDuplicateWarning(null);
     }
@@ -1236,7 +1226,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
 
   // Open modal to edit plan item
   const handleOpenEditModal = (item: ScheduledPlanItem) => {
-    const baseItem = localItems.find((i) => i.id === item.id || i.issue_key === item.issue_key) || item;
+    const baseItem = localItems.find((i) => (item.id ? i.id === item.id : i.issue_key === item.issue_key)) || item;
     setEditingItem(baseItem);
     setEditEstimateHours(baseItem.estimate_hours);
     setEditAssignee(baseItem.assignee_name);
@@ -1273,7 +1263,8 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
     const fixedStart = editFixedStartDate.trim() || null;
 
     const updatedList = localItems.map((item) => {
-      if (item.id === editingItem.id || item.issue_key === editingItem.issue_key) {
+      const isTarget = editingItem.id ? item.id === editingItem.id : item.issue_key === editingItem.issue_key;
+      if (isTarget) {
         const newMeta = { ...(item.metadata || {}) };
         newMeta.execution_status = editExecutionStatus;
         newMeta.fixed_start_date = fixedStart;
@@ -1329,7 +1320,8 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
   ) => {
     setOpenStatusMenuId(null);
     const updatedList = localItems.map((item) => {
-      if (item.id === itemToUpdate.id || item.issue_key === itemToUpdate.issue_key) {
+      const isTarget = itemToUpdate.id ? item.id === itemToUpdate.id : item.issue_key === itemToUpdate.issue_key;
+      if (isTarget) {
         const meta = { ...(item.metadata || {}) };
         meta.execution_status = newExecutionStatus;
 
@@ -1450,7 +1442,8 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       // Atualiza localItems com a nova data limite (duedate = end_date)
       setLocalItems((prev) =>
         prev.map((it) => {
-          if (it.id === syncJiraItem.id || it.issue_key === syncJiraItem.issue_key) {
+          const isTarget = syncJiraItem.id ? it.id === syncJiraItem.id : it.issue_key === syncJiraItem.issue_key;
+          if (isTarget) {
             return {
               ...it,
               metadata: {
@@ -1466,7 +1459,8 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       // Atualiza serverItems também para manter sincronizado com a base
       setServerItems((prev) =>
         prev.map((it) => {
-          if (it.id === syncJiraItem.id || it.issue_key === syncJiraItem.issue_key) {
+          const isTarget = syncJiraItem.id ? it.id === syncJiraItem.id : it.issue_key === syncJiraItem.issue_key;
+          if (isTarget) {
             return {
               ...it,
               metadata: {
@@ -1499,7 +1493,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
       setIsSavingPlan(true);
 
       const itemsToSave = localItems.map((item) => {
-        const baseItem = serverItemMap.get(item.issue_key) || (item.id ? serverItemMap.get(item.id) : undefined);
+        const baseItem = (item.id ? serverItemMap.get(item.id) : undefined) || serverItemMap.get(item.issue_key);
         const meta = { ...(item.metadata || {}) };
         if (baseItem) {
           if (baseItem.start_date !== item.start_date) {
@@ -2241,20 +2235,22 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
 
   // Obter itens selecionados para o modal de inversão
   const swapItem1 = useMemo(() => {
-    return localItems.find((i) => i.issue_key === swapItem1Key) || null;
+    return localItems.find((i) => (i.id ? i.id === swapItem1Key : i.issue_key === swapItem1Key)) || null;
   }, [localItems, swapItem1Key]);
 
   const swapItem2 = useMemo(() => {
-    return localItems.find((i) => i.issue_key === swapItem2Key) || null;
+    return localItems.find((i) => (i.id ? i.id === swapItem2Key : i.issue_key === swapItem2Key)) || null;
   }, [localItems, swapItem2Key]);
 
   const handleExecuteSwap = async (saveImmediately: boolean = true) => {
-    if (!swapItem1 || !swapItem2 || swapItem1.issue_key === swapItem2.issue_key) return;
+    if (!swapItem1 || !swapItem2) return;
+    const isSame = swapItem1.id && swapItem2.id ? swapItem1.id === swapItem2.id : swapItem1.sort_order === swapItem2.sort_order;
+    if (isSame) return;
 
     try {
       setIsSwapping(true);
-      const idx1 = localItems.findIndex((it) => it.issue_key === swapItem1.issue_key);
-      const idx2 = localItems.findIndex((it) => it.issue_key === swapItem2.issue_key);
+      const idx1 = localItems.findIndex((it) => (swapItem1.id ? it.id === swapItem1.id : it.issue_key === swapItem1.issue_key));
+      const idx2 = localItems.findIndex((it) => (swapItem2.id ? it.id === swapItem2.id : it.issue_key === swapItem2.issue_key));
 
       if (idx1 === -1 || idx2 === -1) {
         throw new Error('Uma das tarefas selecionadas não foi encontrada na fila.');
@@ -2411,6 +2407,16 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
     }
   };
 
+  // Mapeamento de contagem de demandas no plano (para suportar múltiplas instâncias da mesma demanda)
+  const plannedCountMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const item of localItems) {
+      const k = item.issue_key.toUpperCase().trim();
+      map.set(k, (map.get(k) || 0) + 1);
+    }
+    return map;
+  }, [localItems]);
+
   // Conjunto de chaves de demandas atualmente no plano (localItems)
   const plannedKeySet = useMemo(() => {
     return new Set(localItems.map((item) => item.issue_key.toUpperCase().trim()));
@@ -2427,7 +2433,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
     }, 0);
   }, [backlogData, plannedKeySet]);
 
-  // Filtra itens do backlog: remove as demandas que já estão no plano e aplica busca
+  // Filtra itens do backlog: respeita a opção hidePlannedInBacklog e aplica busca
   const filteredBacklogGroups = useMemo(() => {
     if (!backlogData) return [];
 
@@ -2435,19 +2441,22 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
 
     return backlogData.groups
       .map((group) => {
-        // Remove demandas que já foram adicionadas ao plano
-        const unassignedIssues = group.issues.filter(
-          (issue) => !plannedKeySet.has(issue.key.toUpperCase().trim())
-        );
+        // Se a opção de ocultar demandas já planejadas estiver ativa (e não houver busca textual), filtra fora
+        const issues = group.issues.filter((issue) => {
+          if (hidePlannedInBacklog && !q) {
+            return !plannedKeySet.has(issue.key.toUpperCase().trim());
+          }
+          return true;
+        });
 
         const matched = q
-          ? unassignedIssues.filter(
+          ? issues.filter(
               (issue) =>
                 issue.key.toLowerCase().includes(q) ||
                 issue.summary.toLowerCase().includes(q) ||
                 issue.assignee?.displayName.toLowerCase().includes(q)
             )
-          : unassignedIssues;
+          : issues;
 
         return {
           ...group,
@@ -2456,7 +2465,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
         };
       })
       .filter((g) => g.count > 0);
-  }, [backlogData, backlogSearch, plannedKeySet]);
+  }, [backlogData, backlogSearch, hidePlannedInBacklog, plannedKeySet]);
 
   return (
     <div className="space-y-5 animate-in fade-in duration-200 pb-16">
@@ -3529,8 +3538,8 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                       <button
                         type="button"
                         onClick={() => {
-                          setSwapItem1Key(localItems[0]?.issue_key || '');
-                          setSwapItem2Key(localItems[1]?.issue_key || '');
+                          setSwapItem1Key(localItems[0]?.id || localItems[0]?.issue_key || '');
+                          setSwapItem2Key(localItems[1]?.id || localItems[1]?.issue_key || '');
                           setIsSwapModalOpen(true);
                         }}
                         disabled={isSavingPlan}
@@ -3616,7 +3625,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                       const displayStatus = item.metadata?.displayStatus || item.status || 'Planejado';
                       const statusStyle = getStatusBadgeStyle(displayStatus);
 
-                      const baseItem = serverDisplayItemMap.get(item.issue_key) || (item.id ? serverDisplayItemMap.get(item.id) : undefined);
+                      const baseItem = (item.id ? serverDisplayItemMap.get(item.id) : undefined) || serverDisplayItemMap.get(item.issue_key);
 
                       let oldStartDate: string | null = null;
                       if (baseItem && baseItem.start_date !== item.start_date) {
@@ -4051,7 +4060,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                               )}
                               {(() => {
                                 const origIdx = localItems.findIndex(
-                                  (it) => it.id === item.id || it.issue_key === item.issue_key
+                                  (it) => (item.id ? it.id === item.id : it.issue_key === item.issue_key)
                                 );
                                 return (
                                   <>
@@ -4139,6 +4148,16 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                     : 'Todos os tipos (sem Épicos)'}
                 </span>
               </span>
+
+              <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 cursor-pointer select-none transition-all">
+                <input
+                  type="checkbox"
+                  checked={hidePlannedInBacklog}
+                  onChange={(e) => setHidePlannedInBacklog(e.target.checked)}
+                  className="rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                />
+                <span>Ocultar já planejadas</span>
+              </label>
             </div>
 
             <div className="flex items-center gap-2">
@@ -4235,23 +4254,36 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                     {/* Accordion Body */}
                     {isOpen && (
                       <div className="p-4 pt-1 border-t border-slate-100 dark:border-slate-800/80 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                        {group.issues.map((issue) => (
-                          <JiraCard
-                            key={issue.id}
-                            demand={issue}
-                            showDueDateBadge={true}
-                            actionButton={
-                              <button
-                                type="button"
-                                onClick={() => handleOpenAddModal(issue)}
-                                className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-sm shadow-indigo-600/30 transition-all active:scale-95 flex-shrink-0"
-                              >
-                                <Plus className="w-3.5 h-3.5" />
-                                <span>Incluir no Plano</span>
-                              </button>
-                            }
-                          />
-                        ))}
+                        {group.issues.map((issue) => {
+                          const planCount = plannedCountMap.get(issue.key.toUpperCase().trim()) || 0;
+                          return (
+                            <JiraCard
+                              key={issue.id}
+                              demand={issue}
+                              showDueDateBadge={true}
+                              actionButton={
+                                <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                                  {planCount > 0 && (
+                                    <span
+                                      className="text-[10px] px-2 py-0.5 rounded font-bold bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800"
+                                      title={`Demanda já incluída ${planCount}x no plano`}
+                                    >
+                                      No plano ({planCount}x)
+                                    </span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenAddModal(issue)}
+                                    className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-sm shadow-indigo-600/30 transition-all active:scale-95 flex-shrink-0"
+                                  >
+                                    <Plus className="w-3.5 h-3.5" />
+                                    <span>{planCount > 0 ? 'Incluir Novamente' : 'Incluir no Plano'}</span>
+                                  </button>
+                                </div>
+                              }
+                            />
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -4335,9 +4367,24 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
             </div>
 
             {/* Target Issue Details Card */}
-            <div className="mb-5">
+            <div className="mb-4">
               <JiraCard demand={addingIssue} showDueDateBadge={true} />
             </div>
+
+            {(() => {
+              const existingCount = localItems.filter(
+                (i) => i.issue_key.toUpperCase() === addingIssue.key.toUpperCase()
+              ).length;
+              if (existingCount === 0) return null;
+              return (
+                <div className="p-3 mb-4 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-indigo-800 dark:text-indigo-300 text-xs flex items-center gap-2">
+                  <Info className="w-4 h-4 flex-shrink-0 text-indigo-500" />
+                  <span>
+                    Esta demanda já consta no plano (<strong>{existingCount}x</strong>). Uma nova instância será adicionada ao final da fila de execução.
+                  </span>
+                </div>
+              );
+            })()}
 
             <form onSubmit={handleConfirmAdd} className="space-y-4">
               {/* Estimativa em Horas (Obrigatório) */}
@@ -5542,7 +5589,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                     className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                   >
                     {localItems.map((item) => (
-                      <option key={`swap1-${item.issue_key}`} value={item.issue_key}>
+                      <option key={`swap1-${item.id || item.issue_key}`} value={item.id || item.issue_key}>
                         #{item.sort_order} · {item.issue_key} - {item.summary.length > 28 ? item.summary.substring(0, 28) + '...' : item.summary} ({item.estimated_hours}h)
                       </option>
                     ))}
@@ -5560,7 +5607,7 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
                     className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                   >
                     {localItems.map((item) => (
-                      <option key={`swap2-${item.issue_key}`} value={item.issue_key}>
+                      <option key={`swap2-${item.id || item.issue_key}`} value={item.id || item.issue_key}>
                         #{item.sort_order} · {item.issue_key} - {item.summary.length > 28 ? item.summary.substring(0, 28) + '...' : item.summary} ({item.estimated_hours}h)
                       </option>
                     ))}
@@ -5586,105 +5633,121 @@ export const ProjectManagementModule: React.FC<ProjectManagementModuleProps> = (
               </div>
 
               {/* Cards comparativos */}
-              {swapItem1 && swapItem2 && swapItem1.issue_key !== swapItem2.issue_key && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-1.5 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono font-black text-indigo-600 dark:text-indigo-400 text-xs">
-                        {swapItem1.issue_key}
-                      </span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300">
-                        #{swapItem1.sort_order} ➔ #{swapItem2.sort_order}
-                      </span>
-                    </div>
-                    <p className="font-medium text-slate-700 dark:text-slate-300 line-clamp-1 text-[11px]" title={swapItem1.summary}>
-                      {swapItem1.summary}
-                    </p>
-                    <div className="text-[10px] text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-x-2">
-                      <span>Duração: <strong>{swapItem1.estimated_hours}h</strong></span>
-                      <span>•</span>
-                      <span>Resp: <strong>{swapItem1.assignee_name || '-'}</strong></span>
-                    </div>
-                  </div>
+              {(() => {
+                const isSameSelection = Boolean(
+                  swapItem1 && swapItem2 && (swapItem1.id && swapItem2.id ? swapItem1.id === swapItem2.id : swapItem1.sort_order === swapItem2.sort_order)
+                );
+                return (
+                  <>
+                    {swapItem1 && swapItem2 && !isSameSelection && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-1.5 text-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="font-mono font-black text-indigo-600 dark:text-indigo-400 text-xs">
+                              {swapItem1.issue_key}
+                            </span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300">
+                              #{swapItem1.sort_order} ➔ #{swapItem2.sort_order}
+                            </span>
+                          </div>
+                          <p className="font-medium text-slate-700 dark:text-slate-300 line-clamp-1 text-[11px]" title={swapItem1.summary}>
+                            {swapItem1.summary}
+                          </p>
+                          <div className="text-[10px] text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-x-2">
+                            <span>Duração: <strong>{swapItem1.estimated_hours}h</strong></span>
+                            <span>•</span>
+                            <span>Resp: <strong>{swapItem1.assignee_name || '-'}</strong></span>
+                          </div>
+                        </div>
 
-                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-1.5 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono font-black text-indigo-600 dark:text-indigo-400 text-xs">
-                        {swapItem2.issue_key}
-                      </span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300">
-                        #{swapItem2.sort_order} ➔ #{swapItem1.sort_order}
-                      </span>
-                    </div>
-                    <p className="font-medium text-slate-700 dark:text-slate-300 line-clamp-1 text-[11px]" title={swapItem2.summary}>
-                      {swapItem2.summary}
-                    </p>
-                    <div className="text-[10px] text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-x-2">
-                      <span>Duração: <strong>{swapItem2.estimated_hours}h</strong></span>
-                      <span>•</span>
-                      <span>Resp: <strong>{swapItem2.assignee_name || '-'}</strong></span>
-                    </div>
-                  </div>
-                </div>
-              )}
+                        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-1.5 text-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="font-mono font-black text-indigo-600 dark:text-indigo-400 text-xs">
+                              {swapItem2.issue_key}
+                            </span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300">
+                              #{swapItem2.sort_order} ➔ #{swapItem1.sort_order}
+                            </span>
+                          </div>
+                          <p className="font-medium text-slate-700 dark:text-slate-300 line-clamp-1 text-[11px]" title={swapItem2.summary}>
+                            {swapItem2.summary}
+                          </p>
+                          <div className="text-[10px] text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-x-2">
+                            <span>Duração: <strong>{swapItem2.estimated_hours}h</strong></span>
+                            <span>•</span>
+                            <span>Resp: <strong>{swapItem2.assignee_name || '-'}</strong></span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
-              {/* Mensagem contextual sobre a duração */}
-              {swapItem1 && swapItem2 && swapItem1.issue_key === swapItem2.issue_key ? (
-                <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 text-[11px] text-rose-700 dark:text-rose-300 flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-                  <span>Selecione duas tarefas diferentes para realizar a inversão.</span>
-                </div>
-              ) : swapItem1 && swapItem2 && Number(swapItem1.estimated_hours) === Number(swapItem2.estimated_hours) ? (
-                <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 text-[11px] text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
-                  <span>
-                    <strong>Mesmo tempo de execução ({swapItem1.estimated_hours}h):</strong> a inversão não alterará as datas das demais demandas da fila de execução.
-                  </span>
-                </div>
-              ) : swapItem1 && swapItem2 ? (
-                <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 text-[11px] text-amber-800 dark:text-amber-300 flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
-                  <span>
-                    <strong>Tempos diferentes ({swapItem1.estimated_hours}h vs {swapItem2.estimated_hours}h):</strong> as datas de início e fim das demandas posteriores serão recalculadas automaticamente.
-                  </span>
-                </div>
-              ) : null}
+                    {/* Mensagem contextual sobre a duração */}
+                    {isSameSelection ? (
+                      <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 text-[11px] text-rose-700 dark:text-rose-300 flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                        <span>Selecione duas tarefas diferentes para realizar a inversão.</span>
+                      </div>
+                    ) : swapItem1 && swapItem2 && Number(swapItem1.estimated_hours) === Number(swapItem2.estimated_hours) ? (
+                      <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 text-[11px] text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+                        <span>
+                          <strong>Mesmo tempo de execução ({swapItem1.estimated_hours}h):</strong> a inversão não alterará as datas das demais demandas da fila de execução.
+                        </span>
+                      </div>
+                    ) : swapItem1 && swapItem2 ? (
+                      <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 text-[11px] text-amber-800 dark:text-amber-300 flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                        <span>
+                          <strong>Tempos diferentes ({swapItem1.estimated_hours}h vs {swapItem2.estimated_hours}h):</strong> as datas de início e fim das demandas posteriores serão recalculadas automaticamente.
+                        </span>
+                      </div>
+                    ) : null}
+                  </>
+                );
+              })()}
             </div>
 
             {/* Footer Buttons */}
-            <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-800">
-              <button
-                type="button"
-                onClick={() => setIsSwapModalOpen(false)}
-                disabled={isSwapping}
-                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-all cursor-pointer"
-              >
-                Cancelar
-              </button>
+            {(() => {
+              const isSameSelection = Boolean(
+                swapItem1 && swapItem2 && (swapItem1.id && swapItem2.id ? swapItem1.id === swapItem2.id : swapItem1.sort_order === swapItem2.sort_order)
+              );
+              return (
+                <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setIsSwapModalOpen(false)}
+                    disabled={isSwapping}
+                    className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-all cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
 
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleExecuteSwap(false)}
-                  disabled={!swapItem1 || !swapItem2 || swapItem1.issue_key === swapItem2.issue_key || isSwapping}
-                  className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition-all disabled:opacity-40 cursor-pointer"
-                  title="Inverte na tela para você conferir antes de salvar"
-                >
-                  Inverter na Fila
-                </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleExecuteSwap(false)}
+                      disabled={!swapItem1 || !swapItem2 || isSameSelection || isSwapping}
+                      className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition-all disabled:opacity-40 cursor-pointer"
+                      title="Inverte na tela para você conferir antes de salvar"
+                    >
+                      Inverter na Fila
+                    </button>
 
-                <button
-                  type="button"
-                  onClick={() => handleExecuteSwap(true)}
-                  disabled={!swapItem1 || !swapItem2 || swapItem1.issue_key === swapItem2.issue_key || isSwapping}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition-all active:scale-95 disabled:opacity-40 cursor-pointer"
-                  title="Inverte a ordem e salva imediatamente no banco de dados com registro no log"
-                >
-                  {isSwapping ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowUpDown className="w-3.5 h-3.5" />}
-                  <span>Inverter e Salvar</span>
-                </button>
-              </div>
-            </div>
+                    <button
+                      type="button"
+                      onClick={() => handleExecuteSwap(true)}
+                      disabled={!swapItem1 || !swapItem2 || isSameSelection || isSwapping}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition-all active:scale-95 disabled:opacity-40 cursor-pointer"
+                      title="Inverte a ordem e salva imediatamente no banco de dados com registro no log"
+                    >
+                      {isSwapping ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowUpDown className="w-3.5 h-3.5" />}
+                      <span>Inverter e Salvar</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
