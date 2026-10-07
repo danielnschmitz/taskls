@@ -24,6 +24,8 @@ import {
   Copy,
   Clock,
   Loader2,
+  Settings2,
+  UserX,
 } from 'lucide-react';
 import { JiraReviewEvent, JiraEventsResponse, JiraReviewGroup } from '../types';
 
@@ -116,9 +118,14 @@ function groupJiraEvents(events: JiraReviewEvent[]): JiraReviewGroup[] {
 interface JiraReviewPanelProps {
   onShowToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
   onRefreshCount?: () => void;
+  onOpenSettings?: () => void;
 }
 
-export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, onRefreshCount }) => {
+export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({
+  onShowToast,
+  onRefreshCount,
+  onOpenSettings,
+}) => {
   const [events, setEvents] = useState<JiraReviewEvent[]>([]);
   const [totalPending, setTotalPending] = useState(0);
   const [totalReviewed, setTotalReviewed] = useState(0);
@@ -304,6 +311,37 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
     }
   };
 
+  // Quick Ignore User
+  const handleQuickIgnoreUser = async (authorName: string) => {
+    if (
+      !window.confirm(
+        `Deseja desconsiderar "${authorName}" das revisões de evoluções?\n\nAs alterações deste usuário não gerarão novas revisões e suas pendências existentes serão removidas.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/jira/ignored-users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userName: authorName }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Erro ao desconsiderar usuário');
+      }
+
+      const data = await res.json();
+      onShowToast(data.message || `Usuário "${authorName}" desconsiderado com sucesso!`, 'success');
+      fetchEvents(false);
+      if (onRefreshCount) onRefreshCount();
+    } catch (err: any) {
+      onShowToast(err.message || 'Falha ao desconsiderar usuário', 'error');
+    }
+  };
+
   const copyWebhookUrl = () => {
     if (!webhookInfo?.webhookUrl) return;
     navigator.clipboard.writeText(webhookInfo.webhookUrl);
@@ -392,6 +430,18 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
             <Radio className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
             <span>Webhook Jira</span>
           </button>
+
+          {/* Settings Button */}
+          {onOpenSettings && (
+            <button
+              onClick={onOpenSettings}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700/80 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white text-xs font-semibold transition-all shadow-sm"
+              title="Abrir configurações de integração e usuários ignorados do Jira"
+            >
+              <Settings2 className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
+              <span>Configurações</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -564,6 +614,19 @@ export const JiraReviewPanel: React.FC<JiraReviewPanelProps> = ({ onShowToast, o
                       <span className="font-semibold text-slate-700 dark:text-slate-200 truncate" title={group.authorName}>
                         {group.authorName}
                       </span>
+                      {group.authorName && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleQuickIgnoreUser(group.authorName);
+                          }}
+                          className="p-0.5 rounded text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors flex-shrink-0"
+                          title={`Desconsiderar "${group.authorName}" nas revisões`}
+                        >
+                          <UserX className="w-3 h-3" />
+                        </button>
+                      )}
                       <span className="text-slate-400">·</span>
                       <span className="text-slate-500 dark:text-slate-400 text-[10px] whitespace-nowrap">
                         {formatTimeAgo(group.eventTime)}

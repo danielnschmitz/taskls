@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { getJiraConfig, getAuthHeader, executeJqlSearch } from './jira';
+import { pool } from './db';
 
 export const dashboardRoutes = Router();
 
@@ -460,6 +461,148 @@ function extractLayoutString(val: any): string | null {
   return extractOptionString(val) || (typeof val === 'object' ? null : String(val).trim());
 }
 
+export interface StatusWorkflowStage {
+  id: string;
+  name: string;
+  mappedStage: string;
+  rank: number;
+  color: string;
+}
+
+export interface NeoActivationConfig {
+  mode: 'threshold' | 'custom';
+  thresholdStatus: string;
+  customStatuses?: string[];
+}
+
+export const DEFAULT_NEO_WORKFLOW_STAGES: StatusWorkflowStage[] = [
+  { id: 'aberto', name: 'Aberto', mappedStage: 'Aberto', rank: 1, color: '#64748b' },
+  { id: 'pronto_p_fazer', name: 'Pronto p/ fazer', mappedStage: 'Pronto p/ fazer', rank: 2, color: '#3b82f6' },
+  { id: 'desenvolvimento', name: 'Desenvolvimento', mappedStage: 'Desenvolvimento', rank: 3, color: '#6366f1' },
+  { id: 'teste_de_aceitacao', name: 'Teste de Aceitação', mappedStage: 'Em homologação', rank: 4, color: '#f59e0b' },
+  { id: 'deploy_hml', name: 'Deploy HML', mappedStage: 'Em homologação', rank: 5, color: '#f97316' },
+  { id: 'deploy', name: 'Deploy', mappedStage: 'Homologação aprovada', rank: 6, color: '#06b6d4' },
+  { id: 'documentar', name: 'Documentar', mappedStage: 'Produção assistida', rank: 7, color: '#a855f7' },
+  { id: 'concluido', name: 'Concluído', mappedStage: 'Em produção', rank: 8, color: '#10b981' },
+  { id: 'em_producao', name: 'Em produção', mappedStage: 'Em produção', rank: 9, color: '#059669' },
+];
+
+export const DEFAULT_NEO_ACTIVATION_CONFIG: NeoActivationConfig = {
+  mode: 'threshold',
+  thresholdStatus: 'Em produção',
+  customStatuses: ['Em produção', 'Concluído'],
+};
+
+export function normalizeStatus(rawStatus: string): string {
+  if (!rawStatus) return '';
+  return rawStatus
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
+export function getStatusRank(rawStatus: string): number {
+  const s = normalizeStatus(rawStatus);
+  if (!s || s === 'cancelado' || s === 'desativado') return 0;
+  if (s === 'em producao' || s.includes('producao')) return 9;
+  if (s === 'concluido' || s === 'finalizado' || s === 'resolvido') return 8;
+  if (s === 'documentar' || s === 'documentacao') return 7;
+  if (s === 'deploy' || s === 'deploy prd') return 6;
+  if (s === 'deploy hml') return 5;
+  if (s === 'teste de aceitacao' || s.includes('aceitacao') || s.includes('homologacao') || s.includes('teste')) return 4;
+  if (s === 'desenvolvimento' || s.includes('desenvolv')) return 3;
+  if (s.startsWith('pronto p') || s.startsWith('pronto para') || s.includes('pronto')) return 2;
+  if (s === 'aberto' || s.includes('aberto') || s.includes('backlog')) return 1;
+  return 1;
+}
+
+export function isIssueActivated(rawStatus: string, config: NeoActivationConfig): boolean {
+  const s = normalizeStatus(rawStatus);
+  if (s === 'cancelado' || s === 'desativado') return false;
+
+  if (config.mode === 'custom' && Array.isArray(config.customStatuses) && config.customStatuses.length > 0) {
+    const customNorm = config.customStatuses.map(normalizeStatus);
+    return customNorm.includes(s);
+  }
+
+  const thresholdRank = getStatusRank(config.thresholdStatus || 'Em produção');
+  const issueRank = getStatusRank(rawStatus);
+  return issueRank >= thresholdRank && issueRank > 0;
+}
+
+async function getNeoActivationConfig(): Promise<NeoActivationConfig> {
+  try {
+    const res = await pool.query(`SELECT value FROM app_settings WHERE key = 'neo_activation_config' LIMIT 1`);
+    if (res.rows.length > 0 && res.rows[0].value) {
+      const parsed = typeof res.rows[0].value === 'string' ? JSON.parse(res.rows[0].value) : res.rows[0].value;
+      return {
+        mode: parsed.mode === 'custom' ? 'custom' : 'threshold',
+        thresholdStatus: parsed.thresholdStatus || DEFAULT_NEO_ACTIVATION_CONFIG.thresholdStatus,
+        customStatuses: Array.isArray(parsed.customStatuses) ? parsed.customStatuses : DEFAULT_NEO_ACTIVATION_CONFIG.customStatuses,
+      };
+    }
+  } catch (err) {
+    console.warn('[Dashboards] Erro ao carregar neo_activation_config de app_settings:', err);
+  }
+  return DEFAULT_NEO_ACTIVATION_CONFIG;
+}
+
+async function saveNeoActivationConfig(cfg: Partial<NeoActivationConfig>): Promise<NeoActivationConfig> {
+  const cleanConfig: NeoActivationConfig = {
+    mode: cfg.mode === 'custom' ? 'custom' : 'threshold',
+    thresholdStatus: cfg.thresholdStatus || 'Em produção',
+    customStatuses: Array.isArray(cfg.customStatuses) && cfg.customStatuses.length > 0
+      ? cfg.customStatuses
+      : [cfg.thresholdStatus || 'Em produção'],
+  };
+
+  await pool.query(
+    `INSERT INTO app_settings (key, value)
+     VALUES ('neo_activation_config', $1::jsonb)
+     ON CONFLICT (key) DO UPDATE
+     SET value = EXCLUDED.value`,
+    [JSON.stringify(cleanConfig)]
+  );
+
+  return cleanConfig;
+}
+
+/**
+ * GET /api/dashboards/neo-ativacoes/settings
+ * Retorna a configuração global de ativação (a partir de qual status é ativado)
+ */
+dashboardRoutes.get('/neo-ativacoes/settings', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const config = await getNeoActivationConfig();
+    res.json({
+      config,
+      workflowStages: DEFAULT_NEO_WORKFLOW_STAGES,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao carregar configurações de ativação' });
+  }
+});
+
+/**
+ * PUT /api/dashboards/neo-ativacoes/settings
+ * Atualiza a configuração global de ativação e limpa o cache
+ */
+dashboardRoutes.put('/neo-ativacoes/settings', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { mode, thresholdStatus, customStatuses } = req.body;
+    const updated = await saveNeoActivationConfig({ mode, thresholdStatus, customStatuses });
+    neoActivationsCache.clear();
+    res.json({
+      success: true,
+      config: updated,
+      workflowStages: DEFAULT_NEO_WORKFLOW_STAGES,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao salvar configurações de ativação' });
+  }
+});
+
 /**
  * GET /api/dashboards/jira-neo-ativacoes
  * Retorna dados analíticos de quantidade de ativações do projeto Neogrid (NEO)
@@ -475,9 +618,21 @@ dashboardRoutes.get('/jira-neo-ativacoes', async (req: Request, res: Response): 
       return;
     }
 
+    const persistedConfig = await getNeoActivationConfig();
+    const queryThreshold = req.query.thresholdStatus as string | undefined;
+    const queryMode = req.query.mode as string | undefined;
+    const queryCustom = req.query.customStatuses as string | undefined;
+
+    const currentConfig: NeoActivationConfig = {
+      mode: (queryMode === 'custom' || queryMode === 'threshold') ? queryMode : (queryThreshold ? 'threshold' : persistedConfig.mode),
+      thresholdStatus: queryThreshold || persistedConfig.thresholdStatus || 'Em produção',
+      customStatuses: queryCustom ? queryCustom.split(',').map((s) => s.trim()) : persistedConfig.customStatuses,
+    };
+
     const host = config.domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
     const forceRefresh = req.query.refresh === 'true';
-    const cacheKey = 'NEO:ATIVACAO';
+    const configKey = `${currentConfig.mode}:${currentConfig.thresholdStatus}:${(currentConfig.customStatuses || []).sort().join(',')}`;
+    const cacheKey = `NEO:ATIVACAO:${configKey}`;
     const now = Date.now();
 
     if (!forceRefresh && neoActivationsCache.has(cacheKey)) {
@@ -568,6 +723,8 @@ dashboardRoutes.get('/jira-neo-ativacoes', async (req: Request, res: Response): 
     let totalAtivacoes = 0;
     let totalEmProducaoCards = 0;
     let totalEmProducaoAtivacoes = 0;
+    let totalAtivadosCards = 0;
+    let totalAtivadosAtivacoes = 0;
 
     const issues = allRawIssues.map((issue) => {
       const f = issue.fields || {};
@@ -593,6 +750,10 @@ dashboardRoutes.get('/jira-neo-ativacoes', async (req: Request, res: Response): 
 
       const normStatus = status.toLowerCase().trim();
       const isEmProducao = normStatus === 'em produção' || normStatus === 'em producao';
+
+      // Avaliação de ativação baseada na configuração (threshold ou custom)
+      const statusRank = getStatusRank(status);
+      const isAtivado = isIssueActivated(status, currentConfig);
 
       // Canal de distribuição
       const canal = extractOptionString(f[NEO_CUSTOM_FIELDS.canal]);
@@ -632,6 +793,24 @@ dashboardRoutes.get('/jira-neo-ativacoes', async (req: Request, res: Response): 
         totalEmProducaoAtivacoes += quantidade_ativacoes;
       }
 
+      // Data de ativação (Deploy PRD -> Finalizado -> ResolutionDate -> Updated)
+      let dt_ativacao: string | null = null;
+      let mes_ano_ativacao: string | null = null;
+
+      const effectiveAtivacaoDateStr = dt_deploy_prd || dt_finalizado || (isAtivado ? (f.resolutiondate || f.updated) : null);
+      if (effectiveAtivacaoDateStr) {
+        dt_ativacao = effectiveAtivacaoDateStr;
+        const d = new Date(effectiveAtivacaoDateStr);
+        if (!isNaN(d.getTime())) {
+          mes_ano_ativacao = d.toISOString().substring(0, 7); // 'YYYY-MM'
+        }
+      }
+
+      if (isAtivado) {
+        totalAtivadosCards++;
+        totalAtivadosAtivacoes += quantidade_ativacoes;
+      }
+
       return {
         key: issue.key,
         summary: f.summary || 'Sem resumo',
@@ -651,6 +830,10 @@ dashboardRoutes.get('/jira-neo-ativacoes', async (req: Request, res: Response): 
         dt_finalizado,
         dt_producao,
         mes_ano_producao,
+        isAtivado,
+        dt_ativacao,
+        mes_ano_ativacao,
+        statusRank,
         created: f.created,
         url: `https://${host}/browse/${issue.key}`,
       };
@@ -662,6 +845,10 @@ dashboardRoutes.get('/jira-neo-ativacoes', async (req: Request, res: Response): 
       totalAtivacoes,
       totalEmProducaoCards,
       totalEmProducaoAtivacoes,
+      totalAtivadosCards,
+      totalAtivadosAtivacoes,
+      activationConfig: currentConfig,
+      workflowStages: DEFAULT_NEO_WORKFLOW_STAGES,
       lastUpdated: new Date().toISOString(),
       issues,
       availableErps: Array.from(erpsSet).sort((a, b) => a.localeCompare(b)),

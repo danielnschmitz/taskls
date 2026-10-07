@@ -152,6 +152,8 @@ export interface JiraConfig {
   };
   ignored_fields?: string[];
   defaultIgnoredFields?: string[];
+  ignored_users?: string[];
+  recentAuthors?: string[];
   hasApiToken?: boolean;
   allPossibleStatuses?: string[];
 }
@@ -368,6 +370,20 @@ export interface JiraLeadTimeResponse {
   issues: JiraLeadTimeIssue[];
 }
 
+export interface StatusWorkflowStage {
+  id: string;
+  name: string;
+  mappedStage: string;
+  rank: number;
+  color: string;
+}
+
+export interface NeoActivationConfig {
+  mode: 'threshold' | 'custom';
+  thresholdStatus: string;
+  customStatuses?: string[];
+}
+
 export interface JiraNeoActivationIssue {
   key: string;
   summary: string;
@@ -387,6 +403,10 @@ export interface JiraNeoActivationIssue {
   dt_finalizado: string | null;
   dt_producao: string | null;
   mes_ano_producao: string | null;
+  isAtivado?: boolean;
+  dt_ativacao?: string | null;
+  mes_ano_ativacao?: string | null;
+  statusRank?: number;
   created: string;
   url: string;
 }
@@ -397,6 +417,10 @@ export interface JiraNeoActivationsResponse {
   totalAtivacoes: number;
   totalEmProducaoAtivacoes: number;
   totalEmProducaoCards: number;
+  totalAtivadosAtivacoes?: number;
+  totalAtivadosCards?: number;
+  activationConfig?: NeoActivationConfig;
+  workflowStages?: StatusWorkflowStage[];
   lastUpdated: string;
   issues: JiraNeoActivationIssue[];
   availableErps: string[];

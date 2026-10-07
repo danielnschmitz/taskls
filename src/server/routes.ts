@@ -34,6 +34,7 @@ import {
   unmarkBatchEventsAsReviewed,
   markAllEventsAsReviewed,
   cleanupIgnoredJiraEvents,
+  cleanupIgnoredUserEvents,
   syncJiraEventsFromRest,
   getPendingEventsCount,
 } from './jiraEvents';
@@ -935,6 +936,11 @@ router.get('/jira/settings', async (req: Request, res: Response) => {
     }
 
     const config = await getJiraConfig();
+    const recentAuthorsRes = await pool.query<{ author_name: string }>(
+      `SELECT DISTINCT author_name FROM jira_review_events WHERE author_name IS NOT NULL AND author_name != '' ORDER BY author_name ASC LIMIT 50`
+    ).catch(() => ({ rows: [] }));
+    const recentAuthors = recentAuthorsRes.rows.map((r) => r.author_name);
+
     res.json({
       domain: config.domain,
       email: config.email,
@@ -942,6 +948,8 @@ router.get('/jira/settings', async (req: Request, res: Response) => {
       statuses: config.statuses,
       custom_fields: config.custom_fields,
       ignored_fields: config.ignored_fields || DEFAULT_IGNORED_FIELDS,
+      ignored_users: config.ignored_users || [],
+      recentAuthors,
       defaultIgnoredFields: DEFAULT_IGNORED_FIELDS,
       hasApiToken: Boolean(config.api_token),
       allPossibleStatuses: ALL_POSSIBLE_STATUSES,
@@ -964,7 +972,7 @@ router.put('/jira/settings', async (req: Request, res: Response) => {
       return;
     }
 
-    const { domain, email, api_token, projects, statuses, custom_fields, ignored_fields } = req.body;
+    const { domain, email, api_token, projects, statuses, custom_fields, ignored_fields, ignored_users } = req.body;
 
     const updated = await saveJiraConfig({
       ...(domain !== undefined && { domain }),
@@ -974,11 +982,17 @@ router.put('/jira/settings', async (req: Request, res: Response) => {
       ...(statuses !== undefined && { statuses }),
       ...(custom_fields !== undefined && { custom_fields }),
       ...(ignored_fields !== undefined && { ignored_fields }),
+      ...(ignored_users !== undefined && { ignored_users }),
     });
 
     // Se a lista de campos ignorados foi atualizada, limpa pendências existentes desses campos
     if (ignored_fields !== undefined) {
       await cleanupIgnoredJiraEvents(updated.ignored_fields).catch(() => {});
+    }
+
+    // Se a lista de usuários ignorados foi atualizada, limpa pendências existentes desses usuários
+    if (ignored_users !== undefined) {
+      await cleanupIgnoredUserEvents(updated.ignored_users).catch(() => {});
     }
 
     res.json({
@@ -991,12 +1005,57 @@ router.put('/jira/settings', async (req: Request, res: Response) => {
         statuses: updated.statuses,
         custom_fields: updated.custom_fields,
         ignored_fields: updated.ignored_fields,
+        ignored_users: updated.ignored_users,
         hasApiToken: Boolean(updated.api_token),
       },
     });
   } catch (err: any) {
     console.error('[API] Erro ao salvar configurações do Jira:', err);
     res.status(500).json({ error: 'Erro ao salvar configurações do Jira' });
+  }
+});
+
+/**
+ * POST /api/jira/ignored-users
+ * Adiciona rapidamente um autor à lista de desconsiderados e limpa suas pendências
+ */
+router.post('/jira/ignored-users', async (req: Request, res: Response) => {
+  try {
+    const authUser = (req as any).user;
+    if (!authUser?.isAdmin) {
+      res.status(403).json({ error: 'Apenas administradores podem desconsiderar usuários das revisões.' });
+      return;
+    }
+
+    const { userName } = req.body;
+    if (!userName || typeof userName !== 'string' || !userName.trim()) {
+      res.status(400).json({ error: 'Nome do usuário é obrigatório.' });
+      return;
+    }
+
+    const trimmedUser = userName.trim();
+    const config = await getJiraConfig();
+    const currentList = config.ignored_users || [];
+    const alreadyExists = currentList.some((u) => u.toLowerCase() === trimmedUser.toLowerCase());
+
+    const updatedList = alreadyExists ? currentList : [...currentList, trimmedUser];
+
+    const updated = await saveJiraConfig({
+      ignored_users: updatedList,
+    });
+
+    // Remove pendências imediatas do usuário
+    const removedCount = await cleanupIgnoredUserEvents([trimmedUser]).catch(() => 0);
+
+    res.json({
+      success: true,
+      message: `Usuário "${trimmedUser}" desconsiderado com sucesso das revisões.${removedCount > 0 ? ` (${removedCount} pendência(s) removida(s))` : ''}`,
+      ignored_users: updated.ignored_users,
+      removedCount,
+    });
+  } catch (err: any) {
+    console.error('[API] Erro ao desconsiderar usuário do Jira:', err);
+    res.status(500).json({ error: err.message || 'Erro ao desconsiderar usuário do Jira' });
   }
 });
 

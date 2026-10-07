@@ -804,123 +804,141 @@ export const App: React.FC = () => {
               </div>
             </div>
 
-            {/* Loading Spinner */}
-            {isLoading && !dashboardData ? (
+            {/* Loading Spinner para Tarefas */}
+            {isLoading && !dashboardData && activeTab !== 'jira' && activeTab !== 'jira_reviews' && (
               <div className="py-24 flex flex-col items-center justify-center gap-3">
                 <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
                 <p className="text-sm text-slate-400 font-medium">Carregando painéis do TaskLS...</p>
               </div>
-            ) : dashboardData ? (
-              <div className="space-y-6">
-                
-                {/* Panel 1: Current Week (Semana Atual) */}
-                {(activeTab === 'all' || activeTab === 'week') && (
-                  <section>
-                    <WeekPanel
-                      days={dashboardData.week.days}
-                      weekStartDate={dashboardData.week.startDate}
-                      weekEndDate={dashboardData.week.endDate}
-                      categories={categoriesInfo}
-                      focusMode={focusMode}
-                      onToggleFocusMode={() => setFocusMode(!focusMode)}
-                      onPrevWeek={handlePrevWeek}
-                      onNextWeek={handleNextWeek}
-                      onToday={handleToday}
-                      onToggleComplete={handleToggleComplete}
-                      onEdit={handleEditTask}
-                      onDelete={(task) => setTaskToDelete(task)}
-                      onAddTaskForDay={handleAddTaskForDay}
-                      onToggleSubtask={handleToggleSubtask}
-                      onSnooze={handleSnooze}
-                      onCancelSnooze={handleCancelSnooze}
-                      onDropTaskOnDay={handleDropTaskOnDay}
-                      searchQuery={searchQuery}
-                      selectedPriority={selectedPriority}
-                      selectedCategory={selectedCategory}
-                    />
-                  </section>
-                )}
+            )}
 
-                {/* Split Panels: Panel 2 & Panel 3 */}
-                {(activeTab === 'all' || activeTab === 'upcoming' || activeTab === 'backlog') && (
-                  <div
-                    className={`grid gap-6 ${
-                      activeTab === 'all'
-                        ? 'grid-cols-1 lg:grid-cols-12'
-                        : 'grid-cols-1'
-                    }`}
-                  >
-                    {/* Panel 2: Single & Monthly Tasks */}
-                    {(activeTab === 'all' || activeTab === 'upcoming') && (
-                      <section className={activeTab === 'all' ? 'lg:col-span-7' : 'w-full'}>
-                        <UpcomingPanel
-                          tasks={dashboardData.upcoming}
-                          categories={categoriesInfo}
-                          onToggleComplete={handleToggleComplete}
-                          onEdit={handleEditTask}
-                          onDelete={(task) => setTaskToDelete(task)}
-                          onNewTask={handleOpenNewTask}
-                          onToggleSubtask={handleToggleSubtask}
-                          onSnooze={handleSnooze}
-                          onCancelSnooze={handleCancelSnooze}
-                          searchQuery={searchQuery}
-                          selectedPriority={selectedPriority}
-                          selectedCategory={selectedCategory}
-                        />
-                      </section>
-                    )}
-
-                    {/* Panel 3: Backlog (Tarefas Sem Data) */}
-                    {(activeTab === 'all' || activeTab === 'backlog') && (
-                      <section className={activeTab === 'all' ? 'lg:col-span-5' : 'w-full'}>
-                        <BacklogPanel
-                          tasks={dashboardData.backlog}
-                          categories={categoriesInfo}
-                          onToggleComplete={handleToggleComplete}
-                          onEdit={handleEditTask}
-                          onDelete={(task) => setTaskToDelete(task)}
-                          onNewTask={handleOpenNewTask}
-                          onScheduleForToday={handleScheduleForToday}
-                          onToggleSubtask={handleToggleSubtask}
-                          onSnooze={handleSnooze}
-                          onCancelSnooze={handleCancelSnooze}
-                          searchQuery={searchQuery}
-                          selectedPriority={selectedPriority}
-                          selectedCategory={selectedCategory}
-                        />
-                      </section>
-                    )}
-                  </div>
-                )}
-
-                {/* Panel 4: Jira Demands Week (Demandas Jira com Entrega na Semana) */}
-                {canAccessJira && (activeTab === 'all' || activeTab === 'jira') && (
-                  <section className="pt-2">
-                    <JiraWeekPanel
-                      key={jiraRefreshKey}
-                      weekStartDate={format(startOfWeek(jiraWeekBaseDate, { weekStartsOn: 1 }), 'yyyy-MM-dd')}
-                      onPrevWeek={handleJiraPrevWeek}
-                      onNextWeek={handleJiraNextWeek}
-                      onToday={handleJiraToday}
-                      onOpenSettings={user?.isAdmin ? () => setIsJiraModalOpen(true) : undefined}
-                      searchQuery={searchQuery}
-                      onShowToast={showToast}
-                    />
-                  </section>
-                )}
-
-                {/* Panel 5: Jira Review Events (Feed de Revisões e Evoluções) */}
-                {canAccessJira && (activeTab === 'all' || activeTab === 'jira_reviews') && (
-                  <section className="pt-2">
-                    <JiraReviewPanel
-                      onShowToast={showToast}
-                      onRefreshCount={fetchJiraPendingCount}
-                    />
-                  </section>
-                )}
-
+            {/* Erro ao carregar painéis de Tarefas */}
+            {!isLoading && !dashboardData && activeTab !== 'jira' && activeTab !== 'jira_reviews' && (
+              <div className="py-20 flex flex-col items-center justify-center gap-3 text-center bg-white/40 dark:bg-slate-900/40 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 p-8">
+                <AlertCircle className="w-8 h-8 text-rose-500" />
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Não foi possível carregar as tarefas do painel.</p>
+                <button
+                  onClick={fetchDashboard}
+                  className="mt-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-md shadow-indigo-600/20"
+                >
+                  Tentar Novamente
+                </button>
               </div>
-            ) : null}
+            )}
+
+            <div className="space-y-6">
+              {/* Painéis de Tarefas (Apenas quando dashboardData estiver carregado) */}
+              {dashboardData && (
+                <>
+                  {/* Panel 1: Current Week (Semana Atual) */}
+                  {(activeTab === 'all' || activeTab === 'week') && (
+                    <section>
+                      <WeekPanel
+                        days={dashboardData.week.days}
+                        weekStartDate={dashboardData.week.startDate}
+                        weekEndDate={dashboardData.week.endDate}
+                        categories={categoriesInfo}
+                        focusMode={focusMode}
+                        onToggleFocusMode={() => setFocusMode(!focusMode)}
+                        onPrevWeek={handlePrevWeek}
+                        onNextWeek={handleNextWeek}
+                        onToday={handleToday}
+                        onToggleComplete={handleToggleComplete}
+                        onEdit={handleEditTask}
+                        onDelete={(task) => setTaskToDelete(task)}
+                        onAddTaskForDay={handleAddTaskForDay}
+                        onToggleSubtask={handleToggleSubtask}
+                        onSnooze={handleSnooze}
+                        onCancelSnooze={handleCancelSnooze}
+                        onDropTaskOnDay={handleDropTaskOnDay}
+                        searchQuery={searchQuery}
+                        selectedPriority={selectedPriority}
+                        selectedCategory={selectedCategory}
+                      />
+                    </section>
+                  )}
+
+                  {/* Split Panels: Panel 2 & Panel 3 */}
+                  {(activeTab === 'all' || activeTab === 'upcoming' || activeTab === 'backlog') && (
+                    <div
+                      className={`grid gap-6 ${
+                        activeTab === 'all'
+                          ? 'grid-cols-1 lg:grid-cols-12'
+                          : 'grid-cols-1'
+                      }`}
+                    >
+                      {/* Panel 2: Single & Monthly Tasks */}
+                      {(activeTab === 'all' || activeTab === 'upcoming') && (
+                        <section className={activeTab === 'all' ? 'lg:col-span-7' : 'w-full'}>
+                          <UpcomingPanel
+                            tasks={dashboardData.upcoming}
+                            categories={categoriesInfo}
+                            onToggleComplete={handleToggleComplete}
+                            onEdit={handleEditTask}
+                            onDelete={(task) => setTaskToDelete(task)}
+                            onNewTask={handleOpenNewTask}
+                            onToggleSubtask={handleToggleSubtask}
+                            onSnooze={handleSnooze}
+                            onCancelSnooze={handleCancelSnooze}
+                            searchQuery={searchQuery}
+                            selectedPriority={selectedPriority}
+                            selectedCategory={selectedCategory}
+                          />
+                        </section>
+                      )}
+
+                      {/* Panel 3: Backlog (Tarefas Sem Data) */}
+                      {(activeTab === 'all' || activeTab === 'backlog') && (
+                        <section className={activeTab === 'all' ? 'lg:col-span-5' : 'w-full'}>
+                          <BacklogPanel
+                            tasks={dashboardData.backlog}
+                            categories={categoriesInfo}
+                            onToggleComplete={handleToggleComplete}
+                            onEdit={handleEditTask}
+                            onDelete={(task) => setTaskToDelete(task)}
+                            onNewTask={handleOpenNewTask}
+                            onScheduleForToday={handleScheduleForToday}
+                            onToggleSubtask={handleToggleSubtask}
+                            onSnooze={handleSnooze}
+                            onCancelSnooze={handleCancelSnooze}
+                            searchQuery={searchQuery}
+                            selectedPriority={selectedPriority}
+                            selectedCategory={selectedCategory}
+                          />
+                        </section>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Panel 4: Jira Demands Week (Demandas Jira com Entrega na Semana) */}
+              {canAccessJira && (activeTab === 'all' || activeTab === 'jira') && (
+                <section className="pt-2">
+                  <JiraWeekPanel
+                    key={jiraRefreshKey}
+                    weekStartDate={format(startOfWeek(jiraWeekBaseDate, { weekStartsOn: 1 }), 'yyyy-MM-dd')}
+                    onPrevWeek={handleJiraPrevWeek}
+                    onNextWeek={handleJiraNextWeek}
+                    onToday={handleJiraToday}
+                    onOpenSettings={user?.isAdmin ? () => setIsJiraModalOpen(true) : undefined}
+                    searchQuery={searchQuery}
+                    onShowToast={showToast}
+                  />
+                </section>
+              )}
+
+              {/* Panel 5: Jira Review Events (Feed de Revisões e Evoluções) */}
+              {canAccessJira && (activeTab === 'all' || activeTab === 'jira_reviews') && (
+                <section className="pt-2">
+                  <JiraReviewPanel
+                    onShowToast={showToast}
+                    onRefreshCount={fetchJiraPendingCount}
+                    onOpenSettings={user?.isAdmin ? () => setIsJiraModalOpen(true) : undefined}
+                  />
+                </section>
+              )}
+            </div>
           </>
         )}
 

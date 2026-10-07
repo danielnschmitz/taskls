@@ -12,6 +12,7 @@ export interface JiraConfig {
     flagged?: string;
   };
   ignored_fields?: string[];
+  ignored_users?: string[];
 }
 
 export const DEFAULT_IGNORED_FIELDS = [
@@ -54,6 +55,7 @@ export const DEFAULT_JIRA_CONFIG: JiraConfig = {
     flagged: 'customfield_10021',
   },
   ignored_fields: [...DEFAULT_IGNORED_FIELDS],
+  ignored_users: [],
 };
 
 export interface JiraDemand {
@@ -148,6 +150,9 @@ export async function getJiraConfig(): Promise<JiraConfig> {
     ignored_fields: Array.isArray(saved.ignored_fields)
       ? saved.ignored_fields
       : [...DEFAULT_IGNORED_FIELDS],
+    ignored_users: Array.isArray(saved.ignored_users)
+      ? saved.ignored_users
+      : [],
   };
 }
 
@@ -172,6 +177,9 @@ export async function saveJiraConfig(newConfig: Partial<JiraConfig>): Promise<Ji
     ignored_fields: Array.isArray(newConfig.ignored_fields)
       ? Array.from(new Set(newConfig.ignored_fields.map((f) => f.trim()).filter(Boolean)))
       : current.ignored_fields || [...DEFAULT_IGNORED_FIELDS],
+    ignored_users: Array.isArray(newConfig.ignored_users)
+      ? Array.from(new Set(newConfig.ignored_users.map((u) => u.trim()).filter(Boolean)))
+      : current.ignored_users || [],
   };
 
   await pool.query(
@@ -191,6 +199,15 @@ export function isFieldIgnored(field: string, ignoredFields: string[] = []): boo
   if (!field) return false;
   const norm = field.trim().toLowerCase();
   return ignoredFields.some((f) => f.trim().toLowerCase() === norm);
+}
+
+/**
+ * Helper para verificar se um autor do Jira deve ser desconsiderado nas revisões
+ */
+export function isAuthorIgnored(author: string, ignoredUsers: string[] = []): boolean {
+  if (!author) return false;
+  const norm = author.trim().toLowerCase();
+  return ignoredUsers.some((u) => u.trim().toLowerCase() === norm);
 }
 
 /**

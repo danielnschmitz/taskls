@@ -1,5 +1,5 @@
 import { pool } from './db';
-import { getJiraConfig, formatDisplayStatus, getAuthHeader, executeJqlSearch, JiraDemand, JiraConfig, DEFAULT_IGNORED_FIELDS, isFieldIgnored } from './jira';
+import { getJiraConfig, formatDisplayStatus, getAuthHeader, executeJqlSearch, JiraDemand, JiraConfig, DEFAULT_IGNORED_FIELDS, isFieldIgnored, isAuthorIgnored } from './jira';
 
 export type JiraEventType =
   | 'status_changed'
@@ -356,7 +356,7 @@ export async function processWebhookPayload(payload: any): Promise<{ processed: 
   const eventsSaved: string[] = [];
 
   // 1. Criação de Issue
-  if (webhookEvent === 'jira:issue_created') {
+  if (webhookEvent === 'jira:issue_created' && !isAuthorIgnored(authorName, config.ignored_users)) {
     const eventId = `iss-${issue.key}-created`;
     const saveRes = await saveJiraEvent({
       eventId,
@@ -387,38 +387,40 @@ export async function processWebhookPayload(payload: any): Promise<{ processed: 
     const comment = payload.comment;
     if (comment && comment.id) {
       const commentAuthor = comment.author?.displayName || authorName;
-      const commentAvatar = comment.author?.avatarUrls?.['32x32'] || authorAvatar;
-      const commentTime = comment.created ? new Date(comment.created).toISOString() : eventTime;
-      const eventId = `cmt-${issue.key}-${comment.id}`;
+      if (!isAuthorIgnored(commentAuthor, config.ignored_users)) {
+        const commentAvatar = comment.author?.avatarUrls?.['32x32'] || authorAvatar;
+        const commentTime = comment.created ? new Date(comment.created).toISOString() : eventTime;
+        const eventId = `cmt-${issue.key}-${comment.id}`;
 
-      const saveRes = await saveJiraEvent({
-        eventId,
-        issueKey: issue.key,
-        issueId: issue.id,
-        projectKey: projKey,
-        summary: issue.fields?.summary || cardSnapshot.summary,
-        eventType: 'comment_added',
-        authorName: commentAuthor,
-        authorAvatar: commentAvatar,
-        eventTime: commentTime,
-        diff: {
-          field: 'comment',
-          label: 'Novo Comentário',
-          text: cleanAndFormatJiraText(comment.body),
-          commentId: comment.id,
-        },
-        cardData: cardSnapshot,
-      });
-      if (saveRes.isNew) {
-        processedCount++;
-        eventsSaved.push(eventId);
+        const saveRes = await saveJiraEvent({
+          eventId,
+          issueKey: issue.key,
+          issueId: issue.id,
+          projectKey: projKey,
+          summary: issue.fields?.summary || cardSnapshot.summary,
+          eventType: 'comment_added',
+          authorName: commentAuthor,
+          authorAvatar: commentAvatar,
+          eventTime: commentTime,
+          diff: {
+            field: 'comment',
+            label: 'Novo Comentário',
+            text: cleanAndFormatJiraText(comment.body),
+            commentId: comment.id,
+          },
+          cardData: cardSnapshot,
+        });
+        if (saveRes.isNew) {
+          processedCount++;
+          eventsSaved.push(eventId);
+        }
       }
     }
   }
 
   // 3. Atualizações de Campos (Changelog)
   const changelog = payload.changelog;
-  if (changelog && Array.isArray(changelog.items)) {
+  if (changelog && Array.isArray(changelog.items) && !isAuthorIgnored(authorName, config.ignored_users)) {
     const ignoredList = config.ignored_fields || DEFAULT_IGNORED_FIELDS;
     for (const item of changelog.items) {
       if (isFieldIgnored(item.field, ignoredList)) {
@@ -589,7 +591,8 @@ export async function syncJiraEventsFromRest(daysBack: number = 1): Promise<{
     // 1. Verificar se o card foi criado dentro da janela de dias
     if (issue.fields?.created) {
       const createdDate = new Date(issue.fields.created);
-      if (createdDate >= cutoffTime) {
+      const creatorName = issue.fields?.creator?.displayName || 'Jira';
+      if (createdDate >= cutoffTime && !isAuthorIgnored(creatorName, config.ignored_users)) {
         const eventId = `iss-${issue.key}-created`;
         const saveRes = await saveJiraEvent({
           eventId,
@@ -598,7 +601,7 @@ export async function syncJiraEventsFromRest(daysBack: number = 1): Promise<{
           projectKey: projKey,
           summary: issue.fields?.summary || cardSnapshot.summary,
           eventType: 'issue_created',
-          authorName: issue.fields?.creator?.displayName || 'Jira',
+          authorName: creatorName,
           authorAvatar: issue.fields?.creator?.avatarUrls?.['32x32'] || null,
           eventTime: createdDate.toISOString(),
           diff: {
@@ -636,6 +639,8 @@ export async function syncJiraEventsFromRest(daysBack: number = 1): Promise<{
       if (!historyTime || historyTime < cutoffTime) continue;
 
       const authorName = history.author?.displayName || 'Jira';
+      if (isAuthorIgnored(authorName, config.ignored_users)) continue;
+
       const authorAvatar = history.author?.avatarUrls?.['32x32'] || null;
       const ignoredList = config.ignored_fields || DEFAULT_IGNORED_FIELDS;
 
@@ -720,6 +725,9 @@ export async function syncJiraEventsFromRest(daysBack: number = 1): Promise<{
       const commentTime = comment.created ? new Date(comment.created) : null;
       if (!commentTime || commentTime < cutoffTime) continue;
 
+      const commentAuthor = comment.author?.displayName || 'Jira';
+      if (isAuthorIgnored(commentAuthor, config.ignored_users)) continue;
+
       const eventId = `cmt-${issue.key}-${comment.id}`;
       const saveRes = await saveJiraEvent({
         eventId,
@@ -728,7 +736,7 @@ export async function syncJiraEventsFromRest(daysBack: number = 1): Promise<{
         projectKey: projKey,
         summary: issue.fields?.summary || cardSnapshot.summary,
         eventType: 'comment_added',
-        authorName: comment.author?.displayName || 'Jira',
+        authorName: commentAuthor,
         authorAvatar: comment.author?.avatarUrls?.['32x32'] || null,
         eventTime: commentTime.toISOString(),
         diff: {
@@ -811,12 +819,28 @@ export async function listJiraEvents(params: {
     )`;
   }
 
+  const config = await getJiraConfig();
+  const ignoredUsers = (config.ignored_users || []).map((u) => u.trim().toLowerCase()).filter(Boolean);
+  if (ignoredUsers.length > 0) {
+    queryParams.push(ignoredUsers);
+    baseWhere += ` AND NOT (LOWER(author_name) = ANY($${queryParams.length}::text[]))`;
+  }
+
+  let userIgnoreClause = '';
+  let userIgnoreParam: string[][] = [];
+  if (ignoredUsers.length > 0) {
+    userIgnoreClause = ' AND NOT (LOWER(author_name) = ANY($1::text[]))';
+    userIgnoreParam = [ignoredUsers];
+  }
+
   // Contadores globais (independentes do filtro de paginação/status)
   const pendingCountRes = await pool.query<{ count: string }>(
-    `SELECT COUNT(*) FROM jira_review_events WHERE is_reviewed = FALSE`
+    `SELECT COUNT(*) FROM jira_review_events WHERE is_reviewed = FALSE${userIgnoreClause}`,
+    userIgnoreParam
   );
   const reviewedCountRes = await pool.query<{ count: string }>(
-    `SELECT COUNT(*) FROM jira_review_events WHERE is_reviewed = TRUE`
+    `SELECT COUNT(*) FROM jira_review_events WHERE is_reviewed = TRUE${userIgnoreClause}`,
+    userIgnoreParam
   );
 
   const totalPending = parseInt(pendingCountRes.rows[0].count, 10) || 0;
@@ -915,6 +939,15 @@ export async function markAllEventsAsReviewed(projectKey?: string, userId?: stri
  * Retorna contagem de eventos pendentes de revisão
  */
 export async function getPendingEventsCount(): Promise<number> {
+  const config = await getJiraConfig();
+  const ignoredUsers = (config.ignored_users || []).map((u) => u.trim().toLowerCase()).filter(Boolean);
+  if (ignoredUsers.length > 0) {
+    const res = await pool.query<{ count: string }>(
+      `SELECT COUNT(*) FROM jira_review_events WHERE is_reviewed = FALSE AND NOT (LOWER(author_name) = ANY($1::text[]))`,
+      [ignoredUsers]
+    );
+    return parseInt(res.rows[0].count, 10) || 0;
+  }
   const res = await pool.query<{ count: string }>(
     `SELECT COUNT(*) FROM jira_review_events WHERE is_reviewed = FALSE`
   );
@@ -981,11 +1014,45 @@ export async function cleanupIgnoredJiraEvents(customIgnoredList?: string[]): Pr
 }
 
 /**
+ * Remove eventos pendentes de usuários que foram configurados para serem desconsiderados
+ */
+export async function cleanupIgnoredUserEvents(customIgnoredUsers?: string[]): Promise<number> {
+  try {
+    const config = await getJiraConfig();
+    const ignored = customIgnoredUsers && customIgnoredUsers.length > 0
+      ? customIgnoredUsers
+      : config.ignored_users || [];
+
+    if (!ignored || ignored.length === 0) return 0;
+
+    const normalized = ignored.map((u) => u.trim().toLowerCase()).filter(Boolean);
+    if (normalized.length === 0) return 0;
+
+    const res = await pool.query(
+      `DELETE FROM jira_review_events 
+       WHERE is_reviewed = FALSE 
+         AND LOWER(author_name) = ANY($1::text[])`,
+      [normalized]
+    );
+
+    const deletedCount = res.rowCount || 0;
+    if (deletedCount > 0) {
+      console.log(`[JiraEvents] Higienização de usuários concluída: ${deletedCount} evento(s) pendente(s) de usuários desconsiderados foram removidos.`);
+    }
+    return deletedCount;
+  } catch (err) {
+    console.warn('[JiraEvents] Falha ao limpar eventos de usuários ignorados:', err);
+    return 0;
+  }
+}
+
+/**
  * Migra eventos ADF que foram salvos anteriormente no banco como JSON bruto
  */
 export async function migrateAdfEventsInDb(): Promise<void> {
-  // Limpa pendências antigas de campos desconsiderados
+  // Limpa pendências antigas de campos desconsiderados e usuários desconsiderados
   await cleanupIgnoredJiraEvents().catch(() => {});
+  await cleanupIgnoredUserEvents().catch(() => {});
 
   try {
     const res = await pool.query(`

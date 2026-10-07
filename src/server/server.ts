@@ -29,6 +29,18 @@ const PORT = process.env.PORT || 3333;
 app.use(cors());
 app.use(express.json());
 
+// Log de requisições HTTP para facilitar diagnóstico e depuração
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    if (req.url.startsWith('/api') || res.statusCode >= 400) {
+      console.log(`[HTTP] ${req.method} ${req.url} -> ${res.statusCode} (${duration}ms)`);
+    }
+  });
+  next();
+});
+
 // API Routes
 // 1. Rotas de autenticação (login público)
 app.use('/api/auth', authRouter);

@@ -12,6 +12,7 @@ import {
   CheckSquare,
   Square,
   RotateCw,
+  UserX,
 } from 'lucide-react';
 import { JiraConfig } from '../types';
 
@@ -73,6 +74,9 @@ export const JiraConfigModal: React.FC<JiraConfigModalProps> = ({
   const [allPossibleStatuses, setAllPossibleStatuses] = useState<string[]>([...DEFAULT_POSSIBLE_STATUSES]);
   const [ignoredFields, setIgnoredFields] = useState<string[]>([...DEFAULT_IGNORED_FIELDS]);
   const [newIgnoredFieldInput, setNewIgnoredFieldInput] = useState('');
+  const [ignoredUsers, setIgnoredUsers] = useState<string[]>([]);
+  const [newIgnoredUserInput, setNewIgnoredUserInput] = useState('');
+  const [recentAuthors, setRecentAuthors] = useState<string[]>([]);
 
   // Load existing settings on modal open
   useEffect(() => {
@@ -91,6 +95,12 @@ export const JiraConfigModal: React.FC<JiraConfigModalProps> = ({
         }
         if (data.ignored_fields && Array.isArray(data.ignored_fields)) {
           setIgnoredFields(data.ignored_fields);
+        }
+        if (data.ignored_users && Array.isArray(data.ignored_users)) {
+          setIgnoredUsers(data.ignored_users);
+        }
+        if (data.recentAuthors && Array.isArray(data.recentAuthors)) {
+          setRecentAuthors(data.recentAuthors);
         }
       })
       .catch((err) => {
@@ -135,6 +145,22 @@ export const JiraConfigModal: React.FC<JiraConfigModalProps> = ({
 
   const handleResetIgnoredFields = () => {
     setIgnoredFields([...DEFAULT_IGNORED_FIELDS]);
+  };
+
+  // Handlers para usuários ignorados nas revisões
+  const handleAddIgnoredUser = (userName?: string) => {
+    const raw = (userName !== undefined ? userName : newIgnoredUserInput).trim();
+    if (!raw) return;
+    if (!ignoredUsers.some((u) => u.toLowerCase() === raw.toLowerCase())) {
+      setIgnoredUsers([...ignoredUsers, raw]);
+    }
+    if (userName === undefined) {
+      setNewIgnoredUserInput('');
+    }
+  };
+
+  const handleRemoveIgnoredUser = (userToRemove: string) => {
+    setIgnoredUsers(ignoredUsers.filter((u) => u.toLowerCase() !== userToRemove.toLowerCase()));
   };
 
   // Toggle status selection
@@ -201,6 +227,7 @@ export const JiraConfigModal: React.FC<JiraConfigModalProps> = ({
         projects,
         statuses: selectedStatuses,
         ignored_fields: ignoredFields,
+        ignored_users: ignoredUsers,
       };
 
       if (apiToken.trim()) {
@@ -565,6 +592,96 @@ export const JiraConfigModal: React.FC<JiraConfigModalProps> = ({
                   <span>Adicionar</span>
                 </button>
               </div>
+            </div>
+
+            {/* Section 5: Usuários Desconsiderados nas Revisões */}
+            <div className="space-y-3 pt-4 border-t border-slate-200 dark:border-slate-800/80">
+              <div>
+                <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                  5. Usuários Desconsiderados nas Revisões
+                </label>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Alterações, comentários e criações feitos por estes usuários (ou automações) não gerarão revisões e suas pendências serão limpas.
+                </p>
+              </div>
+
+              {/* Badges dos usuários ignorados */}
+              <div className="flex flex-wrap items-center gap-2 p-2.5 rounded-xl bg-slate-100/70 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 min-h-[46px]">
+                {ignoredUsers.length === 0 ? (
+                  <span className="text-xs text-slate-400 dark:text-slate-500 italic">
+                    Nenhum usuário desconsiderado. Todos os autores gerarão revisões normalmente.
+                  </span>
+                ) : (
+                  ignoredUsers.map((user) => (
+                    <span
+                      key={user}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800/90 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 text-xs font-medium shadow-sm hover:border-slate-400 dark:hover:border-slate-600 transition-colors"
+                    >
+                      <UserX className="w-3.5 h-3.5 text-rose-500" />
+                      <span>{user}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveIgnoredUser(user)}
+                        className="hover:text-rose-500 text-slate-400 transition-colors ml-0.5"
+                        title={`Remover ${user} da lista de desconsiderados`}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </span>
+                  ))
+                )}
+              </div>
+
+              {/* Input para adicionar novo usuário */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  placeholder="Nome do usuário ou automação (ex: Daniel Schmitz, Automation for Jira)"
+                  value={newIgnoredUserInput}
+                  onChange={(e) => setNewIgnoredUserInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddIgnoredUser();
+                    }
+                  }}
+                  className="flex-1 px-3 py-2 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleAddIgnoredUser()}
+                  className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-white text-xs font-semibold flex items-center gap-1.5 transition-all border border-slate-300 dark:border-slate-700"
+                >
+                  <Plus className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
+                  <span>Adicionar</span>
+                </button>
+              </div>
+
+              {/* Sugestões de autores recentes */}
+              {recentAuthors.filter((author) => !ignoredUsers.some((u) => u.toLowerCase() === author.toLowerCase())).length > 0 && (
+                <div className="space-y-1.5 pt-1">
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                    Sugestões de autores identificados recentemente nas revisões:
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {recentAuthors
+                      .filter((author) => !ignoredUsers.some((u) => u.toLowerCase() === author.toLowerCase()))
+                      .slice(0, 10)
+                      .map((author) => (
+                        <button
+                          key={author}
+                          type="button"
+                          onClick={() => handleAddIgnoredUser(author)}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 hover:bg-rose-50 dark:bg-slate-900 dark:hover:bg-rose-950/40 text-slate-600 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400 border border-slate-200 hover:border-rose-300 dark:border-slate-800 dark:hover:border-rose-800 transition-colors"
+                          title={`Clique para ignorar ${author}`}
+                        >
+                          <Plus className="w-3 h-3 text-slate-400" />
+                          <span>{author}</span>
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Modal Footer Actions */}

@@ -21,8 +21,21 @@ import {
   Clock,
   Briefcase,
   SlidersHorizontal,
+  Zap,
+  Check,
+  CheckSquare,
+  Square,
+  Info,
+  X,
+  Save,
+  RotateCcw,
 } from 'lucide-react';
-import { JiraNeoActivationIssue, JiraNeoActivationsResponse } from '../../types';
+import {
+  JiraNeoActivationIssue,
+  JiraNeoActivationsResponse,
+  NeoActivationConfig,
+  StatusWorkflowStage,
+} from '../../types';
 import { ExportChartButton } from '../ExportChartButton';
 
 interface JiraNeoActivationsDashboardProps {
@@ -42,7 +55,63 @@ type SortField =
   | 'canal'
   | 'tipo_integracao'
   | 'dt_producao'
+  | 'dt_ativacao'
   | 'created';
+
+export const DEFAULT_WORKFLOW_STAGES: StatusWorkflowStage[] = [
+  { id: 'aberto', name: 'Aberto', mappedStage: 'Aberto', rank: 1, color: '#64748b' },
+  { id: 'pronto_p_fazer', name: 'Pronto p/ fazer', mappedStage: 'Pronto p/ fazer', rank: 2, color: '#3b82f6' },
+  { id: 'desenvolvimento', name: 'Desenvolvimento', mappedStage: 'Desenvolvimento', rank: 3, color: '#6366f1' },
+  { id: 'teste_de_aceitacao', name: 'Teste de Aceitação', mappedStage: 'Em homologação', rank: 4, color: '#f59e0b' },
+  { id: 'deploy_hml', name: 'Deploy HML', mappedStage: 'Em homologação', rank: 5, color: '#f97316' },
+  { id: 'deploy', name: 'Deploy', mappedStage: 'Homologação aprovada', rank: 6, color: '#06b6d4' },
+  { id: 'documentar', name: 'Documentar', mappedStage: 'Produção assistida', rank: 7, color: '#a855f7' },
+  { id: 'concluido', name: 'Concluído', mappedStage: 'Em produção', rank: 8, color: '#10b981' },
+  { id: 'em_producao', name: 'Em produção', mappedStage: 'Em produção', rank: 9, color: '#059669' },
+];
+
+export const DEFAULT_ACTIVATION_CONFIG: NeoActivationConfig = {
+  mode: 'threshold',
+  thresholdStatus: 'Em produção',
+  customStatuses: ['Em produção', 'Concluído'],
+};
+
+export const normalizeNeoStatus = (rawStatus: string): string => {
+  if (!rawStatus) return '';
+  return rawStatus
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+};
+
+export const getStatusRank = (rawStatus: string): number => {
+  const s = normalizeNeoStatus(rawStatus);
+  if (!s || s === 'cancelado' || s === 'desativado') return 0;
+  if (s === 'em producao' || s.includes('producao')) return 9;
+  if (s === 'concluido' || s === 'finalizado' || s === 'resolvido') return 8;
+  if (s === 'documentar' || s === 'documentacao') return 7;
+  if (s === 'deploy' || s === 'deploy prd') return 6;
+  if (s === 'deploy hml') return 5;
+  if (s === 'teste de aceitacao' || s.includes('aceitacao') || s.includes('homologacao') || s.includes('teste')) return 4;
+  if (s === 'desenvolvimento' || s.includes('desenvolv')) return 3;
+  if (s.startsWith('pronto p') || s.startsWith('pronto para') || s.includes('pronto')) return 2;
+  if (s === 'aberto' || s.includes('aberto') || s.includes('backlog')) return 1;
+  return 1;
+};
+
+export const isCardActivated = (issue: JiraNeoActivationIssue, cfg: NeoActivationConfig): boolean => {
+  const normStatus = normalizeNeoStatus(issue.status);
+  if (!normStatus || normStatus === 'cancelado' || normStatus === 'desativado') return false;
+
+  if (cfg.mode === 'custom' && Array.isArray(cfg.customStatuses) && cfg.customStatuses.length > 0) {
+    return cfg.customStatuses.some((st) => normalizeNeoStatus(st) === normStatus);
+  }
+
+  const thresholdRank = getStatusRank(cfg.thresholdStatus || 'Em produção');
+  const issueRank = issue.statusRank !== undefined ? issue.statusRank : getStatusRank(issue.status);
+  return issueRank >= thresholdRank && issueRank > 0;
+};
 
 export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardProps> = ({ onShowToast }) => {
   // Estado dos Dados
@@ -50,6 +119,17 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+
+  // Configuração do Critério de Ativação
+  const [activationConfig, setActivationConfig] = useState<NeoActivationConfig>(() => {
+    try {
+      const saved = localStorage.getItem('taskls_neo_activation_config');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return DEFAULT_ACTIVATION_CONFIG;
+  });
+  const [isConfigModalOpen, setIsConfigModalOpen] = useState<boolean>(false);
+  const [isSavingGlobalConfig, setIsSavingGlobalConfig] = useState<boolean>(false);
 
   // Filtros Locais
   const [datePreset, setDatePreset] = useState<DatePreset>('all');
@@ -63,7 +143,7 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
   const [tipoIntegracaoFilter, setTipoIntegracaoFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // Controles do Gráfico de Linhas (Ativações por Mês - Em Produção)
+  // Controles do Gráfico de Linhas (Ativações por Mês)
   const [lineChartMetric, setLineChartMetric] = useState<'ativacoes' | 'cards'>('ativacoes');
   const [hoveredMonthIndex, setHoveredMonthIndex] = useState<number | null>(null);
 
@@ -79,7 +159,7 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
 
   // Busca dados da API
   const fetchActivationsData = useCallback(
-    async (isForceRefresh: boolean = false) => {
+    async (isForceRefresh: boolean = false, overrideConfig?: NeoActivationConfig) => {
       if (isForceRefresh) {
         setIsRefreshing(true);
       } else {
@@ -91,6 +171,14 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
         const params = new URLSearchParams();
         if (isForceRefresh) {
           params.set('refresh', 'true');
+        }
+
+        const cfgToUse = overrideConfig || activationConfig;
+        if (cfgToUse.mode === 'threshold' && cfgToUse.thresholdStatus) {
+          params.set('thresholdStatus', cfgToUse.thresholdStatus);
+        } else if (cfgToUse.mode === 'custom' && cfgToUse.customStatuses?.length) {
+          params.set('mode', 'custom');
+          params.set('customStatuses', cfgToUse.customStatuses.join(','));
         }
 
         const res = await fetch(`/api/dashboards/jira-neo-ativacoes?${params.toString()}`);
@@ -114,12 +202,80 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
         setIsRefreshing(false);
       }
     },
-    [onShowToast]
+    [activationConfig, onShowToast]
   );
 
   useEffect(() => {
     fetchActivationsData(false);
   }, [fetchActivationsData]);
+
+  // Se a API retornar configuração padrão salva no sistema e o usuário ainda não tiver customizado localmente
+  useEffect(() => {
+    if (data?.activationConfig) {
+      const saved = localStorage.getItem('taskls_neo_activation_config');
+      if (!saved) {
+        setActivationConfig(data.activationConfig);
+      }
+    }
+  }, [data?.activationConfig]);
+
+  // Salvar configuração como padrão global no servidor
+  const handleSaveGlobalConfig = async (newCfg: NeoActivationConfig) => {
+    setIsSavingGlobalConfig(true);
+    try {
+      const res = await fetch('/api/dashboards/neo-ativacoes/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newCfg),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error || 'Erro ao salvar configuração padrão');
+      }
+      setActivationConfig(newCfg);
+      try {
+        localStorage.setItem('taskls_neo_activation_config', JSON.stringify(newCfg));
+      } catch (e) {}
+      setIsConfigModalOpen(false);
+      onShowToast(
+        newCfg.mode === 'threshold'
+          ? `Configuração salva no sistema! Ativações consideradas a partir de "${newCfg.thresholdStatus}".`
+          : 'Configuração salva no sistema com status personalizados!',
+        'success'
+      );
+      fetchActivationsData(true, newCfg);
+    } catch (err: any) {
+      console.error(err);
+      onShowToast(err.message || 'Falha ao salvar padrão global', 'error');
+    } finally {
+      setIsSavingGlobalConfig(false);
+    }
+  };
+
+  // Aplicar configuração na sessão local
+  const handleApplyConfigLocally = (newCfg: NeoActivationConfig) => {
+    setActivationConfig(newCfg);
+    try {
+      localStorage.setItem('taskls_neo_activation_config', JSON.stringify(newCfg));
+    } catch (e) {}
+    setIsConfigModalOpen(false);
+    onShowToast(
+      newCfg.mode === 'threshold'
+        ? `Critério alterado para: a partir de "${newCfg.thresholdStatus}".`
+        : 'Critério de status personalizados aplicado!',
+      'info'
+    );
+  };
+
+  // Alteração rápida pelo seletor da toolbar
+  const handleQuickThresholdSelect = (threshold: string) => {
+    const updated: NeoActivationConfig = {
+      mode: 'threshold',
+      thresholdStatus: threshold,
+      customStatuses: [threshold],
+    };
+    handleApplyConfigLocally(updated);
+  };
 
   // Filtragem dos cards
   const filteredIssues = useMemo(() => {
@@ -156,7 +312,9 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
 
       // 1. Filtro de Status
       if (statusFilter !== 'all') {
-        if (statusFilter === 'em_producao_only') {
+        if (statusFilter === 'ativados_only') {
+          if (!isCardActivated(issue, activationConfig)) return false;
+        } else if (statusFilter === 'em_producao_only') {
           if (!issue.isEmProducao) return false;
         } else if (issue.status !== statusFilter) {
           return false;
@@ -185,7 +343,10 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
 
       // 6. Filtro de Período
       if (filterStart || filterEnd) {
-        const targetDateStr = dateField === 'producao' ? issue.dt_producao : issue.created;
+        const targetDateStr =
+          dateField === 'producao'
+            ? issue.dt_ativacao || issue.dt_producao || issue.created
+            : issue.created;
         if (!targetDateStr) return false;
         const d = new Date(targetDateStr);
         if (isNaN(d.getTime())) return false;
@@ -221,6 +382,7 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
     canalFilter,
     tipoIntegracaoFilter,
     searchQuery,
+    activationConfig,
   ]);
 
   // Cálculo das 4 análises principais e KPIs
@@ -231,6 +393,8 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
     let totalAtivacoes = 0;
     let emProducaoCards = 0;
     let emProducaoAtivacoes = 0;
+    let ativadosCards = 0;
+    let ativadosAtivacoes = 0;
     let emAndamentoCards = 0;
     let emAndamentoAtivacoes = 0;
     let backlogCards = 0;
@@ -245,7 +409,7 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
     // 3. Quantidade de Ativações por Indústria (todos os status ativos)
     const industriaMap = new Map<string, { industria: string; ativacoes: number; cards: number }>();
 
-    // 4. Quantidade de Ativações por Mês (Considera estritamente apenas "Em Produção")
+    // 4. Quantidade de Ativações por Mês (Considera cards que atendem ao critério de Ativado)
     const monthlyMap = new Map<
       string,
       {
@@ -265,24 +429,34 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
       const qtd = item.quantidade_ativacoes;
       totalAtivacoes += qtd;
 
-      const normSt = item.status.toLowerCase().trim();
+      const activated = isCardActivated(item, activationConfig);
+      if (activated) {
+        ativadosCards++;
+        ativadosAtivacoes += qtd;
+      }
 
-      // Categorização Macro
       if (item.isEmProducao) {
         emProducaoCards++;
         emProducaoAtivacoes += qtd;
-      } else if (
-        normSt.includes('desenvolvimento') ||
-        normSt.includes('deploy hml') ||
-        normSt.includes('aceitação') ||
-        normSt.includes('aceitacao') ||
-        normSt === 'deploy'
-      ) {
-        emAndamentoCards++;
-        emAndamentoAtivacoes += qtd;
-      } else if (normSt.includes('aberto') || normSt.includes('pronto')) {
-        backlogCards++;
-        backlogAtivacoes += qtd;
+      }
+
+      const normSt = item.status.toLowerCase().trim();
+
+      // Categorização Macro
+      if (!activated) {
+        if (
+          normSt.includes('desenvolvimento') ||
+          normSt.includes('deploy hml') ||
+          normSt.includes('aceitação') ||
+          normSt.includes('aceitacao') ||
+          normSt === 'deploy'
+        ) {
+          emAndamentoCards++;
+          emAndamentoAtivacoes += qtd;
+        } else if (normSt.includes('aberto') || normSt.includes('pronto')) {
+          backlogCards++;
+          backlogAtivacoes += qtd;
+        }
       }
 
       // Agrupamento 1: Por Status
@@ -307,12 +481,13 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
       indCurr.cards++;
       industriaMap.set(indName, indCurr);
 
-      // Agrupamento 4: Por Mês (Apenas cards que estão "Em Produção")
-      if (item.isEmProducao) {
+      // Agrupamento 4: Por Mês (Apenas cards que atendem ao critério de Ativado)
+      if (activated) {
+        const actDate = item.dt_ativacao || item.dt_producao || item.dt_deploy_prd || item.dt_finalizado || item.created;
         const mKey =
+          item.mes_ano_ativacao ||
           item.mes_ano_producao ||
-          (item.dt_producao ? item.dt_producao.substring(0, 7) : null) ||
-          (item.created ? item.created.substring(0, 7) : null);
+          (actDate ? actDate.substring(0, 7) : null);
 
         if (mKey) {
           if (!monthlyMap.has(mKey)) {
@@ -381,6 +556,8 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
       totalAtivacoes,
       emProducaoCards,
       emProducaoAtivacoes,
+      ativadosCards,
+      ativadosAtivacoes,
       emAndamentoCards,
       emAndamentoAtivacoes,
       backlogCards,
@@ -392,7 +569,7 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
       byIndustria,
       byMonth,
     };
-  }, [filteredIssues]);
+  }, [filteredIssues, activationConfig]);
 
   // Ordenação da tabela detalhada
   const sortedIssues = useMemo(() => {
@@ -435,8 +612,9 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
           valB = b.tipo_integracao || '';
           break;
         case 'dt_producao':
-          valA = a.dt_producao || '';
-          valB = b.dt_producao || '';
+        case 'dt_ativacao':
+          valA = a.dt_ativacao || a.dt_producao || '';
+          valB = b.dt_ativacao || b.dt_producao || '';
           break;
         case 'created':
         default:
@@ -474,6 +652,8 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
       'Key',
       'Resumo',
       'Status',
+      'Ativado',
+      'Critério Ativação',
       'Em Produção',
       'Quantidade de Ativações',
       'ERP (Epic Name)',
@@ -486,8 +666,8 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
       'Analista Responsável',
       'Data Deploy PRD',
       'Data Finalizado',
-      'Data Entrada Produção',
-      'Mês Entrada Produção',
+      'Data Ativação',
+      'Mês Ativação',
       'Data Criação',
       'Link Jira',
     ];
@@ -502,6 +682,8 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
       escapeCsv(iss.key),
       escapeCsv(iss.summary),
       escapeCsv(iss.status),
+      escapeCsv(isCardActivated(iss, activationConfig) ? 'Sim' : 'Não'),
+      escapeCsv(activationConfig.mode === 'threshold' ? `≥ ${activationConfig.thresholdStatus}` : 'Personalizado'),
       escapeCsv(iss.isEmProducao ? 'Sim' : 'Não'),
       escapeCsv(iss.quantidade_ativacoes),
       escapeCsv(iss.erp),
@@ -514,8 +696,8 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
       escapeCsv(iss.analista_responsavel || ''),
       escapeCsv(iss.dt_deploy_prd ? iss.dt_deploy_prd.substring(0, 10) : ''),
       escapeCsv(iss.dt_finalizado ? iss.dt_finalizado.substring(0, 10) : ''),
-      escapeCsv(iss.dt_producao ? iss.dt_producao.substring(0, 10) : ''),
-      escapeCsv(iss.mes_ano_producao || ''),
+      escapeCsv(iss.dt_ativacao ? iss.dt_ativacao.substring(0, 10) : (iss.dt_producao ? iss.dt_producao.substring(0, 10) : '')),
+      escapeCsv(iss.mes_ano_ativacao || iss.mes_ano_producao || ''),
       escapeCsv(iss.created ? iss.created.substring(0, 10) : ''),
       escapeCsv(iss.url),
     ]);
@@ -723,6 +905,7 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
 
   // Contadores por status para os botões de filtro rápido
   const developedStatusCounts = useMemo(() => {
+    let ativados = 0;
     let emProducao = 0;
     let producaoAssistida = 0;
     let homologacaoAprovada = 0;
@@ -731,7 +914,10 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
     let prontoPFazer = 0;
     let aberto = 0;
 
+    const thresholdRank = getStatusRank(activationConfig.thresholdStatus || 'Em produção');
+
     for (const item of developedErpLayoutItems) {
+      if (item.rank >= thresholdRank) ativados++;
       if (item.status === 'Em produção') emProducao++;
       else if (item.status === 'Produção assistida') producaoAssistida++;
       else if (item.status === 'Homologação aprovada') homologacaoAprovada++;
@@ -743,6 +929,7 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
 
     return {
       total: developedErpLayoutItems.length,
+      ativados,
       emProducao,
       producaoAssistida,
       homologacaoAprovada,
@@ -751,12 +938,15 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
       prontoPFazer,
       aberto,
     };
-  }, [developedErpLayoutItems]);
+  }, [developedErpLayoutItems, activationConfig]);
 
   // Filtragem e ordenação da listagem única de ERP e Layout
   const filteredAndSortedDevelopedItems = useMemo(() => {
+    const thresholdRank = getStatusRank(activationConfig.thresholdStatus || 'Em produção');
     const filtered = developedErpLayoutItems.filter((item) => {
-      if (developedStatusFilter !== 'all' && item.status !== developedStatusFilter) {
+      if (developedStatusFilter === 'ativados_only') {
+        if (item.rank < thresholdRank) return false;
+      } else if (developedStatusFilter !== 'all' && item.status !== developedStatusFilter) {
         return false;
       }
 
@@ -797,6 +987,7 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
     developedSearchQuery,
     developedSortField,
     developedSortAsc,
+    activationConfig,
   ]);
 
   const handleDevelopedSort = (field: 'erp' | 'layout' | 'status') => {
@@ -1011,9 +1202,9 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
                     ? 'bg-emerald-500/15 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-bold'
                     : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
                 }`}
-                title="Filtra com base na data em que a demanda entrou em produção"
+                title="Filtra com base na data em que a demanda foi ativada / entrou em produção"
               >
-                Entrada Produção
+                Data Ativação
               </button>
               <button
                 type="button"
@@ -1026,6 +1217,44 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
                 title="Filtra com base na data em que a demanda foi criada no Jira"
               >
                 Criação
+              </button>
+            </div>
+
+            {/* Seletor de Critério de Ativação */}
+            <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-950 px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-800">
+              <Zap className="w-3.5 h-3.5 text-emerald-500 fill-emerald-500/20" />
+              <span className="text-[11px] font-semibold whitespace-nowrap">Ativado a partir de:</span>
+              <select
+                value={activationConfig.mode === 'threshold' ? activationConfig.thresholdStatus : 'custom'}
+                onChange={(e) => {
+                  if (e.target.value === 'custom_modal') {
+                    setIsConfigModalOpen(true);
+                  } else {
+                    handleQuickThresholdSelect(e.target.value);
+                  }
+                }}
+                className="px-2 py-0.5 text-xs font-bold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-emerald-700 dark:text-emerald-300 focus:outline-none focus:border-emerald-500 cursor-pointer shadow-xs"
+                title="Define a partir de qual status um card é considerado como ativado"
+              >
+                {DEFAULT_WORKFLOW_STAGES.map((st) => (
+                  <option key={st.id} value={st.name}>
+                    {st.name} (Etapa #{st.rank})
+                  </option>
+                ))}
+                {activationConfig.mode === 'custom' && (
+                  <option value="custom">
+                    Personalizado ({activationConfig.customStatuses?.length || 0} status)
+                  </option>
+                )}
+                <option value="custom_modal">⚙️ Mais opções...</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => setIsConfigModalOpen(true)}
+                className="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 rounded-lg transition-colors"
+                title="Configurar critérios de ativação e salvar como padrão do sistema"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
@@ -1061,6 +1290,9 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
               className="px-2.5 py-1.5 text-xs font-medium bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-sm"
             >
               <option value="all">Todos os Status (exceto Cancelado)</option>
+              <option value="ativados_only">
+                Apenas Ativados (≥ {activationConfig.mode === 'threshold' ? activationConfig.thresholdStatus : 'Personalizado'})
+              </option>
               <option value="em_producao_only">Apenas Em Produção</option>
               {data?.availableStatuses
                 ?.filter((st) => st.toLowerCase().trim() !== 'cancelado')
@@ -1208,27 +1440,28 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
           </p>
         </div>
 
-        {/* KPI 2: Ativações Em Produção */}
+        {/* KPI 2: Ativações Entregues / Ativadas */}
         <div className="p-5 rounded-2xl bg-white dark:bg-[#0e1628]/90 border border-slate-200 dark:border-slate-800 shadow-xl relative overflow-hidden group hover:border-emerald-500/40 transition-all">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
               <TrendingUp className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
-              Em Produção
+              Ativações Ativadas
             </span>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/15 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
-              Entregues
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/15 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              ≥ {activationConfig.mode === 'threshold' ? activationConfig.thresholdStatus : 'Personalizado'}
             </span>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
             <span className="text-3xl font-black text-emerald-600 dark:text-emerald-400 tracking-tight">
-              {analytics.emProducaoAtivacoes}
+              {analytics.ativadosAtivacoes}
             </span>
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-              ({analytics.totalAtivacoes > 0 ? Math.round((analytics.emProducaoAtivacoes / analytics.totalAtivacoes) * 100) : 0}%)
+              ({analytics.totalAtivacoes > 0 ? Math.round((analytics.ativadosAtivacoes / analytics.totalAtivacoes) * 100) : 0}%)
             </span>
           </div>
           <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
-            {analytics.emProducaoCards} cards finalizados em produção
+            {analytics.ativadosCards} cards ativados (a partir de "{activationConfig.thresholdStatus}")
           </p>
         </div>
 
@@ -1368,7 +1601,7 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
           </div>
         </div>
 
-        {/* SEÇÃO 4: Evolução Mensal de Ativações (Gráfico de Linhas - Apenas Em Produção) */}
+        {/* SEÇÃO 4: Evolução Mensal de Ativações (Gráfico de Linhas) */}
         <div id="chart-neo-monthly" className="p-5 rounded-2xl bg-white dark:bg-[#0e1628]/90 border border-slate-200 dark:border-slate-800 shadow-xl space-y-4">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
             <div>
@@ -1377,7 +1610,7 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
                 4. Ativações por Mês
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Evolução temporal &bull; Apenas status "Em Produção" &bull; Gráfico de linhas
+                Evolução temporal &bull; Considera status a partir de "{activationConfig.mode === 'threshold' ? activationConfig.thresholdStatus : 'Personalizado'}" &bull; Gráfico de linhas
               </p>
             </div>
 
@@ -1392,7 +1625,7 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
                       ? 'bg-emerald-600 text-white shadow-sm'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
-                  title="Exibir volume total de ativações entregues em produção por mês"
+                  title="Exibir volume total de ativações entregues por mês"
                 >
                   Volume Ativações
                 </button>
@@ -1404,7 +1637,7 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
                       ? 'bg-emerald-600 text-white shadow-sm'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
-                  title="Exibir quantidade de cards/demandas entregues em produção por mês"
+                  title="Exibir quantidade de cards/demandas ativadas por mês"
                 >
                   Qtd. Cards
                 </button>
@@ -1442,7 +1675,7 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
           <div className="relative pt-2">
             {analytics.byMonth.length === 0 ? (
               <p className="text-xs text-slate-500 italic py-14 text-center">
-                Nenhuma ativação em produção encontrada para os filtros selecionados.
+                Nenhuma ativação encontrada para o critério selecionado nos filtros aplicados.
               </p>
             ) : (
               (() => {
@@ -1694,7 +1927,7 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
                           <div className="flex items-center justify-between gap-3 text-emerald-700 dark:text-emerald-300">
                             <span className="flex items-center gap-1.5">
                               <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                              Ativações em Produção:
+                              Ativações Ativadas:
                             </span>
                             <span className="font-bold font-mono text-slate-900 dark:text-white">
                               {hoveredPoint.ativacoes} ativ.
@@ -1704,7 +1937,7 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
                           <div className="flex items-center justify-between gap-3 text-slate-600 dark:text-slate-300">
                             <span className="flex items-center gap-1.5">
                               <span className="w-2 h-2 rounded-full bg-slate-400 dark:bg-slate-500" />
-                              Cards em Produção:
+                              Cards Ativados:
                             </span>
                             <span className="font-bold font-mono text-slate-900 dark:text-white">
                               {hoveredPoint.cards} {hoveredPoint.cards === 1 ? 'card' : 'cards'}
@@ -1912,6 +2145,18 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
             }`}
           >
             Todos ({developedStatusCounts.total})
+          </button>
+          <button
+            type="button"
+            onClick={() => setDevelopedStatusFilter('ativados_only')}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              developedStatusFilter === 'ativados_only'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 border border-emerald-500/20'
+            }`}
+          >
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            Ativados ≥ {activationConfig.thresholdStatus} ({developedStatusCounts.ativados})
           </button>
           <button
             type="button"
@@ -2246,12 +2491,12 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
                   </div>
                 </th>
                 <th
-                  onClick={() => handleSort('dt_producao')}
+                  onClick={() => handleSort('dt_ativacao')}
                   className="p-3 font-bold cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors text-right"
                 >
                   <div className="flex items-center justify-end gap-1">
-                    <span>Em Produção Em</span>
-                    {sortField === 'dt_producao' && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-500 dark:text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />)}
+                    <span>Data Ativação</span>
+                    {(sortField === 'dt_ativacao' || sortField === 'dt_producao') && (sortAsc ? <ArrowUp className="w-3 h-3 text-indigo-500 dark:text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />)}
                   </div>
                 </th>
               </tr>
@@ -2287,17 +2532,25 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
                       </span>
                     </td>
 
-                    {/* Status */}
+                    {/* Status e Badge Ativado */}
                     <td className="p-3 whitespace-nowrap">
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          iss.isEmProducao
-                            ? 'bg-emerald-500/15 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
-                            : 'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800'
-                        }`}
-                      >
-                        {iss.status}
-                      </span>
+                      <div className="flex flex-col gap-1 items-start">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            isCardActivated(iss, activationConfig)
+                              ? 'bg-emerald-500/15 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
+                              : 'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800'
+                          }`}
+                        >
+                          {iss.status}
+                        </span>
+                        {isCardActivated(iss, activationConfig) && (
+                          <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400">
+                            <CheckCircle2 className="w-2.5 h-2.5" />
+                            Ativado
+                          </span>
+                        )}
+                      </div>
                     </td>
 
                     {/* Quantidade de Ativações */}
@@ -2339,11 +2592,11 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
                       )}
                     </td>
 
-                    {/* Data Em Produção */}
+                    {/* Data Ativação */}
                     <td className="p-3 text-right font-mono text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                      {iss.dt_producao ? (
+                      {iss.dt_ativacao || iss.dt_producao ? (
                         <span className="text-emerald-600 dark:text-emerald-400/90 font-semibold">
-                          {new Date(iss.dt_producao).toLocaleDateString('pt-BR')}
+                          {new Date(iss.dt_ativacao || iss.dt_producao!).toLocaleDateString('pt-BR')}
                         </span>
                       ) : (
                         <span className="text-slate-400 dark:text-slate-600">-</span>
@@ -2354,6 +2607,405 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
               )}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* Modal de Configuração de Critério de Ativação */}
+      <ActivationConfigModal
+        isOpen={isConfigModalOpen}
+        onClose={() => setIsConfigModalOpen(false)}
+        currentConfig={activationConfig}
+        workflowStages={data?.workflowStages || DEFAULT_WORKFLOW_STAGES}
+        availableStatuses={data?.availableStatuses || []}
+        issues={data?.issues || []}
+        onApplyLocally={handleApplyConfigLocally}
+        onSaveAsDefault={handleSaveGlobalConfig}
+        isSaving={isSavingGlobalConfig}
+      />
+    </div>
+  );
+};
+
+interface ActivationConfigModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  currentConfig: NeoActivationConfig;
+  workflowStages: StatusWorkflowStage[];
+  availableStatuses: string[];
+  issues: JiraNeoActivationIssue[];
+  onApplyLocally: (config: NeoActivationConfig) => void;
+  onSaveAsDefault: (config: NeoActivationConfig) => Promise<void>;
+  isSaving: boolean;
+}
+
+const ActivationConfigModal: React.FC<ActivationConfigModalProps> = ({
+  isOpen,
+  onClose,
+  currentConfig,
+  workflowStages,
+  availableStatuses,
+  issues,
+  onApplyLocally,
+  onSaveAsDefault,
+  isSaving,
+}) => {
+  const [mode, setMode] = useState<'threshold' | 'custom'>(currentConfig.mode || 'threshold');
+  const [thresholdStatus, setThresholdStatus] = useState<string>(currentConfig.thresholdStatus || 'Em produção');
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(
+    currentConfig.customStatuses && currentConfig.customStatuses.length > 0
+      ? currentConfig.customStatuses
+      : ['Em produção', 'Concluído']
+  );
+
+  // Sincroniza se modal reabrir com config alterada
+  useEffect(() => {
+    if (isOpen) {
+      setMode(currentConfig.mode || 'threshold');
+      setThresholdStatus(currentConfig.thresholdStatus || 'Em produção');
+      setSelectedStatuses(
+        currentConfig.customStatuses && currentConfig.customStatuses.length > 0
+          ? currentConfig.customStatuses
+          : ['Em produção', 'Concluído']
+      );
+    }
+  }, [isOpen, currentConfig]);
+
+  if (!isOpen) return null;
+
+  const pendingConfig: NeoActivationConfig = {
+    mode,
+    thresholdStatus,
+    customStatuses: selectedStatuses,
+  };
+
+  const thresholdRank = getStatusRank(thresholdStatus);
+
+  // Simulação em tempo real sobre os issues carregados
+  const totalCards = issues.length;
+  const totalAtivacoes = issues.reduce((acc, i) => acc + (i.quantidade_ativacoes || 1), 0);
+
+  let simAtivadosCards = 0;
+  let simAtivadosQtd = 0;
+  for (const iss of issues) {
+    if (isCardActivated(iss, pendingConfig)) {
+      simAtivadosCards++;
+      simAtivadosQtd += iss.quantidade_ativacoes || 1;
+    }
+  }
+
+  const simPctCards = totalCards > 0 ? Math.round((simAtivadosCards / totalCards) * 100) : 0;
+  const simPctAtiv = totalAtivacoes > 0 ? Math.round((simAtivadosQtd / totalAtivacoes) * 100) : 0;
+
+  const toggleCustomStatus = (st: string) => {
+    if (selectedStatuses.includes(st)) {
+      setSelectedStatuses(selectedStatuses.filter((s) => s !== st));
+    } else {
+      setSelectedStatuses([...selectedStatuses, st]);
+    }
+  };
+
+  const handleResetToDefault = () => {
+    setMode('threshold');
+    setThresholdStatus('Em produção');
+    setSelectedStatuses(['Em produção', 'Concluído']);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+      <div
+        className="w-full max-w-3xl bg-white dark:bg-[#0e1628] border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Modal Header */}
+        <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-start justify-between bg-slate-50/50 dark:bg-slate-900/40">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+              <Zap className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                Critério de Ativação de Cards
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Defina a partir de qual status do Jira uma demanda é contabilizada como ativada/entregue
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Modal Content Scrollable */}
+        <div className="p-6 overflow-y-auto space-y-6 flex-1 text-sm">
+          {/* Seletor de Modo */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
+              Modo de Seleção
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setMode('threshold')}
+                className={`p-3.5 rounded-2xl border text-left transition-all ${
+                  mode === 'threshold'
+                    ? 'border-emerald-500 bg-emerald-500/10 dark:bg-emerald-500/15 text-emerald-900 dark:text-emerald-200 font-semibold shadow-xs'
+                    : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-bold flex items-center gap-1.5">
+                    <TrendingUp className="w-4 h-4 text-emerald-500" />
+                    Etapa Mínima no Fluxo
+                  </span>
+                  {mode === 'threshold' && <Check className="w-4 h-4 text-emerald-500" />}
+                </div>
+                <p className="text-xs opacity-80 font-normal">
+                  Define o status de corte. O card é considerado ativado a partir deste status e em todas as etapas seguintes. (Recomendado)
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setMode('custom')}
+                className={`p-3.5 rounded-2xl border text-left transition-all ${
+                  mode === 'custom'
+                    ? 'border-indigo-500 bg-indigo-500/10 dark:bg-indigo-500/15 text-indigo-900 dark:text-indigo-200 font-semibold shadow-xs'
+                    : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-bold flex items-center gap-1.5">
+                    <SlidersHorizontal className="w-4 h-4 text-indigo-500" />
+                    Seleção Manual
+                  </span>
+                  {mode === 'custom' && <Check className="w-4 h-4 text-indigo-500" />}
+                </div>
+                <p className="text-xs opacity-80 font-normal">
+                  Escolha manualmente e individualmente os status específicos que devem ser considerados ativados.
+                </p>
+              </button>
+            </div>
+          </div>
+
+          {/* Configuração do Modo Threshold */}
+          {mode === 'threshold' && (
+            <div className="space-y-4 animate-in fade-in">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+                    Status Inicial (Etapa de Corte)
+                  </label>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Cards neste status ou em estágios posteriores serão contabilizados como <strong>Ativados</strong>.
+                  </p>
+                </div>
+                <select
+                  value={thresholdStatus}
+                  onChange={(e) => setThresholdStatus(e.target.value)}
+                  className="px-3.5 py-2 text-xs font-bold bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-emerald-700 dark:text-emerald-300 focus:outline-none focus:border-emerald-500 cursor-pointer shadow-sm"
+                >
+                  {workflowStages.map((st) => (
+                    <option key={st.id} value={st.name}>
+                      {st.name} (Etapa #{st.rank} - {st.mappedStage})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Pipeline Visual do Fluxo */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-3">
+                <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                  <span className="font-semibold flex items-center gap-1">
+                    <Info className="w-3.5 h-3.5 text-indigo-500" />
+                    Fluxo Sequencial Jira Neogrid (clique em qualquer etapa para defini-la como corte):
+                  </span>
+                  <span className="text-[11px] font-mono">Corte ativo: ≥ {thresholdStatus}</span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 pt-1">
+                  {workflowStages.map((stage) => {
+                    const isActivatedStage = stage.rank >= thresholdRank;
+                    const isCurrentThreshold = stage.name === thresholdStatus;
+                    const cardsInThisStage = issues.filter((i) => i.status === stage.name).length;
+
+                    return (
+                      <button
+                        key={stage.id}
+                        type="button"
+                        onClick={() => setThresholdStatus(stage.name)}
+                        className={`p-2.5 rounded-xl border text-left transition-all relative flex flex-col justify-between ${
+                          isCurrentThreshold
+                            ? 'ring-2 ring-emerald-500 border-emerald-500 bg-emerald-500/20 dark:bg-emerald-500/25 shadow-sm'
+                            : isActivatedStage
+                            ? 'border-emerald-500/40 bg-emerald-500/10 dark:bg-emerald-500/15 text-emerald-800 dark:text-emerald-300'
+                            : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 opacity-60 hover:opacity-100'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                            #{stage.rank}
+                          </span>
+                          {isActivatedStage ? (
+                            <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-emerald-500 text-white flex items-center gap-0.5">
+                              <Check className="w-2.5 h-2.5" /> Ativado
+                            </span>
+                          ) : (
+                            <span className="text-[9px] font-semibold text-slate-400">Em curso</span>
+                          )}
+                        </div>
+                        <div className="font-bold text-xs truncate" title={stage.name}>
+                          {stage.name}
+                        </div>
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 flex items-center justify-between">
+                          <span>{stage.mappedStage}</span>
+                          <span className="font-mono font-bold">({cardsInThisStage})</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Configuração do Modo Custom */}
+          {mode === 'custom' && (
+            <div className="space-y-3 animate-in fade-in">
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+                  Selecione os Status Considerados Ativados
+                </label>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Marque cada status que deve pontuar como ativado no dashboard.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 p-3 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800">
+                {availableStatuses
+                  .filter((st) => st.toLowerCase().trim() !== 'cancelado')
+                  .map((st) => {
+                    const isChecked = selectedStatuses.includes(st);
+                    const count = issues.filter((i) => i.status === st).length;
+
+                    return (
+                      <button
+                        key={st}
+                        type="button"
+                        onClick={() => toggleCustomStatus(st)}
+                        className={`p-2.5 rounded-xl border text-left flex items-center justify-between transition-all ${
+                          isChecked
+                            ? 'border-indigo-500 bg-indigo-500/10 dark:bg-indigo-500/15 text-indigo-900 dark:text-indigo-200 font-bold'
+                            : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          {isChecked ? (
+                            <CheckSquare className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                          ) : (
+                            <Square className="w-4 h-4 text-slate-400" />
+                          )}
+                          <span className="text-xs truncate">{st}</span>
+                        </div>
+                        <span className="text-[11px] font-mono text-slate-400 font-normal">
+                          {count} card(s)
+                        </span>
+                      </button>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
+
+          {/* Simulação em Tempo Real do Impacto */}
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-emerald-500 text-white shadow-sm">
+                <BarChart3 className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="text-xs font-bold text-emerald-900 dark:text-emerald-200 uppercase tracking-wider block">
+                  Impacto Imediato nos Dados Atuais
+                </span>
+                <span className="text-xs text-slate-600 dark:text-slate-300">
+                  {mode === 'threshold'
+                    ? `Status de corte: a partir de "${thresholdStatus}" (etapa #${thresholdRank})`
+                    : `${selectedStatuses.length} status selecionado(s) manualmente`}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4 text-right">
+              <div>
+                <div className="text-lg font-black text-emerald-600 dark:text-emerald-400">
+                  {simAtivadosCards}{' '}
+                  <span className="text-xs font-normal text-slate-500">/ {totalCards} cards</span>
+                </div>
+                <div className="text-[10px] text-slate-500">{simPctCards}% dos cards do projeto</div>
+              </div>
+              <div className="w-px h-8 bg-slate-300 dark:bg-slate-700" />
+              <div>
+                <div className="text-lg font-black text-emerald-600 dark:text-emerald-400">
+                  {simAtivadosQtd}{' '}
+                  <span className="text-xs font-normal text-slate-500">/ {totalAtivacoes} ativ.</span>
+                </div>
+                <div className="text-[10px] text-slate-500">{simPctAtiv}% do volume total</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Modal Footer Actions */}
+        <div className="p-4 px-6 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={handleResetToDefault}
+            className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            Restaurar Padrão ("Em produção")
+          </button>
+
+          <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={() => onApplyLocally(pendingConfig)}
+              className="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 transition-all shadow-xs"
+              title="Aplica para esta visualização e salva no seu navegador"
+            >
+              Aplicar na Sessão
+            </button>
+            <button
+              type="button"
+              disabled={isSaving}
+              onClick={() => onSaveAsDefault(pendingConfig)}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-all shadow-sm active:scale-95 disabled:opacity-50"
+              title="Salva no banco de dados para todos os usuários do sistema"
+            >
+              {isSaving ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                <>
+                  <Save className="w-3.5 h-3.5" />
+                  Salvar como Padrão do Sistema
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>
