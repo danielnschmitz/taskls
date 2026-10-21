@@ -310,6 +310,35 @@ export async function initDatabase(): Promise<void> {
       ALTER TABLE users ALTER COLUMN allowed_modules SET DEFAULT ARRAY['tasks', 'cards', 'health', 'dashboards', 'projects']::TEXT[];
       UPDATE users SET allowed_modules = array_append(allowed_modules, 'projects')
       WHERE allowed_modules IS NOT NULL AND NOT ('projects' = ANY(allowed_modules));
+
+      -- Módulo de Monitoramento de Integrações (Google Chat / Webhooks)
+      CREATE TABLE IF NOT EXISTS integration_review_events (
+        id SERIAL PRIMARY KEY,
+        message_id VARCHAR(255) UNIQUE NOT NULL,
+        space_id VARCHAR(100) NOT NULL,
+        space_name VARCHAR(255),
+        sender_name VARCHAR(150),
+        sender_avatar TEXT,
+        header_title TEXT,
+        header_subtitle TEXT,
+        summary TEXT NOT NULL,
+        raw_message JSONB NOT NULL DEFAULT '{}'::jsonb,
+        parsed_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+        event_time TIMESTAMPTZ NOT NULL,
+        is_reviewed BOOLEAN DEFAULT FALSE,
+        reviewed_at TIMESTAMPTZ,
+        reviewed_by VARCHAR(36) REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_integration_events_reviewed ON integration_review_events(is_reviewed);
+      CREATE INDEX IF NOT EXISTS idx_integration_events_time ON integration_review_events(event_time DESC);
+      CREATE INDEX IF NOT EXISTS idx_integration_events_space ON integration_review_events(space_id);
+      CREATE INDEX IF NOT EXISTS idx_integration_events_sender ON integration_review_events(sender_name);
+
+      -- Atualizar módulos permitidos para incluir 'integrations'
+      ALTER TABLE users ALTER COLUMN allowed_modules SET DEFAULT ARRAY['tasks', 'cards', 'health', 'dashboards', 'projects', 'integrations']::TEXT[];
+      UPDATE users SET allowed_modules = array_append(allowed_modules, 'integrations')
+      WHERE allowed_modules IS NOT NULL AND NOT ('integrations' = ANY(allowed_modules));
     `);
 
     // Seed de Feriados Globais de Gestão de Projetos

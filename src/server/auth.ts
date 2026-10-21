@@ -219,7 +219,7 @@ export function requireModule(moduleName: string) {
     if (user.isAdmin) {
       return next();
     }
-    const modules = user.allowedModules || ['tasks', 'cards', 'health', 'dashboards'];
+    const modules = user.allowedModules || ['tasks', 'cards', 'health', 'dashboards', 'projects', 'integrations'];
     if (!modules.includes(moduleName)) {
       res.status(403).json({ error: `Você não tem permissão para acessar o módulo '${moduleName}'. Solicite acesso ao administrador.` });
       return;

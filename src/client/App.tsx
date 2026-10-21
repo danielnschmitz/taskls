@@ -19,6 +19,7 @@ import {
   Target,
   Search,
   BellRing,
+  Activity,
 } from 'lucide-react';
 import {
   DashboardData,
@@ -38,6 +39,8 @@ import { BackupModal } from './components/BackupModal';
 import { JiraWeekPanel } from './components/JiraWeekPanel';
 import { JiraReviewPanel } from './components/JiraReviewPanel';
 import { JiraConfigModal } from './components/JiraConfigModal';
+import { IntegrationMonitoringPanel } from './components/IntegrationMonitoringPanel';
+import { IntegrationConfigModal } from './components/IntegrationConfigModal';
 import { LoginScreen } from './components/LoginScreen';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { UserManagementModal } from './components/UserManagementModal';
@@ -46,7 +49,6 @@ import { SettingsModule } from './components/SettingsModule';
 import { HealthModule } from './components/HealthModule';
 import { DashboardsModule } from './components/DashboardsModule';
 import { ProjectManagementModule } from './components/ProjectManagementModule';
-import { Calculator3DPage } from './components/Calculator3DPage';
 import { useAuth } from './contexts/AuthContext';
 import {
   triggerBrowserNotification,
@@ -74,7 +76,7 @@ export const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPriority, setSelectedPriority] = useState<Priority | 'all'>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [activeTab, setActiveTab] = useState<'all' | 'week' | 'upcoming' | 'backlog' | 'jira' | 'jira_reviews'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'week' | 'upcoming' | 'backlog' | 'jira' | 'jira_reviews' | 'integrations'>('all');
 
   // Focus mode
   const [focusMode, setFocusMode] = useState(false);
@@ -97,26 +99,14 @@ export const App: React.FC = () => {
   const [jiraRefreshKey, setJiraRefreshKey] = useState(0);
   const [jiraPendingCount, setJiraPendingCount] = useState<number>(0);
 
+  // Google Chat / Integrations state
+  const [isIntegrationModalOpen, setIsIntegrationModalOpen] = useState(false);
+  const [integrationPendingCount, setIntegrationPendingCount] = useState<number>(0);
+
   // Auth state
   const { user, isAuthenticated, isLoading: isAuthLoading, isDefaultPassword } = useAuth();
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
   const [isUserManagementModalOpen, setIsUserManagementModalOpen] = useState(false);
-
-  // Navegação pública de rotas (ex: /calculadora-3d) sem necessidade de autenticação
-  const [currentPath, setCurrentPath] = useState<string>(() => window.location.pathname.toLowerCase());
-
-  useEffect(() => {
-    const handlePopState = () => {
-      setCurrentPath(window.location.pathname.toLowerCase());
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
-
-  const navigateTo = useCallback((path: string) => {
-    window.history.pushState(null, '', path);
-    setCurrentPath(path.toLowerCase());
-  }, []);
 
   // Jira permission check
   const canAccessJira = Boolean(user?.isAdmin || user?.canAccessJira);
@@ -125,12 +115,13 @@ export const App: React.FC = () => {
   const ACTIVE_MODULE_STORAGE_KEY = 'taskls_active_module';
 
   // Modular access checks
-  const userModules = user?.allowedModules || ['tasks', 'cards', 'health', 'dashboards', 'projects'];
+  const userModules = user?.allowedModules || ['tasks', 'cards', 'health', 'dashboards', 'projects', 'integrations'];
   const canAccessTasks = Boolean(user?.isAdmin || userModules.includes('tasks'));
   const canAccessCards = Boolean(user?.isAdmin || userModules.includes('cards'));
   const canAccessHealth = Boolean(user?.isAdmin || userModules.includes('health'));
   const canAccessDashboards = Boolean(user?.isAdmin || userModules.includes('dashboards'));
   const canAccessProjects = Boolean(user?.isAdmin || userModules.includes('projects'));
+  const canAccessIntegrations = Boolean(user?.isAdmin || userModules.includes('integrations'));
 
   const [activeModule, setActiveModule] = useState<ModuleType>(() => {
     const saved = localStorage.getItem(ACTIVE_MODULE_STORAGE_KEY) as ModuleType | null;
@@ -295,6 +286,25 @@ export const App: React.FC = () => {
     const interval = setInterval(fetchJiraPendingCount, 30000);
     return () => clearInterval(interval);
   }, [fetchJiraPendingCount, isAuthLoading, isAuthenticated, canAccessJira]);
+
+  // Polling de Contagem de Pendências de Monitoramento de Integrações (a cada 30s)
+  const fetchIntegrationPendingCount = useCallback(async () => {
+    if (isAuthLoading || !isAuthenticated || !canAccessIntegrations) return;
+    try {
+      const res = await fetch('/api/integrations/pending-count');
+      if (res.ok) {
+        const json = await res.json();
+        setIntegrationPendingCount(json.pendingCount || 0);
+      }
+    } catch {}
+  }, [isAuthLoading, isAuthenticated, canAccessIntegrations]);
+
+  useEffect(() => {
+    if (isAuthLoading || !isAuthenticated || !canAccessIntegrations) return;
+    fetchIntegrationPendingCount();
+    const interval = setInterval(fetchIntegrationPendingCount, 30000);
+    return () => clearInterval(interval);
+  }, [fetchIntegrationPendingCount, isAuthLoading, isAuthenticated, canAccessIntegrations]);
 
   // Extract list of all tasks
   const allTasksList = dashboardData
@@ -541,17 +551,6 @@ export const App: React.FC = () => {
     setIsTaskModalOpen(true);
   };
 
-  // Rota pública sem necessidade de autenticação: Calculadora 3D
-  const isCalculatorRoute =
-    currentPath === '/calculadora-3d' ||
-    currentPath === '/calculo-3d' ||
-    currentPath === '/calculo3d' ||
-    currentPath === '/calculadora';
-
-  if (isCalculatorRoute) {
-    return <Calculator3DPage onNavigateHome={() => navigateTo('/')} />;
-  }
-
   if (isAuthLoading) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-[#070b14] flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 gap-3">
@@ -562,7 +561,7 @@ export const App: React.FC = () => {
   }
 
   if (!isAuthenticated) {
-    return <LoginScreen onOpenCalculator={() => navigateTo('/calculadora-3d')} />;
+    return <LoginScreen />;
   }
 
   return (
@@ -590,7 +589,6 @@ export const App: React.FC = () => {
         onOpenUserManagement={user?.isAdmin ? () => setIsUserManagementModalOpen(true) : undefined}
         onOpenChangePassword={() => setIsChangePasswordModalOpen(true)}
         onShowToast={showToast}
-        onOpenCalculator={() => navigateTo('/calculadora-3d')}
       />
 
       {/* Main Container */}
@@ -728,6 +726,25 @@ export const App: React.FC = () => {
                     )}
                   </button>
                 )}
+
+                {canAccessIntegrations && (
+                  <button
+                    onClick={() => setActiveTab('integrations')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      activeTab === 'integrations'
+                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                        : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    <Activity className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Integrações</span>
+                    {integrationPendingCount > 0 && (
+                      <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-400 text-slate-950 shadow-sm animate-pulse">
+                        {integrationPendingCount}
+                      </span>
+                    )}
+                  </button>
+                )}
               </div>
 
               {/* Filtros de Tarefas (Posicionados ao lado da seleção de painéis) */}
@@ -805,7 +822,7 @@ export const App: React.FC = () => {
             </div>
 
             {/* Loading Spinner para Tarefas */}
-            {isLoading && !dashboardData && activeTab !== 'jira' && activeTab !== 'jira_reviews' && (
+            {isLoading && !dashboardData && activeTab !== 'jira' && activeTab !== 'jira_reviews' && activeTab !== 'integrations' && (
               <div className="py-24 flex flex-col items-center justify-center gap-3">
                 <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
                 <p className="text-sm text-slate-400 font-medium">Carregando painéis do TaskLS...</p>
@@ -813,7 +830,7 @@ export const App: React.FC = () => {
             )}
 
             {/* Erro ao carregar painéis de Tarefas */}
-            {!isLoading && !dashboardData && activeTab !== 'jira' && activeTab !== 'jira_reviews' && (
+            {!isLoading && !dashboardData && activeTab !== 'jira' && activeTab !== 'jira_reviews' && activeTab !== 'integrations' && (
               <div className="py-20 flex flex-col items-center justify-center gap-3 text-center bg-white/40 dark:bg-slate-900/40 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 p-8">
                 <AlertCircle className="w-8 h-8 text-rose-500" />
                 <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Não foi possível carregar as tarefas do painel.</p>
@@ -827,6 +844,17 @@ export const App: React.FC = () => {
             )}
 
             <div className="space-y-6">
+              {/* Painel: Monitoramento de Integrações (Google Chat / Webhooks) - Exibido logo acima da Semana Atual */}
+              {canAccessIntegrations && (activeTab === 'all' || activeTab === 'week' || activeTab === 'integrations') && (
+                <section className="pt-2">
+                  <IntegrationMonitoringPanel
+                    onShowToast={showToast}
+                    onRefreshCount={fetchIntegrationPendingCount}
+                    onOpenSettings={user?.isAdmin ? () => setIsIntegrationModalOpen(true) : undefined}
+                  />
+                </section>
+              )}
+
               {/* Painéis de Tarefas (Apenas quando dashboardData estiver carregado) */}
               {dashboardData && (
                 <>
@@ -994,6 +1022,18 @@ export const App: React.FC = () => {
           onClose={() => setIsJiraModalOpen(false)}
           onSaved={() => {
             setJiraRefreshKey((prev) => prev + 1);
+          }}
+          onShowToast={showToast}
+        />
+      )}
+
+      {/* Integration Monitoring Configuration Modal (Apenas Admin) */}
+      {user?.isAdmin && (
+        <IntegrationConfigModal
+          isOpen={isIntegrationModalOpen}
+          onClose={() => setIsIntegrationModalOpen(false)}
+          onSaved={() => {
+            fetchIntegrationPendingCount();
           }}
           onShowToast={showToast}
         />

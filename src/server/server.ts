@@ -18,9 +18,11 @@ import { cardRouter } from './cardRoutes';
 import { healthRouter } from './healthRoutes';
 import { dashboardRoutes } from './dashboardRoutes';
 import { projectRoutes } from './projectRoutes';
+import { integrationRoutes } from './integrationRoutes';
 import { authenticateToken, requireAdmin, requireModule } from './auth';
 import { startScheduler, stopScheduler } from './scheduler';
 import { processWebhookPayload, migrateAdfEventsInDb, startJiraSyncScheduler, stopJiraSyncScheduler } from './jiraEvents';
+import { processIntegrationWebhook, startIntegrationSyncScheduler, stopIntegrationSyncScheduler } from './integrationEvents';
 import { startTelegramBotService, stopTelegramBotService } from './telegramBot';
 
 const app = express();
@@ -60,6 +62,21 @@ app.post('/api/jira/webhook', async (req, res) => {
   }
 });
 
+// 2.1. Webhook público de Integrações (recebe POST do Google Chat / alertas externos)
+app.get('/api/integrations/webhook', (req, res) => {
+  res.status(200).json({ status: 'ok', message: 'TaskLS Integration Webhook endpoint is active and listening.' });
+});
+
+app.post('/api/integrations/webhook', async (req, res) => {
+  try {
+    const result = await processIntegrationWebhook(req.body);
+    res.status(200).json({ success: true, ...result });
+  } catch (err: any) {
+    console.error('[Integration Webhook] Erro ao processar payload:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // 3. Rotas de gestão de usuários (exclusivo admin)
 app.use('/api/users', authenticateToken, requireAdmin, userRoutes);
 
@@ -75,7 +92,10 @@ app.use('/api/dashboards', authenticateToken, requireModule('dashboards'), dashb
 // 7. Rotas do módulo de Gestão de Projetos (Neogrid)
 app.use('/api/projects', authenticateToken, requireModule('projects'), projectRoutes);
 
-// 8. Todas as demais rotas da API são protegidas por autenticação
+// 8. Rotas do módulo de Monitoramento de Integrações (Google Chat / Webhook)
+app.use('/api/integrations', authenticateToken, requireModule('integrations'), integrationRoutes);
+
+// 9. Todas as demais rotas da API são protegidas por autenticação
 app.use('/api', authenticateToken, router);
 
 // Serve static frontend files if built
@@ -112,6 +132,7 @@ async function bootstrap() {
     await migrateAdfEventsInDb();
     startScheduler(30000); // Check notifications every 30 seconds
     startJiraSyncScheduler(5 * 60 * 1000); // Sync Jira evolutions automatically every 5 minutes
+    startIntegrationSyncScheduler(); // Sincronização automática do Google Chat a cada 5 min
     startTelegramBotService(); // Inicia serviço do Telegram Bot
 
     app.listen(PORT, () => {
@@ -131,6 +152,7 @@ process.on('SIGINT', async () => {
   console.log('\n[Server] Encerrando TaskLS...');
   stopScheduler();
   stopJiraSyncScheduler();
+  stopIntegrationSyncScheduler();
   stopTelegramBotService();
   await pool.end();
   process.exit(0);
@@ -140,6 +162,7 @@ process.on('SIGTERM', async () => {
   console.log('\n[Server] Encerrando TaskLS...');
   stopScheduler();
   stopJiraSyncScheduler();
+  stopIntegrationSyncScheduler();
   stopTelegramBotService();
   await pool.end();
   process.exit(0);

@@ -248,6 +248,84 @@ export interface JiraReviewGroup {
   events: JiraReviewEvent[];
 }
 
+// Módulo de Monitoramento de Integrações (Google Chat / Webhook)
+export interface IntegrationErrorItem {
+  id?: string;
+  type?: string; // 'Distribuidor' | 'Empresa' | 'Item'
+  erp?: string; // 'Protheus_NovaIndy' | 'Sankhya_v3' | 'Omie_v3' | 'W3ERP' | 'Consinco' | 'Carrefour' | etc
+  message: string;
+}
+
+export interface IntegrationWidget {
+  type: 'text' | 'keyValue' | 'decoratedText';
+  label?: string;
+  value: string;
+  bottomLabel?: string;
+}
+
+export interface IntegrationSection {
+  header?: string;
+  widgets: IntegrationWidget[];
+}
+
+export interface IntegrationParsedData {
+  items: IntegrationErrorItem[];
+  details: Record<string, string>;
+  sections: IntegrationSection[];
+  severity: 'error' | 'warning' | 'info';
+  category?: string;
+  httpCode?: string;
+  operation?: string;
+  campaign?: string;
+  rawText?: string;
+}
+
+export interface IntegrationReviewEvent {
+  id: number;
+  messageId: string;
+  spaceId: string;
+  spaceName?: string;
+  senderName: string;
+  senderAvatar?: string | null;
+  headerTitle?: string;
+  headerSubtitle?: string;
+  summary: string;
+  rawMessage: any;
+  parsedData: IntegrationParsedData;
+  eventTime: string;
+  isReviewed: boolean;
+  reviewedAt?: string | null;
+  reviewedBy?: string | null;
+  createdAt: string;
+}
+
+export interface IntegrationEventsResponse {
+  events: IntegrationReviewEvent[];
+  totalPending: number;
+  totalReviewed: number;
+  total: number;
+  availableSenders: string[];
+  availableSpaces: Array<{ id: string; name: string }>;
+}
+
+export interface GoogleChatSpaceConfig {
+  id: string; // ex: 'spaces/AAAA12345'
+  name: string; // Friendly name ex: 'Erros de Integração Neogrid'
+}
+
+export interface GoogleChatConfig {
+  hasServiceAccount: boolean;
+  serviceAccountEmail?: string;
+  spaces: GoogleChatSpaceConfig[];
+  pollIntervalMinutes: number;
+  autoSyncEnabled: boolean;
+  filterMode: 'all' | 'errors_only';
+  filterKeywords: string[];
+  ignoredKeywords: string[];
+  ignoredSenders: string[];
+  webhookUrl?: string;
+}
+
 // Módulo de Saúde & Peso
 export interface WeightLog {
   id: string;

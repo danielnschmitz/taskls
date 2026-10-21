@@ -650,11 +650,13 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({ onShowToast }) =
                     {users
                       .filter((u) => u.username.toLowerCase().includes(searchUserQuery.toLowerCase()))
                       .map((u) => {
-                        const userModules = u.allowedModules || ['tasks', 'cards', 'health', 'dashboards'];
+                        const userModules = u.allowedModules || ['tasks', 'cards', 'health', 'dashboards', 'projects', 'integrations'];
                         const hasTasks = userModules.includes('tasks');
                         const hasCards = userModules.includes('cards');
                         const hasHealth = userModules.includes('health');
                         const hasDashboards = userModules.includes('dashboards');
+                        const hasProjects = userModules.includes('projects');
+                        const hasIntegrations = userModules.includes('integrations');
 
                         return (
                           <tr key={u.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40 transition-colors">
@@ -700,12 +702,22 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({ onShowToast }) =
                                     Dashboards
                                   </span>
                                 )}
+                                {(hasProjects || u.isAdmin) && (
+                                  <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-teal-500/10 dark:bg-teal-500/15 text-teal-700 dark:text-teal-300 border border-teal-500/30">
+                                    Projetos
+                                  </span>
+                                )}
+                                {(hasIntegrations || u.isAdmin) && (
+                                  <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-violet-500/10 dark:bg-violet-500/15 text-violet-700 dark:text-violet-300 border border-violet-500/30">
+                                    Integrações
+                                  </span>
+                                )}
                                 {(u.canAccessJira || u.isAdmin) && (
                                   <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-blue-500/10 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30">
                                     Jira
                                   </span>
                                 )}
-                                {!hasTasks && !hasCards && !hasHealth && !hasDashboards && !u.canAccessJira && !u.isAdmin && (
+                                {!hasTasks && !hasCards && !hasHealth && !hasDashboards && !hasProjects && !hasIntegrations && !u.canAccessJira && !u.isAdmin && (
                                   <span className="text-[11px] text-slate-400 dark:text-slate-500 italic">Nenhum</span>
                                 )}
                               </div>
@@ -1513,6 +1525,54 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({ onShowToast }) =
                       <span className="font-bold text-xs block text-slate-900 dark:text-slate-200">Dashboards Analíticos</span>
                       <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
                         Permite acessar métricas de Lead Time, tempos de etapa e eficiência no Jira.
+                      </span>
+                    </div>
+                  </label>
+
+                  {/* Checkbox Módulo Gestão de Projetos */}
+                  <label className={`p-3 rounded-2xl border flex items-start gap-3 cursor-pointer transition-all ${
+                    manageAllowedModules.includes('projects')
+                      ? 'bg-teal-50 dark:bg-teal-600/10 border-teal-200 dark:border-teal-500/40 text-slate-900 dark:text-white'
+                      : 'bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-700'
+                  }`}>
+                    <input
+                      type="checkbox"
+                      checked={manageAllowedModules.includes('projects')}
+                      onChange={() => {
+                        setManageAllowedModules((prev) =>
+                          prev.includes('projects') ? prev.filter((m) => m !== 'projects') : [...prev, 'projects']
+                        );
+                      }}
+                      className="mt-0.5 rounded border-slate-300 dark:border-slate-700 text-teal-600 focus:ring-teal-500 w-4 h-4"
+                    />
+                    <div className="flex-1">
+                      <span className="font-bold text-xs block text-slate-900 dark:text-slate-200">Gestão de Projetos</span>
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
+                        Permite acessar o planejamento cronológico de ativações e entregas de projetos.
+                      </span>
+                    </div>
+                  </label>
+
+                  {/* Checkbox Módulo Monitoramento de Integrações */}
+                  <label className={`p-3 rounded-2xl border flex items-start gap-3 cursor-pointer transition-all ${
+                    manageAllowedModules.includes('integrations')
+                      ? 'bg-indigo-50 dark:bg-indigo-600/10 border-indigo-200 dark:border-indigo-500/40 text-slate-900 dark:text-white'
+                      : 'bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-700'
+                  }`}>
+                    <input
+                      type="checkbox"
+                      checked={manageAllowedModules.includes('integrations')}
+                      onChange={() => {
+                        setManageAllowedModules((prev) =>
+                          prev.includes('integrations') ? prev.filter((m) => m !== 'integrations') : [...prev, 'integrations']
+                        );
+                      }}
+                      className="mt-0.5 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                    />
+                    <div className="flex-1">
+                      <span className="font-bold text-xs block text-slate-900 dark:text-slate-200">Monitoramento de Integrações</span>
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
+                        Permite revisar falhas e alertas de integrações sincronizados do Google Chat e webhooks.
                       </span>
                     </div>
                   </label>
