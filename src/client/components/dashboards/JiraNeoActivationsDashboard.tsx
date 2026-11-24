@@ -88,15 +88,16 @@ export const normalizeNeoStatus = (rawStatus: string): string => {
 export const getStatusRank = (rawStatus: string): number => {
   const s = normalizeNeoStatus(rawStatus);
   if (!s || s === 'cancelado' || s === 'desativado') return 0;
-  if (s === 'em producao' || s.includes('producao')) return 9;
+  if (s === 'em producao') return 9;
   if (s === 'concluido' || s === 'finalizado' || s === 'resolvido') return 8;
-  if (s === 'documentar' || s === 'documentacao') return 7;
-  if (s === 'deploy' || s === 'deploy prd') return 6;
+  if (s === 'documentar' || s === 'documentacao' || s === 'producao assistida') return 7;
+  if (s === 'deploy' || s === 'deploy prd' || s === 'homologacao aprovada') return 6;
   if (s === 'deploy hml') return 5;
-  if (s === 'teste de aceitacao' || s.includes('aceitacao') || s.includes('homologacao') || s.includes('teste')) return 4;
+  if (s === 'teste de aceitacao' || s === 'em homologacao' || s.includes('aceitacao') || s.includes('homologacao') || s.includes('teste')) return 4;
   if (s === 'desenvolvimento' || s.includes('desenvolv')) return 3;
   if (s.startsWith('pronto p') || s.startsWith('pronto para') || s.includes('pronto')) return 2;
   if (s === 'aberto' || s.includes('aberto') || s.includes('backlog')) return 1;
+  if (s.includes('producao')) return 9;
   return 1;
 };
 
@@ -243,7 +244,6 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
           : 'Configuração salva no sistema com status personalizados!',
         'success'
       );
-      fetchActivationsData(true, newCfg);
     } catch (err: any) {
       console.error(err);
       onShowToast(err.message || 'Falha ao salvar padrão global', 'error');
@@ -903,6 +903,22 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
     return Array.from(map.values());
   }, [data, evaluateNeoStatus]);
 
+  const isDevelopedItemActivated = useCallback(
+    (item: { rawStatus: string; rank: number }) => {
+      if (
+        activationConfig.mode === 'custom' &&
+        Array.isArray(activationConfig.customStatuses) &&
+        activationConfig.customStatuses.length > 0
+      ) {
+        const normRaw = normalizeNeoStatus(item.rawStatus);
+        return activationConfig.customStatuses.some((st) => normalizeNeoStatus(st) === normRaw);
+      }
+      const thresholdRank = getStatusRank(activationConfig.thresholdStatus || 'Em produção');
+      return item.rank >= thresholdRank;
+    },
+    [activationConfig]
+  );
+
   // Contadores por status para os botões de filtro rápido
   const developedStatusCounts = useMemo(() => {
     let ativados = 0;
@@ -914,10 +930,8 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
     let prontoPFazer = 0;
     let aberto = 0;
 
-    const thresholdRank = getStatusRank(activationConfig.thresholdStatus || 'Em produção');
-
     for (const item of developedErpLayoutItems) {
-      if (item.rank >= thresholdRank) ativados++;
+      if (isDevelopedItemActivated(item)) ativados++;
       if (item.status === 'Em produção') emProducao++;
       else if (item.status === 'Produção assistida') producaoAssistida++;
       else if (item.status === 'Homologação aprovada') homologacaoAprovada++;
@@ -938,14 +952,13 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
       prontoPFazer,
       aberto,
     };
-  }, [developedErpLayoutItems, activationConfig]);
+  }, [developedErpLayoutItems, isDevelopedItemActivated]);
 
   // Filtragem e ordenação da listagem única de ERP e Layout
   const filteredAndSortedDevelopedItems = useMemo(() => {
-    const thresholdRank = getStatusRank(activationConfig.thresholdStatus || 'Em produção');
     const filtered = developedErpLayoutItems.filter((item) => {
       if (developedStatusFilter === 'ativados_only') {
-        if (item.rank < thresholdRank) return false;
+        if (!isDevelopedItemActivated(item)) return false;
       } else if (developedStatusFilter !== 'all' && item.status !== developedStatusFilter) {
         return false;
       }
@@ -987,7 +1000,7 @@ export const JiraNeoActivationsDashboard: React.FC<JiraNeoActivationsDashboardPr
     developedSearchQuery,
     developedSortField,
     developedSortAsc,
-    activationConfig,
+    isDevelopedItemActivated,
   ]);
 
   const handleDevelopedSort = (field: 'erp' | 'layout' | 'status') => {
@@ -2886,7 +2899,7 @@ const ActivationConfigModal: React.FC<ActivationConfigModalProps> = ({
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 p-3 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800">
-                {availableStatuses
+                {(availableStatuses.length > 0 ? availableStatuses : workflowStages.map((s) => s.name))
                   .filter((st) => st.toLowerCase().trim() !== 'cancelado')
                   .map((st) => {
                     const isChecked = selectedStatuses.includes(st);

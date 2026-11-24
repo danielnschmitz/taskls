@@ -505,15 +505,16 @@ export function normalizeStatus(rawStatus: string): string {
 export function getStatusRank(rawStatus: string): number {
   const s = normalizeStatus(rawStatus);
   if (!s || s === 'cancelado' || s === 'desativado') return 0;
-  if (s === 'em producao' || s.includes('producao')) return 9;
+  if (s === 'em producao') return 9;
   if (s === 'concluido' || s === 'finalizado' || s === 'resolvido') return 8;
-  if (s === 'documentar' || s === 'documentacao') return 7;
-  if (s === 'deploy' || s === 'deploy prd') return 6;
+  if (s === 'documentar' || s === 'documentacao' || s === 'producao assistida') return 7;
+  if (s === 'deploy' || s === 'deploy prd' || s === 'homologacao aprovada') return 6;
   if (s === 'deploy hml') return 5;
-  if (s === 'teste de aceitacao' || s.includes('aceitacao') || s.includes('homologacao') || s.includes('teste')) return 4;
+  if (s === 'teste de aceitacao' || s === 'em homologacao' || s.includes('aceitacao') || s.includes('homologacao') || s.includes('teste')) return 4;
   if (s === 'desenvolvimento' || s.includes('desenvolv')) return 3;
   if (s.startsWith('pronto p') || s.startsWith('pronto para') || s.includes('pronto')) return 2;
   if (s === 'aberto' || s.includes('aberto') || s.includes('backlog')) return 1;
+  if (s.includes('producao')) return 9;
   return 1;
 }
 
