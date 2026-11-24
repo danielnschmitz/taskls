@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   CheckCircle2,
   Layers,
@@ -2670,9 +2670,11 @@ const ActivationConfigModal: React.FC<ActivationConfigModalProps> = ({
       : ['Em produção', 'Concluído']
   );
 
-  // Sincroniza se modal reabrir com config alterada
+  const wasOpenRef = useRef<boolean>(false);
+
+  // Sincroniza apenas na abertura do modal para não sobrescrever edições em andamento
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !wasOpenRef.current) {
       setMode(currentConfig.mode || 'threshold');
       setThresholdStatus(currentConfig.thresholdStatus || 'Em produção');
       setSelectedStatuses(
@@ -2681,6 +2683,7 @@ const ActivationConfigModal: React.FC<ActivationConfigModalProps> = ({
           : ['Em produção', 'Concluído']
       );
     }
+    wasOpenRef.current = isOpen;
   }, [isOpen, currentConfig]);
 
   if (!isOpen) return null;
