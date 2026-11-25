@@ -29,10 +29,12 @@ import {
   Moon,
   Monitor,
   Palette,
+  MessageCircle,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme, ThemeMode } from '../contexts/ThemeContext';
 import { JiraConfig } from '../types';
+import { WahaSettingsTab } from './WahaSettingsTab';
 
 export interface ManagedUser {
   id: string;
@@ -80,7 +82,7 @@ const DEFAULT_IGNORED_FIELDS = [
 export const SettingsModule: React.FC<SettingsModuleProps> = ({ onShowToast }) => {
   const { user: currentAuthUser } = useAuth();
   const { theme, setTheme, resolvedTheme } = useTheme();
-  const [activeTab, setActiveTab] = useState<'users' | 'jira' | 'appearance'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'jira' | 'waha' | 'appearance'>('users');
 
   // ==========================================
   // ESTADOS - GESTÃO DE USUÁRIOS
@@ -586,6 +588,18 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({ onShowToast }) =
             </button>
 
             <button
+              onClick={() => setActiveTab('waha')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                activeTab === 'waha'
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
+            >
+              <MessageCircle className="w-4 h-4" />
+              <span>WhatsApp (WAHA)</span>
+            </button>
+
+            <button
               onClick={() => setActiveTab('appearance')}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
                 activeTab === 'appearance'
@@ -1075,6 +1089,11 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({ onShowToast }) =
           </form>
         </div>
       )}
+
+      {/* ========================================================== */}
+      {/* ABA 2.5: WHATSAPP (WAHA) & TEMPLATES */}
+      {/* ========================================================== */}
+      {activeTab === 'waha' && <WahaSettingsTab onShowToast={onShowToast} />}
 
       {/* ========================================================== */}
       {/* ABA 3: TEMA & APARÊNCIA */}

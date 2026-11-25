@@ -771,6 +771,7 @@ export async function listJiraEvents(params: {
   status?: 'pending' | 'reviewed' | 'all';
   project?: string;
   eventType?: string;
+  author?: string;
   search?: string;
   limit?: number;
   offset?: number;
@@ -784,6 +785,7 @@ export async function listJiraEvents(params: {
     status = 'pending',
     project = 'all',
     eventType = 'all',
+    author = '',
     search = '',
     limit = 50,
     offset = 0,
@@ -806,6 +808,11 @@ export async function listJiraEvents(params: {
   if (eventType && eventType !== 'all') {
     queryParams.push(eventType);
     baseWhere += ` AND event_type = $${queryParams.length}`;
+  }
+
+  if (author && author.trim()) {
+    queryParams.push(`%${author.trim().toLowerCase()}%`);
+    baseWhere += ` AND LOWER(author_name) LIKE $${queryParams.length}`;
   }
 
   if (search && search.trim()) {
@@ -917,6 +924,21 @@ export async function unmarkEventAsReviewed(id: number): Promise<boolean> {
     [id]
   );
   return (res.rowCount || 0) > 0;
+}
+
+/**
+ * Lista autores distintos de eventos do Jira (opcionalmente filtrando por projeto)
+ */
+export async function listJiraAuthors(project?: string): Promise<string[]> {
+  let query = `SELECT DISTINCT author_name FROM jira_review_events WHERE author_name IS NOT NULL AND TRIM(author_name) <> ''`;
+  const params: any[] = [];
+  if (project && project !== 'all') {
+    params.push(project.toUpperCase());
+    query += ` AND UPPER(project_key) = $1`;
+  }
+  query += ` ORDER BY author_name ASC`;
+  const res = await pool.query<{ author_name: string }>(query, params);
+  return res.rows.map((r) => r.author_name);
 }
 
 /**

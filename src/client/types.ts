@@ -597,3 +597,27 @@ export interface ProjectPlanResponse {
   totalItems: number;
   totalHours: number;
 }
+
+export interface WahaConfig {
+  baseUrl: string;
+  apiKey: string;
+  hasApiKey?: boolean;
+  session: string;
+  defaultGroupId: string;
+  defaultGroupName?: string;
+  jiraAuthorName: string;
+}
+
+export interface WahaTemplate {
+  id: string;
+  name: string;
+  content: string;
+  isDefault?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface WahaGroup {
+  id: string;
+  name: string;
+}

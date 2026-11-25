@@ -37,7 +37,17 @@ import {
   cleanupIgnoredUserEvents,
   syncJiraEventsFromRest,
   getPendingEventsCount,
+  listJiraAuthors,
 } from './jiraEvents';
+import {
+  getWahaConfig,
+  saveWahaConfig,
+  testWahaConnection,
+  listWahaGroups,
+  sendWahaTextMessage,
+  getWahaTemplates,
+  saveWahaTemplates,
+} from './waha';
 import { requireModule } from './auth';
 
 export const router = Router();
@@ -1122,11 +1132,12 @@ router.get('/jira/events', async (req: Request, res: Response) => {
       return;
     }
 
-    const { status, project, eventType, search, limit, offset } = req.query;
+    const { status, project, eventType, author, search, limit, offset } = req.query;
     const data = await listJiraEvents({
       status: (status as any) || 'pending',
       project: typeof project === 'string' ? project : 'all',
       eventType: typeof eventType === 'string' ? eventType : 'all',
+      author: typeof author === 'string' ? author : '',
       search: typeof search === 'string' ? search : '',
       limit: limit ? parseInt(String(limit), 10) : 50,
       offset: offset ? parseInt(String(offset), 10) : 0,
@@ -1358,6 +1369,156 @@ router.get('/jira/webhook-info', async (req: Request, res: Response) => {
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Erro ao obter informações do webhook' });
+  }
+});
+
+/**
+ * GET /api/jira/events/authors
+ * Lista autores distintos de eventos do Jira
+ */
+router.get('/jira/events/authors', async (req: Request, res: Response) => {
+  try {
+    const authUser = (req as any).user;
+    if (!authUser?.isAdmin && !authUser?.canAccessJira) {
+      res.status(403).json({ error: 'Sem permissão.' });
+      return;
+    }
+    const project = typeof req.query.project === 'string' ? req.query.project : 'all';
+    const authors = await listJiraAuthors(project);
+    res.json({ authors });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao listar autores do Jira' });
+  }
+});
+
+// ==========================================
+// ROTAS WAHA (WhatsApp HTTP API) & TEMPLATES
+// ==========================================
+
+/**
+ * GET /api/waha/config
+ * Retorna configuração do WAHA (mascarando apiKey).
+ */
+router.get('/waha/config', async (req: Request, res: Response) => {
+  try {
+    const authUser = (req as any).user;
+    if (!authUser?.isAdmin && !authUser?.canAccessJira) {
+      res.status(403).json({ error: 'Sem permissão.' });
+      return;
+    }
+    const config = await getWahaConfig(true);
+    res.json(config);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao carregar configuração do WAHA' });
+  }
+});
+
+/**
+ * PUT /api/waha/config
+ * Salva configuração do WAHA (apenas Admin)
+ */
+router.put('/waha/config', async (req: Request, res: Response) => {
+  try {
+    const authUser = (req as any).user;
+    if (!authUser?.isAdmin) {
+      res.status(403).json({ error: 'Apenas administradores podem configurar o WAHA.' });
+      return;
+    }
+    const updated = await saveWahaConfig(req.body || {});
+    res.json({ success: true, config: updated });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao salvar configuração do WAHA' });
+  }
+});
+
+/**
+ * POST /api/waha/test
+ * Testa conexão com o servidor WAHA (apenas Admin)
+ */
+router.post('/waha/test', async (req: Request, res: Response) => {
+  try {
+    const authUser = (req as any).user;
+    if (!authUser?.isAdmin) {
+      res.status(403).json({ error: 'Apenas administradores podem testar o WAHA.' });
+      return;
+    }
+    const result = await testWahaConnection(req.body || {});
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message || 'Erro ao testar WAHA' });
+  }
+});
+
+/**
+ * GET /api/waha/groups
+ * Lista grupos do WhatsApp disponíveis na sessão configurada do WAHA
+ */
+router.get('/waha/groups', async (req: Request, res: Response) => {
+  try {
+    const authUser = (req as any).user;
+    if (!authUser?.isAdmin && !authUser?.canAccessJira) {
+      res.status(403).json({ error: 'Sem permissão.' });
+      return;
+    }
+    const groups = await listWahaGroups();
+    res.json({ groups });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao listar grupos do WAHA' });
+  }
+});
+
+/**
+ * GET /api/waha/templates
+ * Retorna templates de mensagem WhatsApp
+ */
+router.get('/waha/templates', async (req: Request, res: Response) => {
+  try {
+    const authUser = (req as any).user;
+    if (!authUser?.isAdmin && !authUser?.canAccessJira) {
+      res.status(403).json({ error: 'Sem permissão.' });
+      return;
+    }
+    const templates = await getWahaTemplates();
+    res.json({ templates });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao carregar templates do WhatsApp' });
+  }
+});
+
+/**
+ * PUT /api/waha/templates
+ * Salva lista de templates de mensagem WhatsApp
+ */
+router.put('/waha/templates', async (req: Request, res: Response) => {
+  try {
+    const authUser = (req as any).user;
+    if (!authUser?.isAdmin && !authUser?.canAccessJira) {
+      res.status(403).json({ error: 'Sem permissão.' });
+      return;
+    }
+    const templates = await saveWahaTemplates(req.body?.templates || []);
+    res.json({ success: true, templates });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao salvar templates do WhatsApp' });
+  }
+});
+
+/**
+ * POST /api/waha/send
+ * Envia mensagem de texto para um grupo de WhatsApp via WAHA
+ */
+router.post('/waha/send', async (req: Request, res: Response) => {
+  try {
+    const authUser = (req as any).user;
+    if (!authUser?.isAdmin && !authUser?.canAccessJira) {
+      res.status(403).json({ error: 'Sem permissão.' });
+      return;
+    }
+    const { chatId, text } = req.body || {};
+    const result = await sendWahaTextMessage({ chatId, text });
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao enviar mensagem via WAHA' });
   }
 });
 

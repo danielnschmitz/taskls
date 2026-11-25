@@ -20,6 +20,7 @@ import {
   Search,
   BellRing,
   Activity,
+  MessageCircle,
 } from 'lucide-react';
 import {
   DashboardData,
@@ -38,6 +39,7 @@ import { ConfirmModal } from './components/ConfirmModal';
 import { BackupModal } from './components/BackupModal';
 import { JiraWeekPanel } from './components/JiraWeekPanel';
 import { JiraReviewPanel } from './components/JiraReviewPanel';
+import { JiraMyNeoReviewPanel } from './components/JiraMyNeoReviewPanel';
 import { JiraConfigModal } from './components/JiraConfigModal';
 import { IntegrationMonitoringPanel } from './components/IntegrationMonitoringPanel';
 import { IntegrationConfigModal } from './components/IntegrationConfigModal';
@@ -76,7 +78,7 @@ export const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPriority, setSelectedPriority] = useState<Priority | 'all'>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [activeTab, setActiveTab] = useState<'all' | 'week' | 'upcoming' | 'backlog' | 'jira' | 'jira_reviews' | 'integrations'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'week' | 'upcoming' | 'backlog' | 'jira' | 'jira_reviews' | 'jira_my_neo' | 'integrations'>('all');
 
   // Focus mode
   const [focusMode, setFocusMode] = useState(false);
@@ -727,6 +729,20 @@ export const App: React.FC = () => {
                   </button>
                 )}
 
+                {canAccessJira && (
+                  <button
+                    onClick={() => setActiveTab('jira_my_neo')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      activeTab === 'jira_my_neo'
+                        ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
+                        : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    <MessageCircle className="w-3.5 h-3.5" />
+                    <span>Minhas Alterações NEO</span>
+                  </button>
+                )}
+
                 {canAccessIntegrations && (
                   <button
                     onClick={() => setActiveTab('integrations')}
@@ -822,7 +838,7 @@ export const App: React.FC = () => {
             </div>
 
             {/* Loading Spinner para Tarefas */}
-            {isLoading && !dashboardData && activeTab !== 'jira' && activeTab !== 'jira_reviews' && activeTab !== 'integrations' && (
+            {isLoading && !dashboardData && activeTab !== 'jira' && activeTab !== 'jira_reviews' && activeTab !== 'jira_my_neo' && activeTab !== 'integrations' && (
               <div className="py-24 flex flex-col items-center justify-center gap-3">
                 <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
                 <p className="text-sm text-slate-400 font-medium">Carregando painéis do TaskLS...</p>
@@ -830,7 +846,7 @@ export const App: React.FC = () => {
             )}
 
             {/* Erro ao carregar painéis de Tarefas */}
-            {!isLoading && !dashboardData && activeTab !== 'jira' && activeTab !== 'jira_reviews' && activeTab !== 'integrations' && (
+            {!isLoading && !dashboardData && activeTab !== 'jira' && activeTab !== 'jira_reviews' && activeTab !== 'jira_my_neo' && activeTab !== 'integrations' && (
               <div className="py-20 flex flex-col items-center justify-center gap-3 text-center bg-white/40 dark:bg-slate-900/40 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 p-8">
                 <AlertCircle className="w-8 h-8 text-rose-500" />
                 <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Não foi possível carregar as tarefas do painel.</p>
@@ -963,6 +979,16 @@ export const App: React.FC = () => {
                     onShowToast={showToast}
                     onRefreshCount={fetchJiraPendingCount}
                     onOpenSettings={user?.isAdmin ? () => setIsJiraModalOpen(true) : undefined}
+                  />
+                </section>
+              )}
+
+              {/* Panel 6: Minhas Alterações NEO + Envio WAHA */}
+              {canAccessJira && activeTab === 'jira_my_neo' && (
+                <section className="pt-2">
+                  <JiraMyNeoReviewPanel
+                    onShowToast={showToast}
+                    onRefreshCount={fetchJiraPendingCount}
                   />
                 </section>
               )}
