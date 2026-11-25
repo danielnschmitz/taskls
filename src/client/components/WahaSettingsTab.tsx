@@ -29,6 +29,7 @@ const TEMPLATE_VARIABLES = [
   { key: '{{status}}', label: 'Status Atual' },
   { key: '{{industry}}', label: 'Indústria' },
   { key: '{{layout}}', label: 'Layout' },
+  { key: '{{analistaResponsavel}}', label: 'Analista Responsável' },
   { key: '{{author}}', label: 'Autor' },
   { key: '{{changes}}', label: 'Lista de Alterações' },
   { key: '{{url}}', label: 'Link do Card' },

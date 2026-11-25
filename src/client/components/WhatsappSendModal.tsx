@@ -51,6 +51,7 @@ export function renderWahaTemplate(templateContent: string, group: JiraReviewGro
     '{{status}}': card?.displayStatus || card?.rawStatus || '',
     '{{industry}}': card?.industry || 'Não informada',
     '{{layout}}': card?.layout || 'Não informado',
+    '{{analistaResponsavel}}': card?.analistaResponsavel || card?.assignee?.displayName || 'Não informado',
     '{{author}}': group.authorName || '',
     '{{changes}}': changesText,
     '{{url}}': card?.url || '',

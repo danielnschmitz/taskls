@@ -106,7 +106,9 @@ export const JiraMyNeoReviewPanel: React.FC<JiraMyNeoReviewPanelProps> = ({
   const [isSyncing, setIsSyncing] = useState(false);
 
   const [statusFilter, setStatusFilter] = useState<'pending' | 'reviewed' | 'all'>('pending');
+  const [eventTypeFilter, setEventTypeFilter] = useState<string>('comment_added');
   const [authorFilter, setAuthorFilter] = useState<string>('');
+  const [isMetaLoaded, setIsMetaLoaded] = useState(false);
   const [availableAuthors, setAvailableAuthors] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -133,7 +135,10 @@ export const JiraMyNeoReviewPanel: React.FC<JiraMyNeoReviewPanelProps> = ({
           setAvailableAuthors(data.authors || []);
         }
       })
-      .catch((err) => console.warn('[JiraMyNeoReview] Erro ao carregar metadados:', err));
+      .catch((err) => console.warn('[JiraMyNeoReview] Erro ao carregar metadados:', err))
+      .finally(() => {
+        if (!cancelled) setIsMetaLoaded(true);
+      });
 
     return () => {
       cancelled = true;
@@ -146,6 +151,7 @@ export const JiraMyNeoReviewPanel: React.FC<JiraMyNeoReviewPanelProps> = ({
       const params = new URLSearchParams({
         status: statusFilter,
         project: 'NEO',
+        eventType: eventTypeFilter,
         limit: '200',
       });
       if (authorFilter.trim()) {
@@ -164,11 +170,12 @@ export const JiraMyNeoReviewPanel: React.FC<JiraMyNeoReviewPanelProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [statusFilter, authorFilter, searchQuery, onShowToast]);
+  }, [statusFilter, eventTypeFilter, authorFilter, searchQuery, onShowToast]);
 
   useEffect(() => {
+    if (!isMetaLoaded) return;
     fetchEvents();
-  }, [fetchEvents]);
+  }, [isMetaLoaded, fetchEvents]);
 
   const handleSyncJira = async () => {
     setIsSyncing(true);
@@ -261,7 +268,7 @@ export const JiraMyNeoReviewPanel: React.FC<JiraMyNeoReviewPanelProps> = ({
         {/* Barra de filtros */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3 pt-2 border-t border-slate-200 dark:border-slate-800">
           {/* Status */}
-          <div className="md:col-span-4 flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
+          <div className="md:col-span-3 flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
             {(
               [
                 { key: 'pending', label: 'Pendentes' },
@@ -284,8 +291,25 @@ export const JiraMyNeoReviewPanel: React.FC<JiraMyNeoReviewPanelProps> = ({
             ))}
           </div>
 
+          {/* Tipo de Evento */}
+          <div className="md:col-span-3">
+            <select
+              value={eventTypeFilter}
+              onChange={(e) => setEventTypeFilter(e.target.value)}
+              className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white font-semibold focus:outline-none focus:border-emerald-500"
+            >
+              <option value="comment_added">Somente Comentários</option>
+              <option value="all">Todos os Eventos</option>
+              <option value="status_changed">Mudança de Status</option>
+              <option value="flagged_changed">Bloqueios / Impedimentos</option>
+              <option value="assignee_changed">Troca de Responsável</option>
+              <option value="field_updated">Campos Alterados</option>
+              <option value="issue_created">Card Criado</option>
+            </select>
+          </div>
+
           {/* Autor */}
-          <div className="md:col-span-4 relative">
+          <div className="md:col-span-3 relative">
             <User className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -303,7 +327,7 @@ export const JiraMyNeoReviewPanel: React.FC<JiraMyNeoReviewPanelProps> = ({
           </div>
 
           {/* Busca */}
-          <div className="md:col-span-4 relative">
+          <div className="md:col-span-3 relative">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"

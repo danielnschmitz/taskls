@@ -230,6 +230,13 @@ export function buildCardSnapshot(issue: any, host: string, config: JiraConfig):
 
   const industryVal = issue.fields?.[industryField]?.value || issue.fields?.[industryField] || null;
   const layoutVal = issue.fields?.[layoutField]?.value || issue.fields?.[layoutField] || null;
+  const rawAnalista = issue.fields?.customfield_10846;
+  const analistaResponsavel = rawAnalista
+    ? (typeof rawAnalista === 'string'
+        ? rawAnalista
+        : rawAnalista?.displayName || rawAnalista?.value || rawAnalista?.name || String(rawAnalista)
+      ).trim()
+    : null;
 
   const flaggedVal =
     issue.fields?.[flaggedField] ??
@@ -278,6 +285,7 @@ export function buildCardSnapshot(issue: any, host: string, config: JiraConfig):
     epic: epicInfo,
     industry: typeof industryVal === 'string' ? industryVal : null,
     layout: typeof layoutVal === 'string' ? layoutVal : null,
+    analistaResponsavel: analistaResponsavel || null,
     isBlocked,
     blockedReason,
     url: `https://${host}/browse/${issue.key}`,
@@ -595,6 +603,7 @@ export async function syncJiraEventsFromRest(daysBack: number = 1): Promise<{
     flaggedField,
     industryField,
     layoutField,
+    'customfield_10846',
   ];
 
   const jql = `project in (${projectsJql}) AND updated >= "-${daysBack}d" ORDER BY updated DESC`;

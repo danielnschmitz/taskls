@@ -80,6 +80,7 @@ export interface JiraDemand {
   industry: string | null;
   layout: string | null;
   canal?: string | null;
+  analistaResponsavel?: string | null;
   isBlocked?: boolean;
   blockedReason?: string | null;
   url: string;
